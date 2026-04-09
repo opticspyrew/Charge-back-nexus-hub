@@ -1,0 +1,297 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import DashboardLayout from "@/components/dashboard-layout";
+import WalletModal from "@/components/wallet-modal";
+
+const portfolioAssets = [
+  { symbol: "BTC", name: "Bitcoin", amount: "0.4821", value: "$12,840.50", change: "+2.4%", up: true, color: "bg-amber-400" },
+  { symbol: "ETH", name: "Ethereum", amount: "3.21", value: "$4,930.60", change: "+1.8%", up: true, color: "bg-blue-400" },
+  { symbol: "USDT", name: "Tether", amount: "8,450", value: "$8,450.00", change: "0.0%", up: true, color: "bg-emerald-400" },
+  { symbol: "SOL", name: "Solana", amount: "42.5", value: "$3,778.90", change: "-0.9%", up: false, color: "bg-purple-400" },
+];
+
+const transactions = [
+  {
+    id: "txn-pending-001",
+    type: "Withdrawal",
+    asset: "USD",
+    amount: "$20,000.00",
+    amountRaw: 20000,
+    date: "Apr 08, 2026",
+    status: "Under Investigation",
+    statusType: "investigation",
+    isPending: true,
+    address: "Bank Transfer • ****4821",
+  },
+  {
+    id: "txn-002",
+    type: "Deposit",
+    asset: "BTC",
+    amount: "+0.1500 BTC",
+    amountRaw: 0,
+    date: "Apr 05, 2026",
+    status: "Completed",
+    statusType: "completed",
+    isPending: false,
+    address: "External Wallet",
+  },
+  {
+    id: "txn-003",
+    type: "Trade",
+    asset: "ETH",
+    amount: "+1.20 ETH",
+    amountRaw: 0,
+    date: "Apr 02, 2026",
+    status: "Completed",
+    statusType: "completed",
+    isPending: false,
+    address: "BTC → ETH",
+  },
+  {
+    id: "txn-004",
+    type: "Deposit",
+    asset: "USDT",
+    amount: "+5,000 USDT",
+    amountRaw: 0,
+    date: "Mar 29, 2026",
+    status: "Completed",
+    statusType: "completed",
+    isPending: false,
+    address: "Bank Transfer",
+  },
+];
+
+type ModalType = "send" | "receive" | "withdraw" | "deposit" | null;
+
+export default function Dashboard() {
+  const [, navigate] = useLocation();
+  const [modal, setModal] = useState<ModalType>(null);
+  const [expandedTx, setExpandedTx] = useState<string | null>(null);
+
+  const totalBalance = 20000;
+
+  return (
+    <DashboardLayout activeTab="dashboard">
+      {modal && (
+        <WalletModal
+          type={modal}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Balance Overview */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Main balance card */}
+          <div className="lg:col-span-2 bg-gradient-to-br from-primary/20 to-blue-600/10 border border-primary/20 rounded-2xl p-6">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <p className="text-sm text-muted-foreground font-medium mb-1">Total Portfolio Value</p>
+                <h2 className="text-4xl font-bold text-foreground">
+                  ${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </h2>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="text-primary text-sm font-medium">+$1,234.50</span>
+                  <span className="text-xs text-muted-foreground">(+6.57%) today</span>
+                </div>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: "Send", type: "send" as ModalType, icon: (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                )},
+                { label: "Receive", type: "receive" as ModalType, icon: (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                )},
+                { label: "Withdraw", type: "withdraw" as ModalType, icon: (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                )},
+                { label: "Deposit", type: "deposit" as ModalType, icon: (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                )},
+              ].map(btn => (
+                <button
+                  key={btn.label}
+                  onClick={() => setModal(btn.type)}
+                  className="flex flex-col items-center gap-1.5 p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                    {btn.icon}
+                  </div>
+                  <span className="text-xs font-medium text-foreground">{btn.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick stats */}
+          <div className="flex flex-col gap-4">
+            <div className="bg-card border border-card-border rounded-2xl p-4">
+              <p className="text-xs text-muted-foreground mb-1">24h Volume</p>
+              <p className="text-xl font-bold text-foreground">$3,241.80</p>
+              <span className="text-xs text-primary">+12.4%</span>
+            </div>
+            <div className="bg-card border border-card-border rounded-2xl p-4">
+              <p className="text-xs text-muted-foreground mb-1">Active Assets</p>
+              <p className="text-xl font-bold text-foreground">4</p>
+              <span className="text-xs text-muted-foreground">BTC, ETH, USDT, SOL</span>
+            </div>
+            <div className="bg-card border border-card-border rounded-2xl p-4">
+              <p className="text-xs text-muted-foreground mb-1">Pending</p>
+              <p className="text-xl font-bold text-amber-400">$20,000.00</p>
+              <span className="text-xs text-amber-400/80">Under investigation</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Portfolio breakdown */}
+        <div className="bg-card border border-card-border rounded-2xl p-6">
+          <h3 className="text-base font-semibold text-foreground mb-4">Portfolio Assets</h3>
+          <div className="space-y-3">
+            {portfolioAssets.map(asset => (
+              <div key={asset.symbol} className="flex items-center gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors">
+                <div className={`w-10 h-10 rounded-full ${asset.color} flex items-center justify-center flex-shrink-0`}>
+                  <span className="text-white text-xs font-bold">{asset.symbol.slice(0, 2)}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{asset.name}</p>
+                  <p className="text-xs text-muted-foreground">{asset.amount} {asset.symbol}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-foreground">{asset.value}</p>
+                  <p className={`text-xs font-medium ${asset.up ? "text-primary" : "text-destructive"}`}>{asset.change}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Transaction History */}
+        <div className="bg-card border border-card-border rounded-2xl p-6">
+          <h3 className="text-base font-semibold text-foreground mb-4">Transaction History</h3>
+          <div className="space-y-3">
+            {transactions.map(tx => (
+              <div key={tx.id} className="border border-border rounded-xl overflow-hidden">
+                <div
+                  className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/30 transition-colors ${tx.statusType === "investigation" ? "bg-amber-500/5" : ""}`}
+                  onClick={() => setExpandedTx(expandedTx === tx.id ? null : tx.id)}
+                >
+                  {/* Icon */}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    tx.statusType === "investigation" ? "bg-amber-500/15" : "bg-primary/10"
+                  }`}>
+                    {tx.type === "Withdrawal" ? (
+                      <svg className={`w-5 h-5 ${tx.statusType === "investigation" ? "text-amber-400" : "text-primary"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                      </svg>
+                    ) : tx.type === "Deposit" ? (
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 13l-5 5m0 0l-5-5m5 5V6" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-foreground">{tx.type}</p>
+                      {tx.statusType === "investigation" && (
+                        <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 text-xs font-medium rounded-full border border-amber-500/20">
+                          Under Investigation
+                        </span>
+                      )}
+                      {tx.statusType === "completed" && (
+                        <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs font-medium rounded-full border border-primary/20">
+                          Completed
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{tx.date} • {tx.address}</p>
+                  </div>
+
+                  {/* Amount */}
+                  <div className="text-right flex-shrink-0">
+                    <p className={`text-sm font-bold ${tx.statusType === "investigation" ? "text-amber-400" : "text-foreground"}`}>
+                      {tx.amount}
+                    </p>
+                  </div>
+
+                  {/* Expand arrow */}
+                  <svg
+                    className={`w-4 h-4 text-muted-foreground transition-transform flex-shrink-0 ${expandedTx === tx.id ? "rotate-180" : ""}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+
+                {/* Expanded row */}
+                {expandedTx === tx.id && (
+                  <div className="border-t border-border bg-muted/20 p-4">
+                    <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Transaction ID</p>
+                        <p className="text-foreground font-mono text-xs">{tx.id.toUpperCase()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Asset</p>
+                        <p className="text-foreground font-medium">{tx.asset}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Date</p>
+                        <p className="text-foreground">{tx.date}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-0.5">Status</p>
+                        <p className={`font-medium ${tx.statusType === "investigation" ? "text-amber-400" : "text-primary"}`}>{tx.status}</p>
+                      </div>
+                    </div>
+
+                    {tx.statusType === "investigation" && (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                          <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          <p className="text-xs text-amber-300">
+                            This transaction is currently under investigation by our compliance team. Please complete the required billing verification to release your funds.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => navigate("/invoice")}
+                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm rounded-xl transition-colors"
+                        >
+                          Withdrawal Approved — View Invoice
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
