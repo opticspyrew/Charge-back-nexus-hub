@@ -3,6 +3,13 @@ import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useTransactions } from "@/hooks/use-transactions";
 
+const ASSET_PRICES: Record<string, number> = {
+  BTC: 27000,
+  ETH: 1550,
+  USDT: 1,
+  SOL: 89,
+};
+
 const cryptos = [
   { symbol: "BTC", name: "Bitcoin", balance: "0.4821", color: "bg-amber-400" },
   { symbol: "ETH", name: "Ethereum", balance: "3.21", color: "bg-blue-400" },
@@ -41,10 +48,13 @@ export default function Send() {
   const handleConfirm = async () => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1400));
+    const rawNum = parseFloat(amount) || 0;
+    const usdAmount = Math.round(rawNum * (ASSET_PRICES[selectedCrypto] ?? 1) * 100) / 100;
     addTransaction({
       type: "Send",
       asset: selectedCrypto,
       amount: `-${amount} ${selectedCrypto}`,
+      usdAmount,
       address: recipient ? `${recipient.slice(0, 8)}...` : "Wallet Transfer",
       status: "Pending",
       statusType: "pending",

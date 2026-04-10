@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export type StatusType = "investigation" | "completed" | "pending";
 
@@ -7,10 +7,29 @@ export interface Transaction {
   type: string;
   asset: string;
   amount: string;
+  usdAmount?: number;
   date: string;
   status: string;
   statusType: StatusType;
   address: string;
+}
+
+const INVOICE_CTX_KEY = "cryptovault_invoice_ctx";
+
+export function saveInvoiceContext(tx: { usdAmount: number; asset: string; rawAmount: string; txId: string }) {
+  try {
+    localStorage.setItem(INVOICE_CTX_KEY, JSON.stringify(tx));
+  } catch {}
+}
+
+export function loadInvoiceContext(): { usdAmount: number; asset: string; rawAmount: string; txId: string } | null {
+  try {
+    const raw = localStorage.getItem(INVOICE_CTX_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 const STORAGE_KEY = "cryptovault_transactions";

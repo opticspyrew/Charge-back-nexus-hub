@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import WalletModal from "@/components/wallet-modal";
-import { useTransactions } from "@/hooks/use-transactions";
+import { useTransactions, saveInvoiceContext } from "@/hooks/use-transactions";
 
 const portfolioAssets = [
   { symbol: "BTC", name: "Bitcoin", amount: "0.4821", value: "$12,840.50", change: "+2.4%", up: true, color: "bg-amber-400" },
@@ -26,6 +26,17 @@ export default function Dashboard() {
     e.stopPropagation();
     cancelTransaction(id);
     if (expandedTx === id) setExpandedTx(null);
+  }
+
+  function handleVerify(tx: { id: string; asset: string; amount: string; usdAmount?: number }) {
+    const rawNum = tx.usdAmount ?? 20000;
+    saveInvoiceContext({
+      usdAmount: rawNum,
+      asset: tx.asset,
+      rawAmount: tx.amount,
+      txId: tx.id,
+    });
+    navigate("/invoice");
   }
 
   const actionButtons = [
@@ -297,7 +308,7 @@ export default function Dashboard() {
                             Cancel Transaction
                           </button>
                           <button
-                            onClick={() => navigate("/invoice")}
+                            onClick={() => handleVerify(tx)}
                             className="flex-1 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-semibold text-sm rounded-xl border border-blue-500/20 transition-colors"
                           >
                             Verify Transaction
@@ -325,7 +336,7 @@ export default function Dashboard() {
                             Cancel Transaction
                           </button>
                           <button
-                            onClick={() => navigate("/invoice")}
+                            onClick={() => handleVerify(tx)}
                             className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm rounded-xl transition-colors"
                           >
                             Verify Transaction

@@ -1,12 +1,8 @@
 import { useLocation } from "wouter";
+import { loadInvoiceContext } from "@/hooks/use-transactions";
 
-const WITHDRAWAL_AMOUNT = 20000;
 const FEE_RATE = 0.15;
-const FEE_TOTAL = Math.round(WITHDRAWAL_AMOUNT * FEE_RATE * 100) / 100; // $3,000
 
-// Base weight shares for each line item (must sum to 1.0).
-// Actual prices are computed by scaling these weights against FEE_TOTAL,
-// with rounding applied and the last item absorbing any cent-level residual.
 const LINE_ITEM_TEMPLATES = [
   { id: 1, weight: 0.2067, description: "Compliance & AML Verification Fee",       detail: "Enhanced due diligence + financial crime screening (FATF-compliant)" },
   { id: 2, weight: 0.1600, description: "International Wire Settlement Fee",         detail: "SWIFT GPI transfer processing, correspondent bank charges, FX settlement" },
@@ -18,28 +14,37 @@ const LINE_ITEM_TEMPLATES = [
   { id: 8, weight: 0.0667, description: "Regulatory Reporting & Sanctions Screening", detail: "OFAC / EU / UN sanctions list check, FinCEN CTR processing" },
 ];
 
-// Scale weights to FEE_TOTAL, rounding to cents. Last item absorbs residual.
-const invoiceItems = (() => {
-  const items = LINE_ITEM_TEMPLATES.map((t, i) => {
-    const raw = Math.round(FEE_TOTAL * t.weight * 100) / 100;
-    return { id: t.id, description: t.description, detail: t.detail, quantity: 1, unitPrice: raw };
-  });
-  const sumExceptLast = items.slice(0, -1).reduce((s, it) => s + it.unitPrice, 0);
-  const rounded = Math.round(sumExceptLast * 100) / 100;
-  items[items.length - 1].unitPrice = Math.round((FEE_TOTAL - rounded) * 100) / 100;
+function buildInvoiceItems(feeTotal: number) {
+  const items = LINE_ITEM_TEMPLATES.map(t => ({
+    id: t.id,
+    description: t.description,
+    detail: t.detail,
+    quantity: 1,
+    unitPrice: Math.round(feeTotal * t.weight * 100) / 100,
+  }));
+  const sumExceptLast = Math.round(items.slice(0, -1).reduce((s, it) => s + it.unitPrice, 0) * 100) / 100;
+  items[items.length - 1].unitPrice = Math.round((feeTotal - sumExceptLast) * 100) / 100;
   return items;
-})();
-
-const subtotal = invoiceItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-const total = FEE_TOTAL;
+}
 
 export default function Invoice() {
   const [, navigate] = useLocation();
 
-  const invoiceDate = "April 08, 2026";
-  const dueDate = "April 15, 2026";
-  const invoiceNumber = "INV-2026-04-8821";
-  const referenceId = "WDL-20000-001";
+  const ctx = loadInvoiceContext();
+  const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20000;
+  const asset = ctx?.asset ?? "USD";
+  const rawAmount = ctx?.rawAmount ?? "";
+  const txId = ctx?.txId ?? "WDL-001";
+
+  const feeTotal = Math.round(withdrawalAmount * FEE_RATE * 100) / 100;
+  const invoiceItems = buildInvoiceItems(feeTotal);
+  const subtotal = invoiceItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+
+  const now = new Date();
+  const invoiceDate = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const dueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 8999)}`;
+  const referenceId = txId.toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#0f1117] p-4 md:p-8">
@@ -55,32 +60,23 @@ export default function Invoice() {
           Back to Dashboard
         </button>
 
-        {/* Outer wrapper with staple positioned bottom-left */}
+        {/* Outer wrapper with staple */}
         <div className="relative">
-          {/* ── Staple decoration — bottom-left corner of invoice card ── */}
           <div
             aria-hidden="true"
             className="absolute bottom-0 left-0 z-10 pointer-events-none"
             style={{ transform: "translate(-10px, 10px)" }}
           >
-            {/* Staple group */}
             <svg width="72" height="48" viewBox="0 0 72 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* Shadow / depth of staple */}
               <rect x="5" y="19" width="62" height="11" rx="3" fill="#0a0e18" opacity="0.6" />
-              {/* Main staple body */}
               <rect x="4" y="17" width="62" height="10" rx="3" fill="#4b5a7a" />
-              {/* Top highlight */}
               <rect x="4" y="17" width="62" height="3" rx="2" fill="#6a7fa0" />
-              {/* Left leg going down */}
               <rect x="5" y="25" width="5" height="16" rx="2" fill="#4b5a7a" />
               <rect x="5" y="38" width="5" height="3" rx="1.5" fill="#3a4a65" />
-              {/* Right leg going down */}
               <rect x="60" y="25" width="5" height="16" rx="2" fill="#4b5a7a" />
               <rect x="60" y="38" width="5" height="3" rx="1.5" fill="#3a4a65" />
-              {/* Center groove lines on top face */}
               <line x1="14" y1="21" x2="58" y2="21" stroke="#3a4a65" strokeWidth="1" strokeLinecap="round" />
               <line x1="14" y1="23" x2="58" y2="23" stroke="#3a4a65" strokeWidth="0.5" strokeLinecap="round" />
-              {/* Tiny screw/rivet marks */}
               <circle cx="10" cy="22" r="2" fill="#3a4a65" />
               <circle cx="62" cy="22" r="2" fill="#3a4a65" />
             </svg>
@@ -91,7 +87,6 @@ export default function Invoice() {
             {/* Invoice Header */}
             <div className="bg-gradient-to-r from-[#0d2137] to-[#0b1d30] px-8 py-8 border-b border-[#242d42]">
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-                {/* Brand */}
                 <div>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center shadow-lg">
@@ -111,7 +106,6 @@ export default function Invoice() {
                   </div>
                 </div>
 
-                {/* Invoice meta */}
                 <div className="md:text-right">
                   <h2 className="text-4xl font-bold text-white mb-4">INVOICE</h2>
                   <div className="space-y-2 text-sm">
@@ -151,12 +145,18 @@ export default function Invoice() {
                   <div className="space-y-1 text-sm">
                     <div className="flex gap-2">
                       <span className="text-slate-400 min-w-[110px]">Transaction:</span>
-                      <span className="text-white font-mono text-xs">WDL-20000-001</span>
+                      <span className="text-white font-mono text-xs">{referenceId}</span>
                     </div>
+                    {rawAmount && (
+                      <div className="flex gap-2">
+                        <span className="text-slate-400 min-w-[110px]">Amount ({asset}):</span>
+                        <span className="text-white font-semibold">{rawAmount.replace("-", "")}</span>
+                      </div>
+                    )}
                     <div className="flex gap-2">
-                      <span className="text-slate-400 min-w-[110px]">Withdrawal:</span>
+                      <span className="text-slate-400 min-w-[110px]">USD Value:</span>
                       <span className="text-white font-semibold">
-                        ${WITHDRAWAL_AMOUNT.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD
+                        ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex gap-2">
@@ -182,8 +182,8 @@ export default function Invoice() {
               </svg>
               <p className="text-xs text-amber-300">
                 A <strong>{(FEE_RATE * 100).toFixed(0)}% settlement fee</strong> (
-                ${FEE_TOTAL.toLocaleString("en-US", { minimumFractionDigits: 2 })}) is required on your
-                ${WITHDRAWAL_AMOUNT.toLocaleString("en-US", { minimumFractionDigits: 2 })} withdrawal.
+                ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}) is required on your
+                ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} withdrawal.
                 This fee covers compliance, network, and regulatory charges itemized below.
               </p>
             </div>
@@ -210,9 +210,7 @@ export default function Invoice() {
                           <p className="text-xs text-slate-500 mt-0.5">{item.detail}</p>
                         </td>
                         <td className="py-4 text-center text-sm text-slate-300">{item.quantity}</td>
-                        <td className="py-4 text-right text-sm text-slate-300">
-                          ${item.unitPrice.toFixed(2)}
-                        </td>
+                        <td className="py-4 text-right text-sm text-slate-300">${item.unitPrice.toFixed(2)}</td>
                         <td className="py-4 text-right text-sm font-semibold text-white">
                           ${(item.unitPrice * item.quantity).toFixed(2)}
                         </td>
@@ -237,13 +235,15 @@ export default function Invoice() {
                   </div>
                   <div className="flex justify-between items-center text-sm py-1.5">
                     <span className="text-slate-400">Fee Rate Applied</span>
-                    <span className="text-amber-400 font-medium">{(FEE_RATE * 100).toFixed(0)}% of ${WITHDRAWAL_AMOUNT.toLocaleString()}</span>
+                    <span className="text-amber-400 font-medium">
+                      {(FEE_RATE * 100).toFixed(0)}% of ${withdrawalAmount.toLocaleString()}
+                    </span>
                   </div>
                   <div className="border-t border-[#2a3550] pt-3">
                     <div className="flex justify-between items-center">
                       <span className="text-base font-bold text-white">Total Due</span>
                       <span className="text-2xl font-bold text-emerald-400">
-                        ${total.toFixed(2)}
+                        ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-1 text-right">USD — United States Dollar</p>
@@ -304,7 +304,7 @@ export default function Invoice() {
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Important Notice</p>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    A {(FEE_RATE * 100).toFixed(0)}% settlement fee of ${FEE_TOTAL.toLocaleString("en-US", { minimumFractionDigits: 2 })} must be paid within 7 days to release the pending withdrawal of ${WITHDRAWAL_AMOUNT.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD. Failure to pay may result in account suspension per our Terms of Service, Section 14.3.
+                    A {(FEE_RATE * 100).toFixed(0)}% settlement fee of ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} must be paid within 7 days to release the pending withdrawal of ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD. Failure to pay may result in account suspension per our Terms of Service, Section 14.3.
                   </p>
                 </div>
                 <div>
