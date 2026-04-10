@@ -166,7 +166,7 @@ export default function Trade() {
             </button>
 
             <div className="text-xs text-muted-foreground text-center">
-              Available: <span className="text-foreground font-medium">$20,000.00 USDT</span>
+              Available: <span className="text-foreground font-medium">$20,435.65 USDT</span>
             </div>
           </div>
         </div>
