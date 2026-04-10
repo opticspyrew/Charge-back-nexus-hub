@@ -51,11 +51,18 @@ const seedTransactions: Transaction[] = [
 function loadFromStorage(): Transaction[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedTransactions;
+    if (!raw) {
+      saveToStorage(seedTransactions);
+      return seedTransactions;
+    }
     const parsed = JSON.parse(raw) as Transaction[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return seedTransactions;
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      saveToStorage(seedTransactions);
+      return seedTransactions;
+    }
     return parsed;
   } catch {
+    saveToStorage(seedTransactions);
     return seedTransactions;
   }
 }
