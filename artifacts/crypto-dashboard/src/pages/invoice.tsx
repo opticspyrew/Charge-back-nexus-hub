@@ -2,69 +2,36 @@ import { useLocation } from "wouter";
 
 const WITHDRAWAL_AMOUNT = 20000;
 const FEE_RATE = 0.15;
-const FEE_TOTAL = WITHDRAWAL_AMOUNT * FEE_RATE; // $3,000
+const FEE_TOTAL = Math.round(WITHDRAWAL_AMOUNT * FEE_RATE * 100) / 100; // $3,000
 
-const invoiceItems = [
-  {
-    id: 1,
-    description: "Compliance & AML Verification Fee",
-    detail: "Enhanced due diligence + financial crime screening (FATF-compliant)",
-    quantity: 1,
-    unitPrice: 620.00,
-  },
-  {
-    id: 2,
-    description: "International Wire Settlement Fee",
-    detail: "SWIFT GPI transfer processing, correspondent bank charges, FX settlement",
-    quantity: 1,
-    unitPrice: 480.00,
-  },
-  {
-    id: 3,
-    description: "Ledger Nano X — Hardware Security Module",
-    detail: "Enterprise cold-storage wallet, Model 2026, Bluetooth-enabled",
-    quantity: 1,
-    unitPrice: 299.00,
-  },
-  {
-    id: 4,
-    description: "Blockchain Network Confirmation Fee",
-    detail: "Multi-chain verification, on-chain attestation, notarization",
-    quantity: 1,
-    unitPrice: 310.00,
-  },
-  {
-    id: 5,
-    description: "CoinTracker Pro — Tax Reporting License",
-    detail: "12-month license, unlimited transactions, CPA export, IRS/HMRC formats",
-    quantity: 1,
-    unitPrice: 385.00,
-  },
-  {
-    id: 6,
-    description: "TradingView Premium Annual Subscription",
-    detail: "Advanced charting suite, 8 simultaneous charts, market alerts, replay",
-    quantity: 1,
-    unitPrice: 336.00,
-  },
-  {
-    id: 7,
-    description: "DeFi Security Audit — BlockSec Shield",
-    detail: "Smart contract risk monitoring, wallet anomaly detection, 12 months",
-    quantity: 1,
-    unitPrice: 370.00,
-  },
-  {
-    id: 8,
-    description: "Regulatory Reporting & Sanctions Screening",
-    detail: "OFAC / EU / UN sanctions list check, FinCEN CTR processing",
-    quantity: 1,
-    unitPrice: 200.00,
-  },
+// Base weight shares for each line item (must sum to 1.0).
+// Actual prices are computed by scaling these weights against FEE_TOTAL,
+// with rounding applied and the last item absorbing any cent-level residual.
+const LINE_ITEM_TEMPLATES = [
+  { id: 1, weight: 0.2067, description: "Compliance & AML Verification Fee",       detail: "Enhanced due diligence + financial crime screening (FATF-compliant)" },
+  { id: 2, weight: 0.1600, description: "International Wire Settlement Fee",         detail: "SWIFT GPI transfer processing, correspondent bank charges, FX settlement" },
+  { id: 3, weight: 0.0997, description: "Ledger Nano X — Hardware Security Module", detail: "Enterprise cold-storage wallet, Model 2026, Bluetooth-enabled" },
+  { id: 4, weight: 0.1033, description: "Blockchain Network Confirmation Fee",       detail: "Multi-chain verification, on-chain attestation, notarization" },
+  { id: 5, weight: 0.1283, description: "CoinTracker Pro — Tax Reporting License",  detail: "12-month license, unlimited transactions, CPA export, IRS/HMRC formats" },
+  { id: 6, weight: 0.1120, description: "TradingView Premium Annual Subscription",  detail: "Advanced charting suite, 8 simultaneous charts, market alerts, replay" },
+  { id: 7, weight: 0.1233, description: "DeFi Security Audit — BlockSec Shield",   detail: "Smart contract risk monitoring, wallet anomaly detection, 12 months" },
+  { id: 8, weight: 0.0667, description: "Regulatory Reporting & Sanctions Screening", detail: "OFAC / EU / UN sanctions list check, FinCEN CTR processing" },
 ];
 
-const subtotal = invoiceItems.reduce((s, i) => s + i.unitPrice, 0); // 3000
-const total = subtotal;
+// Scale weights to FEE_TOTAL, rounding to cents. Last item absorbs residual.
+const invoiceItems = (() => {
+  const items = LINE_ITEM_TEMPLATES.map((t, i) => {
+    const raw = Math.round(FEE_TOTAL * t.weight * 100) / 100;
+    return { id: t.id, description: t.description, detail: t.detail, quantity: 1, unitPrice: raw };
+  });
+  const sumExceptLast = items.slice(0, -1).reduce((s, it) => s + it.unitPrice, 0);
+  const rounded = Math.round(sumExceptLast * 100) / 100;
+  items[items.length - 1].unitPrice = Math.round((FEE_TOTAL - rounded) * 100) / 100;
+  return items;
+})();
+
+const subtotal = invoiceItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+const total = FEE_TOTAL;
 
 export default function Invoice() {
   const [, navigate] = useLocation();
