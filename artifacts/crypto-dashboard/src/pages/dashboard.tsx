@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const { transactions, cancelTransaction } = useTransactions();
 
-  const totalBalance = 20000;
+  const totalBalance = 20435.65;
   const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending").length;
 
   function handleCancel(id: string, e: React.MouseEvent) {

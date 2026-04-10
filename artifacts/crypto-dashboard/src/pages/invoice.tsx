@@ -31,7 +31,7 @@ export default function Invoice() {
   const [, navigate] = useLocation();
 
   const ctx = loadInvoiceContext();
-  const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20000;
+  const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20435.65;
   const asset = ctx?.asset ?? "USD";
   const rawAmount = ctx?.rawAmount ?? "";
   const txId = ctx?.txId ?? "WDL-001";
