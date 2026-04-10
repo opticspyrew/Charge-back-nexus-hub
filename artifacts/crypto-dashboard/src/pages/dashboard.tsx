@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import WalletModal from "@/components/wallet-modal";
+import { useTransactions } from "@/hooks/use-transactions";
 
 const portfolioAssets = [
   { symbol: "BTC", name: "Bitcoin", amount: "0.4821", value: "$12,840.50", change: "+2.4%", up: true, color: "bg-amber-400" },
@@ -10,80 +11,34 @@ const portfolioAssets = [
   { symbol: "SOL", name: "Solana", amount: "42.5", value: "$3,778.90", change: "-0.9%", up: false, color: "bg-purple-400" },
 ];
 
-type StatusType = "investigation" | "completed" | "pending";
-
-interface Transaction {
-  id: string;
-  type: string;
-  asset: string;
-  amount: string;
-  date: string;
-  status: string;
-  statusType: StatusType;
-  address: string;
-}
-
-const initialTransactions: Transaction[] = [
-  {
-    id: "txn-002",
-    type: "Deposit",
-    asset: "BTC",
-    amount: "+0.1500 BTC",
-    date: "Apr 05, 2026",
-    status: "Completed",
-    statusType: "completed",
-    address: "External Wallet",
-  },
-  {
-    id: "txn-003",
-    type: "Trade",
-    asset: "ETH",
-    amount: "+1.20 ETH",
-    date: "Apr 02, 2026",
-    status: "Completed",
-    statusType: "completed",
-    address: "BTC → ETH",
-  },
-  {
-    id: "txn-004",
-    type: "Deposit",
-    asset: "USDT",
-    amount: "+5,000 USDT",
-    date: "Mar 29, 2026",
-    status: "Completed",
-    statusType: "completed",
-    address: "Bank Transfer",
-  },
-];
-
 type ModalType = "send" | "receive" | "withdraw" | "deposit" | null;
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+  const { transactions, addTransaction, cancelTransaction } = useTransactions();
 
   const totalBalance = 20000;
 
-  const pendingTxs = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending");
-  const pendingTotal = pendingTxs.length;
+  const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending").length;
 
   function handleTransactionConfirmed(tx: { type: string; asset: string; amount: string; address: string }) {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
-    const newTx: Transaction = {
-      id: `txn-${Date.now()}`,
+    const newId = addTransaction({
       type: tx.type,
       asset: tx.asset,
       amount: `-${tx.amount} ${tx.asset}`,
-      date: dateStr,
-      status: "Under Investigation",
-      statusType: "investigation",
       address: tx.address ? `${tx.address.slice(0, 8)}...` : "Wallet Transfer",
-    };
-    setTransactions(prev => [newTx, ...prev]);
-    setExpandedTx(newTx.id);
+      status: "Pending",
+      statusType: "pending",
+    });
+    setExpandedTx(newId);
+  }
+
+  function handleCancel(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    cancelTransaction(id);
+    if (expandedTx === id) setExpandedTx(null);
   }
 
   return (
@@ -171,10 +126,10 @@ export default function Dashboard() {
             </div>
             <div className="bg-card border border-card-border rounded-2xl p-4">
               <p className="text-xs text-muted-foreground mb-1">Pending</p>
-              {pendingTotal > 0 ? (
+              {pendingCount > 0 ? (
                 <>
-                  <p className="text-xl font-bold text-amber-400">{pendingTotal}</p>
-                  <span className="text-xs text-amber-400/80">Transaction{pendingTotal > 1 ? "s" : ""} under review</span>
+                  <p className="text-xl font-bold text-amber-400">{pendingCount}</p>
+                  <span className="text-xs text-amber-400/80">Transaction{pendingCount > 1 ? "s" : ""} under review</span>
                 </>
               ) : (
                 <>
@@ -217,15 +172,24 @@ export default function Dashboard() {
             ) : transactions.map(tx => (
               <div key={tx.id} className="border border-border rounded-xl overflow-hidden">
                 <div
-                  className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/30 transition-colors ${tx.statusType === "investigation" ? "bg-amber-500/5" : ""}`}
+                  className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/30 transition-colors ${
+                    tx.statusType === "investigation" ? "bg-amber-500/5" :
+                    tx.statusType === "pending" ? "bg-blue-500/5" : ""
+                  }`}
                   onClick={() => setExpandedTx(expandedTx === tx.id ? null : tx.id)}
                 >
                   {/* Icon */}
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    tx.statusType === "investigation" ? "bg-amber-500/15" : "bg-primary/10"
+                    tx.statusType === "investigation" ? "bg-amber-500/15" :
+                    tx.statusType === "pending" ? "bg-blue-500/15" :
+                    "bg-primary/10"
                   }`}>
                     {tx.type === "Withdrawal" || tx.type === "Send" ? (
-                      <svg className={`w-5 h-5 ${tx.statusType === "investigation" ? "text-amber-400" : "text-primary"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-5 h-5 ${
+                        tx.statusType === "investigation" ? "text-amber-400" :
+                        tx.statusType === "pending" ? "text-blue-400" :
+                        "text-primary"
+                      }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
                       </svg>
                     ) : tx.type === "Deposit" ? (
@@ -266,7 +230,11 @@ export default function Dashboard() {
 
                   {/* Amount */}
                   <div className="text-right flex-shrink-0">
-                    <p className={`text-sm font-bold ${tx.statusType === "investigation" ? "text-amber-400" : "text-foreground"}`}>
+                    <p className={`text-sm font-bold ${
+                      tx.statusType === "investigation" ? "text-amber-400" :
+                      tx.statusType === "pending" ? "text-blue-400" :
+                      "text-foreground"
+                    }`}>
                       {tx.amount}
                     </p>
                   </div>
@@ -298,9 +266,32 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground mb-0.5">Status</p>
-                        <p className={`font-medium ${tx.statusType === "investigation" ? "text-amber-400" : "text-primary"}`}>{tx.status}</p>
+                        <p className={`font-medium ${
+                          tx.statusType === "investigation" ? "text-amber-400" :
+                          tx.statusType === "pending" ? "text-blue-400" :
+                          "text-primary"
+                        }`}>{tx.status}</p>
                       </div>
                     </div>
+
+                    {tx.statusType === "pending" && (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                          <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <p className="text-xs text-blue-300">
+                            Your transaction is being processed. It will be reviewed by our team shortly. You can cancel this transaction before it is approved.
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => handleCancel(tx.id, e)}
+                          className="w-full py-2.5 bg-destructive/10 hover:bg-destructive/20 text-destructive font-semibold text-sm rounded-xl border border-destructive/20 transition-colors"
+                        >
+                          Cancel Transaction
+                        </button>
+                      </div>
+                    )}
 
                     {tx.statusType === "investigation" && (
                       <div className="space-y-3">
