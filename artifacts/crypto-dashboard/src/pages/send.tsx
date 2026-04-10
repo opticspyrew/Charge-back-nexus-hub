@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useTransactions } from "@/hooks/use-transactions";
+import { useAuth } from "@/lib/auth-context";
+import { publicApi } from "@/lib/api";
 
 const ASSET_PRICES: Record<string, number> = {
   BTC: 27000,
@@ -30,6 +32,7 @@ type Step = "form" | "review" | "success";
 export default function Send() {
   const [, navigate] = useLocation();
   const { addTransaction } = useTransactions();
+  const { user } = useAuth();
 
   const [step, setStep] = useState<Step>("form");
   const [selectedCrypto, setSelectedCrypto] = useState("BTC");
@@ -59,6 +62,16 @@ export default function Send() {
       status: "Pending",
       statusType: "pending",
     });
+    if (user) {
+      publicApi.submitRequest({
+        name: user.name,
+        email: user.email,
+        type: "send",
+        amount: usdAmount.toFixed(2),
+        currency: "USD",
+        notes: `Send ${amount} ${selectedCrypto} via ${network}${recipient ? ` to ${recipient.slice(0, 12)}...` : ""}`,
+      }).catch(() => {});
+    }
     setLoading(false);
     setStep("success");
   };
