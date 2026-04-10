@@ -124,7 +124,7 @@ router.post("/clients", requireAdmin, async (req: Request, res: Response): Promi
 
 router.patch("/clients/:id", requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = Number(String(req.params.id));
     const { status, notes } = req.body as { status?: string; notes?: string };
     const [client] = await db.update(adminClients)
       .set({ status, notes, updatedAt: new Date() })
@@ -222,7 +222,7 @@ router.post("/requests", requireAdmin, async (req: Request, res: Response): Prom
 
 router.patch("/requests/:id", requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = Number(String(req.params.id));
     const { status } = req.body as { status?: string };
     const [request] = await db.update(adminServiceRequests)
       .set({ status, updatedAt: new Date() })
