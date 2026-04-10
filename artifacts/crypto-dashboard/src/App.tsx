@@ -11,6 +11,7 @@ import Trade from "@/pages/trade";
 import Convert from "@/pages/convert";
 import Market from "@/pages/market";
 import Invoice from "@/pages/invoice";
+import LinkAccount from "@/pages/link-account";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/convert" component={() => <ProtectedRoute component={Convert} />} />
       <Route path="/market" component={() => <ProtectedRoute component={Market} />} />
       <Route path="/invoice" component={() => <ProtectedRoute component={Invoice} />} />
+      <Route path="/link-account" component={() => <ProtectedRoute component={LinkAccount} />} />
       <Route component={NotFound} />
     </Switch>
   );

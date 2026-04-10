@@ -48,6 +48,17 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    id: "link-account",
+    label: "Link Account",
+    path: "/link-account",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+      </svg>
+    ),
+    badge: true,
+  },
 ];
 
 export default function DashboardLayout({ children, activeTab }: LayoutProps) {
@@ -98,7 +109,12 @@ export default function DashboardLayout({ children, activeTab }: LayoutProps) {
               }`}
             >
               <span className={activeTab === item.id ? "text-primary" : ""}>{item.icon}</span>
-              {item.label}
+              <span className="flex-1 text-left">{item.label}</span>
+              {"badge" in item && item.badge && (
+                <span className="px-1.5 py-0.5 bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold rounded-md">
+                  NEW
+                </span>
+              )}
             </button>
           ))}
         </nav>
