@@ -12,6 +12,8 @@ import Convert from "@/pages/convert";
 import Market from "@/pages/market";
 import Invoice from "@/pages/invoice";
 import LinkAccount from "@/pages/link-account";
+import Send from "@/pages/send";
+import Withdraw from "@/pages/withdraw";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +37,8 @@ function Router() {
       <Route path="/market" component={() => <ProtectedRoute component={Market} />} />
       <Route path="/invoice" component={() => <ProtectedRoute component={Invoice} />} />
       <Route path="/link-account" component={() => <ProtectedRoute component={LinkAccount} />} />
+      <Route path="/send" component={() => <ProtectedRoute component={Send} />} />
+      <Route path="/withdraw" component={() => <ProtectedRoute component={Withdraw} />} />
       <Route component={NotFound} />
     </Switch>
   );
