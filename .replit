@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -31,6 +31,10 @@ externalPort = 8081
 localPort = 20512
 externalPort = 3000
 
+[[ports]]
+localPort = 22133
+externalPort = 3001
+
 [rules]
 
 [rules.formatter]
@@ -39,3 +43,6 @@ externalPort = 3000
 
 [rules.formatter.fileExtensions.".tsx"]
 id = "module:nodejs-24/formatter:prettier"
+
+[nix]
+channel = "stable-25_05"
