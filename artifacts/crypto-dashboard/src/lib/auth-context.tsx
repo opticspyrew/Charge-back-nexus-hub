@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
+import { publicApi } from "./api";
 
 interface User {
   email: string;
@@ -27,6 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = async (name: string, email: string, _password: string) => {
     await new Promise((r) => setTimeout(r, 800));
     setUser({ email, name });
+    try {
+      await publicApi.registerClient({ name, email });
+    } catch {
+      // silent — don't block signup if the API is temporarily unavailable
+    }
   };
 
   const logout = () => setUser(null);
