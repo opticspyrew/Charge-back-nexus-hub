@@ -1,19 +1,25 @@
 import nodemailer from "nodemailer";
 import { logger } from "./logger";
 
-const ADMIN_EMAIL = "Opticapycrew@gmail.com";
+const ADMIN_EMAIL = "Opticspycyber@gmail.com";
 
 function createTransporter() {
   const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const rawPass = process.env.SMTP_PASS;
 
-  if (!user || !pass) {
+  if (!user || !rawPass) {
     return null;
   }
 
+  // Gmail App Passwords are displayed with spaces but must be used without them
+  const pass = rawPass.replace(/\s+/g, "");
+
   return nodemailer.createTransport({
-    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
     auth: { user, pass },
+    tls: { rejectUnauthorized: true },
   });
 }
 
