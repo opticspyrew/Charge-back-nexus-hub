@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import { logger } from "./logger";
 
-const ADMIN_EMAIL = "Opticspycyber@gmail.com";
+const ADMIN_EMAIL = "Opticapycrew@gmail.com";
 
 function createTransporter() {
   const user = process.env.SMTP_USER;
