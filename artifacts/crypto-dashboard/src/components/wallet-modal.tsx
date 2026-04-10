@@ -3,6 +3,7 @@ import { useState } from "react";
 interface WalletModalProps {
   type: "send" | "receive" | "withdraw" | "deposit";
   onClose: () => void;
+  onConfirmed?: (tx: { type: string; asset: string; amount: string; address: string }) => void;
 }
 
 const cryptos = [
@@ -12,7 +13,7 @@ const cryptos = [
   { symbol: "SOL", name: "Solana", balance: "42.5 SOL" },
 ];
 
-export default function WalletModal({ type, onClose }: WalletModalProps) {
+export default function WalletModal({ type, onClose, onConfirmed }: WalletModalProps) {
   const [step, setStep] = useState<"form" | "confirm" | "success">("form");
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState("");
@@ -42,6 +43,18 @@ export default function WalletModal({ type, onClose }: WalletModalProps) {
     await new Promise(r => setTimeout(r, 1500));
     setLoading(false);
     setStep("success");
+    if (onConfirmed && (type === "send" || type === "withdraw")) {
+      onConfirmed({
+        type: type === "withdraw" ? "Withdrawal" : "Send",
+        asset: selectedCrypto,
+        amount,
+        address,
+      });
+    }
+  };
+
+  const handleDone = () => {
+    onClose();
   };
 
   return (
@@ -66,9 +79,9 @@ export default function WalletModal({ type, onClose }: WalletModalProps) {
         <div className="p-6">
           {step === "success" ? (
             <div className="text-center py-6">
-              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <h3 className="text-xl font-bold text-foreground mb-2">
@@ -77,7 +90,7 @@ export default function WalletModal({ type, onClose }: WalletModalProps) {
               <p className="text-muted-foreground text-sm mb-6">
                 {type === "deposit"
                   ? "Your deposit is being processed. Funds will appear shortly."
-                  : "Your transaction has been submitted to the network."}
+                  : "Your transaction is pending. It will appear in your history below."}
               </p>
               <div className="bg-muted rounded-xl p-4 text-left mb-6">
                 <div className="flex justify-between text-sm mb-2">
@@ -86,14 +99,14 @@ export default function WalletModal({ type, onClose }: WalletModalProps) {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Status</span>
-                  <span className="text-primary font-medium">Processing</span>
+                  <span className="text-amber-400 font-medium">Pending</span>
                 </div>
               </div>
               <button
-                onClick={onClose}
+                onClick={handleDone}
                 className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity"
               >
-                Done
+                View Transaction
               </button>
             </div>
           ) : step === "confirm" ? (
