@@ -95,8 +95,8 @@ function LoginPage() {
       const { token } = await api.login(form.username, form.password);
       login(token);
       nav("/");
-    } catch (err: any) {
-      setError(err.message || "Invalid credentials");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid credentials");
     } finally { setLoading(false); }
   };
 
@@ -213,7 +213,7 @@ function ClientsPage() {
       setMsg(r.emailSent ? "✓ Client added. Notification email sent." : "✓ Client added. (Email not configured — check SMTP_USER & SMTP_PASS env vars)");
       setShowAdd(false); setForm({ name: "", email: "", phone: "", company: "", notes: "" });
       load();
-    } catch (err: any) { setMsg(`Error: ${err.message}`); }
+    } catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
     finally { setSaving(false); }
   };
 
@@ -223,7 +223,7 @@ function ClientsPage() {
     try {
       await api.updateClient(showEdit.id, { status: editStatus, notes: editNotes });
       setShowEdit(null); load();
-    } catch (err: any) { setMsg(`Error: ${err.message}`); }
+    } catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
     finally { setSaving(false); }
   };
 
@@ -282,7 +282,7 @@ function ClientsPage() {
             <Input label="Company" value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))} placeholder="Acme Corp" />
           </div>
           <Textarea label="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." />
-          <p className="text-xs text-muted-foreground">An approval notification will be sent to Opticapycrew@gmail.com automatically.</p>
+          <p className="text-xs text-muted-foreground">An approval notification will be sent to Opticspycyber@gmail.com automatically.</p>
           <div className="flex gap-3 justify-end pt-1">
             <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm font-medium text-foreground bg-muted border border-border rounded-lg hover:bg-secondary transition-colors">Cancel</button>
             <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-semibold text-primary-foreground bg-primary rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60">{saving ? "Adding..." : "Add Client"}</button>
@@ -332,13 +332,13 @@ function RequestsPage() {
       setMsg(r.emailSent ? "✓ Request submitted. Notification email sent." : "✓ Request submitted. (Email not configured — check SMTP_USER & SMTP_PASS env vars)");
       setShowAdd(false); setForm({ clientId: "", type: "withdrawal", amount: "", currency: "USD", notes: "" });
       load();
-    } catch (err: any) { setMsg(`Error: ${err.message}`); }
+    } catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
     finally { setSaving(false); }
   };
 
   const updateStatus = async (id: number, status: string) => {
     try { await api.updateRequest(id, { status }); load(); }
-    catch (err: any) { setMsg(`Error: ${err.message}`); }
+    catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
   };
 
   return (
@@ -411,7 +411,7 @@ function RequestsPage() {
             </Select>
           </div>
           <Textarea label="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Request details..." />
-          <p className="text-xs text-muted-foreground">A notification email will be sent to Opticapycrew@gmail.com automatically.</p>
+          <p className="text-xs text-muted-foreground">A notification email will be sent to Opticspycyber@gmail.com automatically.</p>
           <div className="flex gap-3 justify-end pt-1">
             <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm font-medium text-foreground bg-muted border border-border rounded-lg hover:bg-secondary transition-colors">Cancel</button>
             <button type="submit" disabled={saving || !form.clientId} className="px-4 py-2 text-sm font-semibold text-primary-foreground bg-primary rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60">{saving ? "Submitting..." : "Submit Request"}</button>
