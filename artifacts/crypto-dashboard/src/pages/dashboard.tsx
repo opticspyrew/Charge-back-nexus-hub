@@ -11,29 +11,16 @@ const portfolioAssets = [
   { symbol: "SOL", name: "Solana", amount: "42.5", value: "$3,778.90", change: "-0.9%", up: false, color: "bg-purple-400" },
 ];
 
-type ModalType = "send" | "receive" | "withdraw" | "deposit" | null;
+type ModalType = "receive" | "deposit" | null;
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
-  const { transactions, addTransaction, cancelTransaction } = useTransactions();
+  const { transactions, cancelTransaction } = useTransactions();
 
   const totalBalance = 20000;
-
   const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending").length;
-
-  function handleTransactionConfirmed(tx: { type: string; asset: string; amount: string; address: string }) {
-    const newId = addTransaction({
-      type: tx.type,
-      asset: tx.asset,
-      amount: `-${tx.amount} ${tx.asset}`,
-      address: tx.address ? `${tx.address.slice(0, 8)}...` : "Wallet Transfer",
-      status: "Pending",
-      statusType: "pending",
-    });
-    setExpandedTx(newId);
-  }
 
   function handleCancel(id: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -41,13 +28,51 @@ export default function Dashboard() {
     if (expandedTx === id) setExpandedTx(null);
   }
 
+  const actionButtons = [
+    {
+      label: "Send",
+      onClick: () => navigate("/send"),
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        </svg>
+      ),
+    },
+    {
+      label: "Receive",
+      onClick: () => setModal("receive"),
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      ),
+    },
+    {
+      label: "Withdraw",
+      onClick: () => navigate("/withdraw"),
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+        </svg>
+      ),
+    },
+    {
+      label: "Deposit",
+      onClick: () => setModal("deposit"),
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
     <DashboardLayout activeTab="dashboard">
       {modal && (
         <WalletModal
           type={modal}
           onClose={() => setModal(null)}
-          onConfirmed={handleTransactionConfirmed}
         />
       )}
 
@@ -76,31 +101,10 @@ export default function Dashboard() {
 
             {/* Action buttons */}
             <div className="grid grid-cols-4 gap-2">
-              {[
-                { label: "Send", type: "send" as ModalType, icon: (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                )},
-                { label: "Receive", type: "receive" as ModalType, icon: (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                )},
-                { label: "Withdraw", type: "withdraw" as ModalType, icon: (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
-                )},
-                { label: "Deposit", type: "deposit" as ModalType, icon: (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                )},
-              ].map(btn => (
+              {actionButtons.map(btn => (
                 <button
                   key={btn.label}
-                  onClick={() => setModal(btn.type)}
+                  onClick={btn.onClick}
                   className="flex flex-col items-center gap-1.5 p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
@@ -274,6 +278,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
+                    {/* Pending state: info + Cancel + Verify */}
                     {tx.statusType === "pending" && (
                       <div className="space-y-3">
                         <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
@@ -281,18 +286,27 @@ export default function Dashboard() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <p className="text-xs text-blue-300">
-                            Your transaction is being processed. It will be reviewed by our team shortly. You can cancel this transaction before it is approved.
+                            Your transaction is pending review. You can cancel it before it is processed, or verify it to proceed.
                           </p>
                         </div>
-                        <button
-                          onClick={(e) => handleCancel(tx.id, e)}
-                          className="w-full py-2.5 bg-destructive/10 hover:bg-destructive/20 text-destructive font-semibold text-sm rounded-xl border border-destructive/20 transition-colors"
-                        >
-                          Cancel Transaction
-                        </button>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={(e) => handleCancel(tx.id, e)}
+                            className="flex-1 py-2.5 bg-destructive/10 hover:bg-destructive/20 text-destructive font-semibold text-sm rounded-xl border border-destructive/20 transition-colors"
+                          >
+                            Cancel Transaction
+                          </button>
+                          <button
+                            onClick={() => navigate("/invoice")}
+                            className="flex-1 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-semibold text-sm rounded-xl border border-blue-500/20 transition-colors"
+                          >
+                            Verify Transaction
+                          </button>
+                        </div>
                       </div>
                     )}
 
+                    {/* Investigation state: alert + Cancel + Verify */}
                     {tx.statusType === "investigation" && (
                       <div className="space-y-3">
                         <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
@@ -300,15 +314,23 @@ export default function Dashboard() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
                           <p className="text-xs text-amber-300">
-                            This transaction is currently under investigation by our compliance team. Please complete the required billing verification to release your funds.
+                            This transaction is under investigation by our compliance team. Complete the billing verification to release your funds.
                           </p>
                         </div>
-                        <button
-                          onClick={() => navigate("/invoice")}
-                          className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm rounded-xl transition-colors"
-                        >
-                          Withdrawal Approved — View Invoice
-                        </button>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={(e) => handleCancel(tx.id, e)}
+                            className="flex-1 py-2.5 bg-destructive/10 hover:bg-destructive/20 text-destructive font-semibold text-sm rounded-xl border border-destructive/20 transition-colors"
+                          >
+                            Cancel Transaction
+                          </button>
+                          <button
+                            onClick={() => navigate("/invoice")}
+                            className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm rounded-xl transition-colors"
+                          >
+                            Verify Transaction
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
