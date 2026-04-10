@@ -10,29 +10,28 @@ const portfolioAssets = [
   { symbol: "SOL", name: "Solana", amount: "42.5", value: "$3,778.90", change: "-0.9%", up: false, color: "bg-purple-400" },
 ];
 
-const transactions = [
-  {
-    id: "txn-pending-001",
-    type: "Withdrawal",
-    asset: "USD",
-    amount: "$20,000.00",
-    amountRaw: 20000,
-    date: "Apr 08, 2026",
-    status: "Under Investigation",
-    statusType: "investigation",
-    isPending: true,
-    address: "Bank Transfer • ****4821",
-  },
+type StatusType = "investigation" | "completed" | "pending";
+
+interface Transaction {
+  id: string;
+  type: string;
+  asset: string;
+  amount: string;
+  date: string;
+  status: string;
+  statusType: StatusType;
+  address: string;
+}
+
+const initialTransactions: Transaction[] = [
   {
     id: "txn-002",
     type: "Deposit",
     asset: "BTC",
     amount: "+0.1500 BTC",
-    amountRaw: 0,
     date: "Apr 05, 2026",
     status: "Completed",
     statusType: "completed",
-    isPending: false,
     address: "External Wallet",
   },
   {
@@ -40,11 +39,9 @@ const transactions = [
     type: "Trade",
     asset: "ETH",
     amount: "+1.20 ETH",
-    amountRaw: 0,
     date: "Apr 02, 2026",
     status: "Completed",
     statusType: "completed",
-    isPending: false,
     address: "BTC → ETH",
   },
   {
@@ -52,11 +49,9 @@ const transactions = [
     type: "Deposit",
     asset: "USDT",
     amount: "+5,000 USDT",
-    amountRaw: 0,
     date: "Mar 29, 2026",
     status: "Completed",
     statusType: "completed",
-    isPending: false,
     address: "Bank Transfer",
   },
 ];
@@ -67,8 +62,29 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
 
   const totalBalance = 20000;
+
+  const pendingTxs = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending");
+  const pendingTotal = pendingTxs.length;
+
+  function handleTransactionConfirmed(tx: { type: string; asset: string; amount: string; address: string }) {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+    const newTx: Transaction = {
+      id: `txn-${Date.now()}`,
+      type: tx.type,
+      asset: tx.asset,
+      amount: `-${tx.amount} ${tx.asset}`,
+      date: dateStr,
+      status: "Under Investigation",
+      statusType: "investigation",
+      address: tx.address ? `${tx.address.slice(0, 8)}...` : "Wallet Transfer",
+    };
+    setTransactions(prev => [newTx, ...prev]);
+    setExpandedTx(newTx.id);
+  }
 
   return (
     <DashboardLayout activeTab="dashboard">
@@ -76,6 +92,7 @@ export default function Dashboard() {
         <WalletModal
           type={modal}
           onClose={() => setModal(null)}
+          onConfirmed={handleTransactionConfirmed}
         />
       )}
 
@@ -154,8 +171,17 @@ export default function Dashboard() {
             </div>
             <div className="bg-card border border-card-border rounded-2xl p-4">
               <p className="text-xs text-muted-foreground mb-1">Pending</p>
-              <p className="text-xl font-bold text-amber-400">$20,000.00</p>
-              <span className="text-xs text-amber-400/80">Under investigation</span>
+              {pendingTotal > 0 ? (
+                <>
+                  <p className="text-xl font-bold text-amber-400">{pendingTotal}</p>
+                  <span className="text-xs text-amber-400/80">Transaction{pendingTotal > 1 ? "s" : ""} under review</span>
+                </>
+              ) : (
+                <>
+                  <p className="text-xl font-bold text-foreground">0</p>
+                  <span className="text-xs text-muted-foreground">No pending transactions</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -186,7 +212,9 @@ export default function Dashboard() {
         <div className="bg-card border border-card-border rounded-2xl p-6">
           <h3 className="text-base font-semibold text-foreground mb-4">Transaction History</h3>
           <div className="space-y-3">
-            {transactions.map(tx => (
+            {transactions.length === 0 ? (
+              <p className="text-center text-muted-foreground text-sm py-6">No transactions yet.</p>
+            ) : transactions.map(tx => (
               <div key={tx.id} className="border border-border rounded-xl overflow-hidden">
                 <div
                   className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/30 transition-colors ${tx.statusType === "investigation" ? "bg-amber-500/5" : ""}`}
@@ -196,7 +224,7 @@ export default function Dashboard() {
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                     tx.statusType === "investigation" ? "bg-amber-500/15" : "bg-primary/10"
                   }`}>
-                    {tx.type === "Withdrawal" ? (
+                    {tx.type === "Withdrawal" || tx.type === "Send" ? (
                       <svg className={`w-5 h-5 ${tx.statusType === "investigation" ? "text-amber-400" : "text-primary"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
                       </svg>
@@ -216,8 +244,15 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold text-foreground">{tx.type}</p>
                       {tx.statusType === "investigation" && (
-                        <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 text-xs font-medium rounded-full border border-amber-500/20">
+                        <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 text-xs font-medium rounded-full border border-amber-500/20 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
                           Under Investigation
+                        </span>
+                      )}
+                      {tx.statusType === "pending" && (
+                        <span className="px-2 py-0.5 bg-blue-500/15 text-blue-400 text-xs font-medium rounded-full border border-blue-500/20 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                          Pending
                         </span>
                       )}
                       {tx.statusType === "completed" && (
