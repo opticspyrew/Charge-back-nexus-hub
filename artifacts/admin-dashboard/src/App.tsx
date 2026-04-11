@@ -25,6 +25,7 @@ function Badge({ status }: { status: string }) {
     pending: "bg-amber-100 text-amber-800 border-amber-200",
     approved: "bg-emerald-100 text-emerald-800 border-emerald-200",
     denied: "bg-red-100 text-red-800 border-red-200",
+    out_of_bound: "bg-rose-100 text-rose-900 border-rose-300",
     active: "bg-blue-100 text-blue-800 border-blue-200",
     withdrawal: "bg-purple-100 text-purple-800 border-purple-200",
     payment: "bg-blue-100 text-blue-800 border-blue-200",
@@ -32,7 +33,7 @@ function Badge({ status }: { status: string }) {
   };
   return (
     <span className={cn("px-2 py-0.5 text-xs font-semibold rounded-full border", styles[status] || styles.other)}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+      {status === "out_of_bound" ? "OUT OF BOUND" : status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 }
@@ -294,6 +295,7 @@ function ClientsPage() {
         <form onSubmit={handleEdit} className="space-y-4">
           <Select label="Status" value={editStatus} onChange={e => setEditStatus(e.target.value)}>
             <option value="pending">Pending</option>
+            <option value="out_of_bound">Out of Bound</option>
             <option value="active">Active</option>
             <option value="approved">Approved</option>
             <option value="denied">Denied</option>
@@ -382,9 +384,10 @@ function RequestsPage() {
                       <div className="flex gap-2">
                         <button onClick={() => updateStatus(r.id, "approved")} className="text-xs font-semibold text-emerald-600 hover:underline">Approve</button>
                         <button onClick={() => updateStatus(r.id, "denied")} className="text-xs font-semibold text-red-600 hover:underline">Deny</button>
+                        <button onClick={() => updateStatus(r.id, "out_of_bound")} className="text-xs font-semibold text-rose-700 hover:underline">Out of Bound</button>
                       </div>
                     )}
-                    {r.status !== "pending" && <span className="text-xs text-muted-foreground capitalize">{r.status}</span>}
+                    {r.status !== "pending" && <span className="text-xs text-muted-foreground">{r.status === "out_of_bound" ? "OUT OF BOUND" : r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span>}
                   </td>
                 </tr>
               ))}
