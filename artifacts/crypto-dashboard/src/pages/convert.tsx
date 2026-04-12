@@ -2,11 +2,10 @@ import { useState } from "react";
 import DashboardLayout from "@/components/dashboard-layout";
 
 const assets = [
-  { symbol: "BTC", name: "Bitcoin", balance: "0.4821", price: 66421.5 },
-  { symbol: "ETH", name: "Ethereum", balance: "3.21", price: 3285.4 },
-  { symbol: "USDT", name: "Tether", balance: "8450", price: 1 },
-  { symbol: "SOL", name: "Solana", balance: "42.5", price: 142.86 },
-  { symbol: "BNB", name: "BNB", balance: "1.2", price: 596.3 },
+  { symbol: "BTC", name: "Bitcoin", balance: "0.7569", price: 27000 },
+  { symbol: "ETH", name: "Ethereum", balance: "0", price: 1550 },
+  { symbol: "USDT", name: "Tether", balance: "0", price: 1 },
+  { symbol: "SOL", name: "Solana", balance: "0", price: 89 },
 ];
 
 export default function Convert() {
