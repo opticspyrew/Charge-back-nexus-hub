@@ -39,8 +39,11 @@ export default function Invoice() {
   const feeTotal = Math.round(withdrawalAmount * FEE_RATE * 100) / 100;
   const invoiceItems = buildInvoiceItems(feeTotal);
   const subtotal = invoiceItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const vatRate = 0.075;
+  const vatAmount = Math.round(feeTotal * vatRate * 100) / 100;
+  const grossTotal = Math.round((feeTotal + vatAmount) * 100) / 100;
   const priorCredit = 2000;
-  const totalDue = Math.round((feeTotal - priorCredit) * 100) / 100;
+  const totalDue = Math.round((grossTotal - priorCredit) * 100) / 100;
 
   const now = new Date();
   const invoiceDate = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -232,8 +235,8 @@ export default function Invoice() {
                     <span className="text-white font-medium">${subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm py-1.5">
-                    <span className="text-slate-400">Tax (0%)</span>
-                    <span className="text-white font-medium">$0.00</span>
+                    <span className="text-slate-400">VAT ({(vatRate * 100).toFixed(1)}%)</span>
+                    <span className="text-white font-medium">${vatAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm py-1.5">
                     <span className="text-slate-400">Fee Rate Applied</span>
@@ -245,7 +248,7 @@ export default function Invoice() {
                     <div className="flex justify-between items-center">
                       <span className="text-base font-bold text-white">Gross Total</span>
                       <span className="text-xl font-bold text-white">
-                        ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        ${grossTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
@@ -320,7 +323,7 @@ export default function Invoice() {
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Important Notice</p>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    The remaining balance of ${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2 })} (after a ${priorCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })} prior credit applied to the original ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} settlement fee) must be paid within 7 days to release the pending withdrawal of ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD. Failure to pay may result in account suspension per our Terms of Service, Section 14.3.
+                    The remaining balance of ${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2 })} (settlement fee ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} + {(vatRate * 100).toFixed(1)}% VAT ${vatAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}, less ${priorCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })} prior credit) must be paid within 7 days to release the pending withdrawal of ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD. Failure to pay may result in account suspension per our Terms of Service, Section 14.3.
                   </p>
                 </div>
                 <div>
