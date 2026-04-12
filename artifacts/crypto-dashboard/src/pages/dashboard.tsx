@@ -5,10 +5,7 @@ import WalletModal from "@/components/wallet-modal";
 import { useTransactions, saveInvoiceContext } from "@/hooks/use-transactions";
 
 const portfolioAssets = [
-  { symbol: "BTC", name: "Bitcoin", amount: "0.4821", value: "$12,840.50", change: "+2.4%", up: true, color: "bg-amber-400" },
-  { symbol: "ETH", name: "Ethereum", amount: "3.21", value: "$4,930.60", change: "+1.8%", up: true, color: "bg-blue-400" },
-  { symbol: "USDT", name: "Tether", amount: "8,450", value: "$8,450.00", change: "0.0%", up: true, color: "bg-emerald-400" },
-  { symbol: "SOL", name: "Solana", amount: "42.5", value: "$3,778.90", change: "-0.9%", up: false, color: "bg-purple-400" },
+  { symbol: "BTC", name: "Bitcoin", amount: "0.7569", value: "$20,435.65", change: "+2.4%", up: true, color: "bg-amber-400" },
 ];
 
 type ModalType = "receive" | "deposit" | null;

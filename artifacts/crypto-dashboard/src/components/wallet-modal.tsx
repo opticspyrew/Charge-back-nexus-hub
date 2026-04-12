@@ -7,10 +7,7 @@ interface WalletModalProps {
 }
 
 const cryptos = [
-  { symbol: "BTC", name: "Bitcoin", balance: "0.4821 BTC" },
-  { symbol: "ETH", name: "Ethereum", balance: "3.21 ETH" },
-  { symbol: "USDT", name: "Tether", balance: "8,450 USDT" },
-  { symbol: "SOL", name: "Solana", balance: "42.5 SOL" },
+  { symbol: "BTC", name: "Bitcoin", balance: "0.7569 BTC" },
 ];
 
 export default function WalletModal({ type, onClose, onConfirmed }: WalletModalProps) {
