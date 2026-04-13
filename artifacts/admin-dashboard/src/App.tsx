@@ -25,6 +25,7 @@ function Badge({ status }: { status: string }) {
     pending: "bg-amber-100 text-amber-800 border-amber-200",
     approved: "bg-emerald-100 text-emerald-800 border-emerald-200",
     denied: "bg-red-100 text-red-800 border-red-200",
+    processing: "bg-cyan-100 text-cyan-800 border-cyan-200",
     out_of_bound: "bg-rose-100 text-rose-900 border-rose-300",
     active: "bg-blue-100 text-blue-800 border-blue-200",
     withdrawal: "bg-purple-100 text-purple-800 border-purple-200",
