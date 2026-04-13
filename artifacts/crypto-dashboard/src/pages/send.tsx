@@ -56,8 +56,8 @@ export default function Send() {
       amount: `-${amount} ${selectedCrypto}`,
       usdAmount,
       address: recipient ? `${recipient.slice(0, 8)}...` : "Wallet Transfer",
-      status: "Processing",
-      statusType: "processing",
+      status: "Pending",
+      statusType: "pending",
     });
     if (user) {
       publicApi.submitRequest({

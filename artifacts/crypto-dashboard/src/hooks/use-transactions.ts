@@ -127,12 +127,25 @@ function saveToStorage(txns: Transaction[]) {
   }
 }
 
-function escalatePending(txns: Transaction[]): { txns: Transaction[]; changed: boolean } {
+function escalateStatuses(txns: Transaction[]): { txns: Transaction[]; changed: boolean } {
   let changed = false;
   const updated = txns.map(tx => {
     if (tx.statusType === "pending") {
       changed = true;
-      return { ...tx, statusType: "investigation" as StatusType, status: "Under Investigation" };
+      return {
+        ...tx,
+        statusType: "processing" as StatusType,
+        status: "Processing",
+        blockConfirmations: 0,
+        blockConfirmStart: Date.now(),
+      };
+    }
+    if (tx.statusType === "processing") {
+      const elapsed = Date.now() - (tx.blockConfirmStart ?? Date.now());
+      if (elapsed > 90000) {
+        changed = true;
+        return { ...tx, statusType: "investigation" as StatusType, status: "Under Investigation" };
+      }
     }
     return tx;
   });
@@ -142,7 +155,7 @@ function escalatePending(txns: Transaction[]): { txns: Transaction[]; changed: b
 export function useTransactions() {
   const [transactions, setTransactionsState] = useState<Transaction[]>(() => {
     const loaded = loadFromStorage();
-    const { txns, changed } = escalatePending(loaded);
+    const { txns, changed } = escalateStatuses(loaded);
     if (changed) saveToStorage(txns);
     return txns;
   });
@@ -161,10 +174,8 @@ export function useTransactions() {
     const newTx: Transaction = {
       id: `txn-${Date.now()}`,
       date: dateStr,
-      status: tx.status ?? "Processing",
-      statusType: tx.statusType ?? "processing",
-      blockConfirmations: 0,
-      blockConfirmStart: Date.now(),
+      status: tx.status ?? "Pending",
+      statusType: tx.statusType ?? "pending",
       ...tx,
     };
     setTransactions(prev => [newTx, ...prev]);

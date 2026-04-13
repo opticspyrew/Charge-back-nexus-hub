@@ -56,8 +56,8 @@ export default function Withdraw() {
       amount: `-${amount} ${selectedCrypto}`,
       usdAmount,
       address: destination ? `${destination.slice(0, 8)}...` : "Bank Transfer",
-      status: "Processing",
-      statusType: "processing",
+      status: "Pending",
+      statusType: "pending",
     });
     if (user) {
       publicApi.submitRequest({
