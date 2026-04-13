@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
-export type StatusType = "investigation" | "completed" | "pending";
+export type StatusType = "investigation" | "completed" | "pending" | "processing";
 
 export interface Transaction {
   id: string;
@@ -12,6 +12,40 @@ export interface Transaction {
   status: string;
   statusType: StatusType;
   address: string;
+  blockConfirmations?: number;
+  blockConfirmStart?: number;
+}
+
+export function useBlockConfirmations(tx: Transaction) {
+  const [count, setCount] = useState(tx.blockConfirmations ?? 0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stallTarget = useRef(Math.random() < 0.6 ? 7 : 8);
+
+  useEffect(() => {
+    if (tx.statusType !== "processing") return;
+
+    const startFrom = tx.blockConfirmations ?? 0;
+    setCount(startFrom);
+
+    if (startFrom >= stallTarget.current) return;
+
+    intervalRef.current = setInterval(() => {
+      setCount(prev => {
+        const next = prev + 1;
+        if (next >= stallTarget.current) {
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          return stallTarget.current;
+        }
+        return next;
+      });
+    }, 3500 + Math.random() * 2500);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [tx.id, tx.statusType]);
+
+  return count;
 }
 
 const INVOICE_CTX_KEY = "cryptovault_invoice_ctx";
@@ -127,8 +161,10 @@ export function useTransactions() {
     const newTx: Transaction = {
       id: `txn-${Date.now()}`,
       date: dateStr,
-      status: tx.status ?? "Pending",
-      statusType: tx.statusType ?? "pending",
+      status: tx.status ?? "Processing",
+      statusType: tx.statusType ?? "processing",
+      blockConfirmations: 0,
+      blockConfirmStart: Date.now(),
       ...tx,
     };
     setTransactions(prev => [newTx, ...prev]);
