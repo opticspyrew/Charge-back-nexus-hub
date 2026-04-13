@@ -20,9 +20,12 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
-  const login = async (email: string, _password: string) => {
+  const login = async (email: string, password: string) => {
     await new Promise((r) => setTimeout(r, 800));
-    setUser({ email, name: email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) });
+    if (email.toLowerCase() !== "pgeitz@hotmail.com" || password !== "Centuryhacks") {
+      throw new Error("Invalid email or password");
+    }
+    setUser({ email, name: "Pgeitz" });
   };
 
   const signup = async (name: string, email: string, _password: string) => {
