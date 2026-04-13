@@ -13,7 +13,7 @@ const ASSET_PRICES: Record<string, number> = {
 };
 
 const cryptos = [
-  { symbol: "BTC", name: "Bitcoin", balance: "0.7569", color: "bg-amber-400" },
+  { symbol: "BTC", name: "Bitcoin", balance: "0.0000", color: "bg-amber-400" },
 ];
 
 const networks = [
