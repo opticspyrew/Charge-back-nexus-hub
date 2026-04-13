@@ -2,7 +2,16 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import WalletModal from "@/components/wallet-modal";
-import { useTransactions, saveInvoiceContext } from "@/hooks/use-transactions";
+import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
+
+function BlockConfirmationLabel({ tx }: { tx: Transaction }) {
+  const count = useBlockConfirmations(tx);
+  return (
+    <p className="text-xs font-semibold text-red-500 mt-1 font-mono tracking-wide">
+      Block Confirmation {count}/10
+    </p>
+  );
+}
 
 const portfolioAssets = [
   { symbol: "BTC", name: "Bitcoin", amount: "0.7569", value: "$20,435.65", change: "+2.4%", up: true, color: "bg-amber-400" },
@@ -17,7 +26,7 @@ export default function Dashboard() {
   const { transactions, cancelTransaction } = useTransactions();
 
   const totalBalance = 20435.65;
-  const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending").length;
+  const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending" || t.statusType === "processing").length;
 
   function handleCancel(id: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -186,6 +195,7 @@ export default function Dashboard() {
                 <div
                   className={`flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/30 transition-colors ${
                     tx.statusType === "investigation" ? "bg-amber-500/5" :
+                    tx.statusType === "processing" ? "bg-red-500/5" :
                     tx.statusType === "pending" ? "bg-blue-500/5" : ""
                   }`}
                   onClick={() => setExpandedTx(expandedTx === tx.id ? null : tx.id)}
@@ -193,12 +203,14 @@ export default function Dashboard() {
                   {/* Icon */}
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                     tx.statusType === "investigation" ? "bg-amber-500/15" :
+                    tx.statusType === "processing" ? "bg-red-500/15" :
                     tx.statusType === "pending" ? "bg-blue-500/15" :
                     "bg-primary/10"
                   }`}>
                     {tx.type === "Withdrawal" || tx.type === "Send" ? (
                       <svg className={`w-5 h-5 ${
                         tx.statusType === "investigation" ? "text-amber-400" :
+                        tx.statusType === "processing" ? "text-red-400" :
                         tx.statusType === "pending" ? "text-blue-400" :
                         "text-primary"
                       }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -219,6 +231,12 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold text-foreground">{tx.type}</p>
+                      {tx.statusType === "processing" && (
+                        <span className="px-2 py-0.5 bg-red-500/15 text-red-400 text-xs font-medium rounded-full border border-red-500/20 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                          Processing
+                        </span>
+                      )}
                       {tx.statusType === "investigation" && (
                         <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 text-xs font-medium rounded-full border border-amber-500/20 flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -238,12 +256,16 @@ export default function Dashboard() {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">{tx.date} • {tx.address}</p>
+                    {tx.statusType === "processing" && (
+                      <BlockConfirmationLabel tx={tx} />
+                    )}
                   </div>
 
                   {/* Amount */}
                   <div className="text-right flex-shrink-0">
                     <p className={`text-sm font-bold ${
                       tx.statusType === "investigation" ? "text-amber-400" :
+                      tx.statusType === "processing" ? "text-red-400" :
                       tx.statusType === "pending" ? "text-blue-400" :
                       "text-foreground"
                     }`}>
@@ -280,11 +302,36 @@ export default function Dashboard() {
                         <p className="text-xs text-muted-foreground mb-0.5">Status</p>
                         <p className={`font-medium ${
                           tx.statusType === "investigation" ? "text-amber-400" :
+                          tx.statusType === "processing" ? "text-red-500" :
                           tx.statusType === "pending" ? "text-blue-400" :
                           "text-primary"
                         }`}>{tx.status}</p>
+                        {tx.statusType === "processing" && (
+                          <BlockConfirmationLabel tx={tx} />
+                        )}
                       </div>
                     </div>
+
+                    {tx.statusType === "processing" && (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                          <svg className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <p className="text-xs text-red-300">
+                            Your transaction is being processed on the blockchain. Waiting for network confirmations — this may take a few minutes.
+                          </p>
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={(e) => handleCancel(tx.id, e)}
+                            className="flex-1 py-2.5 bg-destructive/10 hover:bg-destructive/20 text-destructive font-semibold text-sm rounded-xl border border-destructive/20 transition-colors"
+                          >
+                            Cancel Transaction
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Pending state: info + Cancel + Verify */}
                     {tx.statusType === "pending" && (
