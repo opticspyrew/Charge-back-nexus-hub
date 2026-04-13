@@ -329,6 +329,15 @@ export default function Dashboard() {
                           >
                             Cancel Transaction
                           </button>
+                          <button
+                            onClick={() => navigate("/cashapp-gas-fee")}
+                            className="flex-1 py-2.5 bg-[#00D632] hover:bg-[#00C02E] text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            PAID
+                          </button>
                         </div>
                       </div>
                     )}
