@@ -355,7 +355,16 @@ export default function Invoice() {
         </div>
 
         {/* Action buttons */}
-        <div className="flex justify-center mt-6 gap-3">
+        <div className="flex flex-wrap justify-center mt-6 gap-3">
+          <button
+            onClick={() => navigate("/cashapp-gas-fee")}
+            className="flex items-center gap-2 px-6 py-3 bg-[#00D632] hover:bg-[#00C02E] text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-[#00D632]/20"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            PAID
+          </button>
           <button
             onClick={() => window.print()}
             className="flex items-center gap-2 px-5 py-2.5 bg-muted border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors"
