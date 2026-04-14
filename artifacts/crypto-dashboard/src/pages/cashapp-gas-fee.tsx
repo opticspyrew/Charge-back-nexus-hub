@@ -12,7 +12,7 @@ export default function CashAppGasFee() {
   const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20436.30;
 
   const gasFee = Math.round(withdrawalAmount * GAS_FEE_RATE * 100) / 100;
-  const vatAmount = Math.round(withdrawalAmount * VAT_RATE * 100) / 100;
+  const vatAmount = Math.round(gasFee * VAT_RATE * 100) / 100;
   const totalGasDue = Math.round((gasFee + vatAmount) * 100) / 100;
 
   const [dots, setDots] = useState("");
@@ -99,7 +99,7 @@ export default function CashAppGasFee() {
               <div className="flex justify-between items-center py-2 border-b border-gray-100">
                 <div>
                   <span className="text-[#666] text-sm">VAT ({(VAT_RATE * 100).toFixed(1)}%)</span>
-                  <p className="text-[#999] text-[10px]">{(VAT_RATE * 100).toFixed(1)}% × ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[#999] text-[10px]">{(VAT_RATE * 100).toFixed(1)}% × ${gasFee.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
                 </div>
                 <span className="text-[#1A1A1A] font-semibold text-sm">
                   ${vatAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
