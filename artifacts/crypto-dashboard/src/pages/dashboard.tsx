@@ -14,7 +14,7 @@ function BlockConfirmationLabel({ tx }: { tx: Transaction }) {
 }
 
 const portfolioAssets = [
-  { symbol: "BTC", name: "Bitcoin", amount: "0.0000", value: "$0.00", change: "+2.4%", up: true, color: "bg-amber-400" },
+  { symbol: "BTC", name: "Bitcoin", amount: "1.8519", value: "$50,000.00", change: "+2.4%", up: true, color: "bg-amber-400" },
 ];
 
 type ModalType = "receive" | "deposit" | null;
@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const { transactions, cancelTransaction } = useTransactions();
 
-  const totalBalance = 0.00;
+  const totalBalance = 50000.00;
   const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending" || t.statusType === "processing").length;
 
   function handleCancel(id: string, e: React.MouseEvent) {
