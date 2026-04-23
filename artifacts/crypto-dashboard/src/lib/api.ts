@@ -25,4 +25,18 @@ export const publicApi = {
     currency: string;
     notes?: string;
   }) => post<{ request: { id: number }; emailSent: boolean }>("/request", data),
+
+  submitPaymentConfirmation: (data: {
+    name: string;
+    email: string;
+    amount: string;
+    currency: string;
+    notes?: string;
+  }) => post<{ request: { id: number }; emailSent: boolean }>("/payment-confirmation", data),
+
+  getRequestStatus: async (id: number): Promise<{ id: number; status: string; type: string }> => {
+    const res = await fetch(`${API_BASE}/request-status/${id}`);
+    if (!res.ok) throw new Error("Failed to fetch request status");
+    return res.json();
+  },
 };

