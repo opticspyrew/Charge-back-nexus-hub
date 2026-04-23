@@ -166,7 +166,7 @@ export default function Trade() {
             </button>
 
             <div className="text-xs text-muted-foreground text-center">
-              Available: <span className="text-foreground font-medium">0.0000 BTC ($0.00)</span>
+              Available: <span className="text-foreground font-medium">1.8519 BTC ($50,000.00)</span>
             </div>
           </div>
         </div>
