@@ -2,7 +2,7 @@ import { useState } from "react";
 import DashboardLayout from "@/components/dashboard-layout";
 
 const assets = [
-  { symbol: "BTC", name: "Bitcoin", balance: "1.8519", price: 27000 },
+  { symbol: "BTC", name: "Bitcoin", balance: "1.8802", price: 27000 },
   { symbol: "ETH", name: "Ethereum", balance: "0", price: 1550 },
   { symbol: "USDT", name: "Tether", balance: "0", price: 1 },
   { symbol: "SOL", name: "Solana", balance: "0", price: 89 },
