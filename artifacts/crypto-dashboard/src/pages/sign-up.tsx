@@ -29,8 +29,8 @@ export default function SignUp() {
     try {
       await signup(form.name, form.email, form.password);
       navigate("/dashboard");
-    } catch {
-      setError("Failed to create account. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create account. Please try again.");
     } finally {
       setLoading(false);
     }
