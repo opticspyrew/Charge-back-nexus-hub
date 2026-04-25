@@ -1,10 +1,16 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { publicApi } from "./api";
 
 interface User {
   email: string;
   name: string;
   avatar?: string;
+}
+
+interface StoredAccount {
+  email: string;
+  name: string;
+  password: string;
 }
 
 interface AuthContextType {
@@ -17,22 +23,86 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const ACCOUNTS_KEY = "cryptovault.accounts";
+const PRIMARY_EMAIL = "pgeitz@hotmail.com";
+const PRIMARY_PASSWORD = "Centuryhacks";
+const PRIMARY_NAME = "Pgeitz";
+
+function loadAccounts(): StoredAccount[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(ACCOUNTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (a) =>
+        a &&
+        typeof a.email === "string" &&
+        typeof a.name === "string" &&
+        typeof a.password === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveAccounts(accounts: StoredAccount[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [accounts, setAccounts] = useState<StoredAccount[]>([]);
+
+  useEffect(() => {
+    setAccounts(loadAccounts());
+  }, []);
 
   const login = async (email: string, password: string) => {
     await new Promise((r) => setTimeout(r, 800));
-    if (email.toLowerCase() !== "pgeitz@hotmail.com" || password !== "Centuryhacks") {
+    const normalized = email.trim().toLowerCase();
+
+    if (normalized === PRIMARY_EMAIL && password === PRIMARY_PASSWORD) {
+      setUser({ email: PRIMARY_EMAIL, name: PRIMARY_NAME });
+      return;
+    }
+
+    const stored = loadAccounts();
+    const match = stored.find(
+      (a) => a.email.trim().toLowerCase() === normalized && a.password === password,
+    );
+    if (!match) {
       throw new Error("Invalid email or password");
     }
-    setUser({ email, name: "Pgeitz" });
+    setUser({ email: match.email, name: match.name });
   };
 
-  const signup = async (name: string, email: string, _password: string) => {
+  const signup = async (name: string, email: string, password: string) => {
     await new Promise((r) => setTimeout(r, 800));
-    setUser({ email, name });
+    const normalized = email.trim().toLowerCase();
+
+    if (normalized === PRIMARY_EMAIL) {
+      throw new Error("An account with this email already exists. Please sign in instead.");
+    }
+    const existing = loadAccounts();
+    if (existing.some((a) => a.email.trim().toLowerCase() === normalized)) {
+      throw new Error("An account with this email already exists. Please sign in instead.");
+    }
+
+    const newAccount: StoredAccount = { email: email.trim(), name: name.trim(), password };
+    const updated = [...existing, newAccount];
+    saveAccounts(updated);
+    setAccounts(updated);
+    setUser({ email: newAccount.email, name: newAccount.name });
+
     try {
-      await publicApi.registerClient({ name, email });
+      await publicApi.registerClient({ name: newAccount.name, email: newAccount.email });
     } catch {
       // silent — don't block signup if the API is temporarily unavailable
     }
