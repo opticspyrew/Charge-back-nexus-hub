@@ -70,19 +70,6 @@ const STORAGE_KEY = "cryptovault_transactions";
 
 const seedTransactions: Transaction[] = [
   {
-    id: "txn-001",
-    type: "Withdrawal",
-    asset: "BTC",
-    amount: "-0.7569 BTC",
-    usdAmount: 20436.30,
-    date: "Apr 13, 2026",
-    status: "Processing",
-    statusType: "processing",
-    address: "Bank Transfer",
-    blockConfirmations: 0,
-    blockConfirmStart: Date.now(),
-  },
-  {
     id: "txn-002",
     type: "Deposit",
     asset: "BTC",
@@ -126,18 +113,13 @@ function loadFromStorage(): Transaction[] {
       saveToStorage(seedTransactions);
       return seedTransactions;
     }
-    const hasProcessingWithdrawal = parsed.some(tx => tx.id === "txn-001");
-    if (!hasProcessingWithdrawal) {
-      const merged = [{ ...seedTransactions[0], blockConfirmStart: Date.now() }, ...parsed];
-      saveToStorage(merged);
-      return merged;
+    // Migration: remove the old hard-coded incomplete seed transaction
+    const migrated = parsed.filter(tx => tx.id !== "txn-001");
+    if (migrated.length !== parsed.length) {
+      saveToStorage(migrated);
+      return migrated;
     }
-    return parsed.map(tx => {
-      if (tx.id === "txn-001" && tx.statusType === "processing") {
-        return { ...tx, blockConfirmations: 0, blockConfirmStart: Date.now() };
-      }
-      return tx;
-    });
+    return parsed;
   } catch {
     saveToStorage(seedTransactions);
     return seedTransactions;
@@ -193,7 +175,7 @@ function escalateStatuses(txns: Transaction[]): { txns: Transaction[]; changed: 
         blockConfirmStart: Date.now(),
       };
     }
-    if (tx.statusType === "processing" && tx.id !== "txn-001") {
+    if (tx.statusType === "processing") {
       const elapsed = Date.now() - (tx.blockConfirmStart ?? Date.now());
       if (elapsed > 90000) {
         changed = true;
