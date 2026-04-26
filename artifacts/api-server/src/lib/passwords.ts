@@ -1,4 +1,4 @@
-import { pbkdf2, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, pbkdf2, randomBytes, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const pbkdf2Async = promisify(pbkdf2);
@@ -53,4 +53,12 @@ export async function verifyPassword(
 
 export function generateSessionToken(): string {
   return randomBytes(32).toString("base64url");
+}
+
+export function generateResetToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashResetToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }

@@ -25,7 +25,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  resetPassword: (email: string, newPassword: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPasswordWithToken: (token: string, newPassword: string) => Promise<void>;
   accountExists: (email: string) => Promise<boolean>;
   logout: () => Promise<void>;
 }
@@ -191,10 +192,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resetPassword = async (email: string, newPassword: string) => {
+  const forgotPassword = async (email: string) => {
     const trimmed = email.trim();
     if (!trimmed) {
-      throw new Error("Please enter the email address for the account.");
+      throw new Error("Please enter the email address for your account.");
+    }
+    await authApi.forgotPassword(trimmed);
+  };
+
+  const resetPasswordWithToken = async (token: string, newPassword: string) => {
+    if (!token) {
+      throw new Error("Reset link is missing or invalid.");
     }
 
     const passwordCheck = validatePassword(newPassword);
@@ -202,11 +210,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(passwordCheck.error ?? "Please choose a stronger password.");
     }
 
-    await authApi.resetPassword({ email: trimmed, newPassword });
+    const result = await authApi.resetPassword({ token, newPassword });
+    updateSession({ token: result.token, user: toUser(result.user) });
 
-    // Clear any active lockout so the user can sign in immediately with
-    // their new password.
-    recordSuccess(email);
+    // Clear any active lockout for this email so a previously locked-out user
+    // can use the dashboard immediately after resetting.
+    recordSuccess(result.user.email);
   };
 
   const logout = async () => {
@@ -229,7 +238,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         signup,
         changePassword,
-        resetPassword,
+        forgotPassword,
+        resetPasswordWithToken,
         accountExists,
         logout,
       }}

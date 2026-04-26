@@ -16,6 +16,7 @@ import Send from "@/pages/send";
 import Withdraw from "@/pages/withdraw";
 import CashAppGasFee from "@/pages/cashapp-gas-fee";
 import ChangePassword from "@/pages/change-password";
+import ResetPassword from "@/pages/reset-password";
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/" component={() => <Redirect to="/sign-in" />} />
       <Route path="/sign-in" component={SignIn} />
       <Route path="/sign-up" component={SignUp} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
       <Route path="/trade" component={() => <ProtectedRoute component={Trade} />} />
       <Route path="/convert" component={() => <ProtectedRoute component={Convert} />} />

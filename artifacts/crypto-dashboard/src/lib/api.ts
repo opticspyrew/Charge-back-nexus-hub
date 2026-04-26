@@ -102,6 +102,27 @@ export const authApi = {
       Authorization: `Bearer ${token}`,
     }),
 
-  resetPassword: (data: { email: string; newPassword: string }) =>
-    post<{ ok: boolean }>(`${AUTH_BASE}/reset-password`, data),
+  forgotPassword: (email: string) =>
+    post<{ ok: boolean }>(`${AUTH_BASE}/forgot-password`, { email }),
+
+  validateResetToken: async (
+    token: string,
+  ): Promise<{ valid: boolean; email?: string; expiresAt?: string; error?: string }> => {
+    const res = await fetch(
+      `${AUTH_BASE}/reset-password?token=${encodeURIComponent(token)}`,
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return {
+        valid: false,
+        error:
+          (data as { error?: string }).error ||
+          "This password reset link is invalid or has expired.",
+      };
+    }
+    return data as { valid: boolean; email?: string; expiresAt?: string };
+  },
+
+  resetPassword: (data: { token: string; newPassword: string }) =>
+    post<AuthSessionResponse>(`${AUTH_BASE}/reset-password`, data),
 };
