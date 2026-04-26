@@ -170,6 +170,77 @@ export function passwordChangedEmail(params: {
   return { subject, html };
 }
 
+export function newSignInEmail(params: {
+  name: string;
+  email: string;
+  signedInAt: Date;
+  deviceLabel: string;
+  ipAddress: string | null;
+  activityUrl: string | null;
+  changePasswordUrl: string | null;
+  supportEmail: string;
+}): { subject: string; html: string } {
+  const {
+    name,
+    email,
+    signedInAt,
+    deviceLabel,
+    ipAddress,
+    activityUrl,
+    changePasswordUrl,
+    supportEmail,
+  } = params;
+  const subject = "New sign-in to your CryptoVault account";
+  const timestamp = signedInAt.toUTCString();
+  const ipLine = ipAddress
+    ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">IP address</td><td style="padding: 8px 0; color: #111827; font-size: 13px;">${ipAddress}</td></tr>`
+    : "";
+  const activityLink = activityUrl
+    ? `<a href="${activityUrl}" style="color: #1e3a5f; font-weight: 600;">recent activity</a>`
+    : `<strong>recent activity</strong>`;
+  const changeLink = changePasswordUrl
+    ? `<a href="${changePasswordUrl}" style="color: #1e3a5f; font-weight: 600;">change your password</a>`
+    : `<strong>change your password</strong>`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #1e3a5f; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">New sign-in detected</h1>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${name || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">
+          We detected a sign-in to your CryptoVault account (<strong>${email}</strong>) from a device or
+          location we haven't seen before.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 130px;">When</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${timestamp}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Device</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${deviceLabel}</td>
+          </tr>
+          ${ipLine}
+        </table>
+        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+          <p style="font-size: 13px; color: #92400e; margin: 0; font-weight: 600;">If this wasn't you</p>
+          <p style="font-size: 13px; color: #78350f; margin: 6px 0 0;">
+            Review your ${activityLink} in the dashboard, ${changeLink} immediately, and contact our support team at
+            <a href="mailto:${supportEmail}" style="color: #1e3a5f; font-weight: 600;">${supportEmail}</a>.
+          </p>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          This is an automated security notification from CryptoVault. You're receiving it because a new
+          device just signed in to your account.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
 export function newClientEmail(client: {
   name: string;
   email: string;

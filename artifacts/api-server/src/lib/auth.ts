@@ -1,5 +1,5 @@
 import { db, users, userSessions, type User, type UserSession } from "@workspace/db";
-import { eq, lt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, ne } from "drizzle-orm";
 import { hashPassword, generateSessionToken } from "./passwords";
 import { logger } from "./logger";
 
@@ -67,6 +67,62 @@ export async function findSessionWithUser(
     return undefined;
   }
   return row;
+}
+
+/**
+ * Returns true if the user has any other (non-expired) session matching the
+ * given (ipAddress, userAgent) pair. We pass `excludeSessionId` so that the
+ * just-created session — which already has its own row — doesn't match itself.
+ *
+ * If both ipAddress and userAgent are null/empty we treat that as "unknown"
+ * and conservatively return true so we don't fire a "new device" alert just
+ * because we happen to be missing metadata.
+ */
+export async function hasSeenSessionMetadata(params: {
+  userId: number;
+  ipAddress: string | null;
+  userAgent: string | null;
+  excludeSessionId?: number;
+}): Promise<boolean> {
+  const { userId, ipAddress, userAgent, excludeSessionId } = params;
+  if (!ipAddress && !userAgent) return true;
+
+  const conditions = [
+    eq(userSessions.userId, userId),
+    gt(userSessions.expiresAt, new Date()),
+    ipAddress
+      ? eq(userSessions.ipAddress, ipAddress)
+      : isNull(userSessions.ipAddress),
+    userAgent
+      ? eq(userSessions.userAgent, userAgent)
+      : isNull(userSessions.userAgent),
+  ];
+  if (typeof excludeSessionId === "number") {
+    conditions.push(ne(userSessions.id, excludeSessionId));
+  }
+  const [row] = await db
+    .select({ id: userSessions.id })
+    .from(userSessions)
+    .where(and(...conditions))
+    .limit(1);
+  return !!row;
+}
+
+/**
+ * Count of currently-valid (non-expired) sessions for the user. We
+ * deliberately exclude expired rows so the "first-ever login" suppression
+ * matches the same time window used by hasSeenSessionMetadata. Otherwise a
+ * stale expired session could make priorSessionCount > 0 while
+ * historicallySeen is false, producing a spurious "new device" alert.
+ */
+export async function countSessionsForUser(userId: number): Promise<number> {
+  const rows = await db
+    .select({ id: userSessions.id })
+    .from(userSessions)
+    .where(
+      and(eq(userSessions.userId, userId), gt(userSessions.expiresAt, new Date())),
+    );
+  return rows.length;
 }
 
 export async function deleteSessionByToken(token: string): Promise<void> {
