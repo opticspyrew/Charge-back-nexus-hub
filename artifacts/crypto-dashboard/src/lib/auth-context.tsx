@@ -24,9 +24,43 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const ACCOUNTS_KEY = "cryptovault.accounts";
+const SESSION_KEY = "cryptovault.session";
 const PRIMARY_EMAIL = "pgeitz@hotmail.com";
 const PRIMARY_PASSWORD = "Centuryhacks";
 const PRIMARY_NAME = "Pgeitz";
+
+function loadSession(): User | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed.email === "string" &&
+      typeof parsed.name === "string" &&
+      (typeof parsed.avatar === "string" || typeof parsed.avatar === "undefined")
+    ) {
+      return { email: parsed.email, name: parsed.name, avatar: parsed.avatar };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(user: User | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (user) {
+      window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    } else {
+      window.localStorage.removeItem(SESSION_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function loadAccounts(): StoredAccount[] {
   if (typeof window === "undefined") return [];
@@ -57,12 +91,17 @@ function saveAccounts(accounts: StoredAccount[]) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(() => loadSession());
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
 
   useEffect(() => {
     setAccounts(loadAccounts());
   }, []);
+
+  const setUser = (next: User | null) => {
+    saveSession(next);
+    setUserState(next);
+  };
 
   const login = async (email: string, password: string) => {
     await new Promise((r) => setTimeout(r, 800));
