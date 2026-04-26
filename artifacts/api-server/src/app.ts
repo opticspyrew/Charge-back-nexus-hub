@@ -6,6 +6,13 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+// Trust exactly one proxy hop (the Replit platform proxy that fronts every
+// request). With this set, Express derives `req.ip` from the rightmost
+// X-Forwarded-For entry — the address the trusted proxy actually saw —
+// and discards any client-supplied entries to its left. This is what the
+// forgot-password throttle relies on to get a non-spoofable client IP.
+app.set("trust proxy", 1);
+
 app.use(
   pinoHttp({
     logger,

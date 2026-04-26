@@ -23,6 +23,10 @@ import {
   passwordResetEmail,
   sendUserEmail,
 } from "../lib/email";
+import {
+  checkForgotPasswordThrottle,
+  getClientIp,
+} from "../lib/forgot-password-throttle";
 
 const SUPPORT_EMAIL = "Opticspycrew@gmail.com";
 
@@ -308,6 +312,35 @@ router.post("/forgot-password", async (req: Request, res: Response): Promise<voi
       res.json({ ok: true });
       return;
     }
+
+    const ip = getClientIp(req);
+    const throttle = checkForgotPasswordThrottle(normalized, ip);
+    if (!throttle.allowed) {
+      logger.warn(
+        {
+          email: normalized,
+          ip,
+          reason: throttle.reason,
+          emailCount: throttle.emailCount,
+          ipCount: throttle.ipCount,
+          retryAfterMs: throttle.retryAfterMs,
+        },
+        "Forgot-password request throttled",
+      );
+      // Still return 200 to avoid leaking that an account exists or that
+      // we recognized the request as abusive.
+      res.json({ ok: true });
+      return;
+    }
+    logger.info(
+      {
+        email: normalized,
+        ip,
+        emailCount: throttle.emailCount,
+        ipCount: throttle.ipCount,
+      },
+      "Forgot-password request accepted by throttle",
+    );
 
     await ensurePrimaryUser();
     const user = await findUserByEmail(normalized);
