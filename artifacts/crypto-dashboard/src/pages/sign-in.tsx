@@ -96,8 +96,8 @@ export default function SignIn() {
     }
     setForgotLoading(true);
     try {
-      await new Promise((r) => setTimeout(r, 300));
-      if (!accountExists(trimmed)) {
+      const exists = await accountExists(trimmed);
+      if (!exists) {
         setForgotError("We couldn't find an account with that email address.");
         return;
       }

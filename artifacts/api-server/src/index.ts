@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { ensurePrimaryUser, purgeExpiredSessions } from "./lib/auth";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,8 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Seed primary user and clear expired sessions on startup (best-effort).
+  void ensurePrimaryUser();
+  void purgeExpiredSessions();
 });

@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { publicApi } from "./api";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { authApi, publicApi, type AuthUser } from "./api";
 import { validatePassword } from "./password-policy";
 import {
   LoginLockoutError,
@@ -14,21 +14,10 @@ interface User {
   avatar?: string;
 }
 
-interface HashedAccount {
-  email: string;
-  name: string;
-  passwordHash: string;
-  salt: string;
-  iterations: number;
+interface StoredSession {
+  token: string;
+  user: User;
 }
-
-interface LegacyAccount {
-  email: string;
-  name: string;
-  password: string;
-}
-
-type StoredAccount = HashedAccount | LegacyAccount;
 
 interface AuthContextType {
   user: User | null;
@@ -37,120 +26,20 @@ interface AuthContextType {
   signup: (name: string, email: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   resetPassword: (email: string, newPassword: string) => Promise<void>;
-  accountExists: (email: string) => boolean;
-  logout: () => void;
+  accountExists: (email: string) => Promise<boolean>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const ACCOUNTS_KEY = "cryptovault.accounts";
 const SESSION_KEY = "cryptovault.session";
-const PRIMARY_EMAIL = "pgeitz@hotmail.com";
-const PRIMARY_PASSWORD = "Centuryhacks";
-const PRIMARY_NAME = "Pgeitz";
+const LEGACY_ACCOUNTS_KEY = "cryptovault.accounts";
 
-const PBKDF2_ITERATIONS = 150_000;
-const PBKDF2_HASH = "SHA-256";
-const PBKDF2_KEY_LENGTH_BITS = 256;
-const SALT_BYTES = 16;
-
-function isHashedAccount(account: StoredAccount): account is HashedAccount {
-  return (
-    typeof (account as HashedAccount).passwordHash === "string" &&
-    typeof (account as HashedAccount).salt === "string" &&
-    typeof (account as HashedAccount).iterations === "number"
-  );
+function toUser(apiUser: AuthUser): User {
+  return { email: apiUser.email, name: apiUser.name };
 }
 
-function isLegacyAccount(account: StoredAccount): account is LegacyAccount {
-  return typeof (account as LegacyAccount).password === "string";
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = window.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
-}
-
-async function derivePasswordHash(
-  password: string,
-  salt: Uint8Array,
-  iterations: number,
-): Promise<string> {
-  const subtle = window.crypto?.subtle;
-  if (!subtle) {
-    throw new Error("WebCrypto is not available in this environment.");
-  }
-  const keyMaterial = await subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"],
-  );
-  const derived = await subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: salt as BufferSource,
-      iterations,
-      hash: PBKDF2_HASH,
-    },
-    keyMaterial,
-    PBKDF2_KEY_LENGTH_BITS,
-  );
-  return bytesToBase64(new Uint8Array(derived));
-}
-
-async function hashPassword(password: string): Promise<{
-  passwordHash: string;
-  salt: string;
-  iterations: number;
-}> {
-  if (!window.crypto?.getRandomValues || !window.crypto?.subtle) {
-    throw new Error(
-      "Your browser does not support the secure cryptography needed to create an account. Please update to a modern browser and try again.",
-    );
-  }
-  const saltBytes = window.crypto.getRandomValues(new Uint8Array(SALT_BYTES));
-  const passwordHash = await derivePasswordHash(password, saltBytes, PBKDF2_ITERATIONS);
-  return {
-    passwordHash,
-    salt: bytesToBase64(saltBytes),
-    iterations: PBKDF2_ITERATIONS,
-  };
-}
-
-async function verifyPassword(account: HashedAccount, password: string): Promise<boolean> {
-  try {
-    const saltBytes = base64ToBytes(account.salt);
-    const candidate = await derivePasswordHash(password, saltBytes, account.iterations);
-    return timingSafeEqual(candidate, account.passwordHash);
-  } catch {
-    return false;
-  }
-}
-
-function loadSession(): User | null {
+function loadStoredSession(): StoredSession | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(SESSION_KEY);
@@ -158,23 +47,29 @@ function loadSession(): User | null {
     const parsed = JSON.parse(raw);
     if (
       parsed &&
-      typeof parsed.email === "string" &&
-      typeof parsed.name === "string" &&
-      (typeof parsed.avatar === "string" || typeof parsed.avatar === "undefined")
+      typeof parsed.token === "string" &&
+      parsed.user &&
+      typeof parsed.user.email === "string" &&
+      typeof parsed.user.name === "string"
     ) {
-      return { email: parsed.email, name: parsed.name, avatar: parsed.avatar };
+      return {
+        token: parsed.token,
+        user: { email: parsed.user.email, name: parsed.user.name },
+      };
     }
+    // Legacy session shape (just user info, no token) — discard so the user
+    // is forced to sign in against the server.
     return null;
   } catch {
     return null;
   }
 }
 
-function saveSession(user: User | null) {
+function saveStoredSession(session: StoredSession | null) {
   if (typeof window === "undefined") return;
   try {
-    if (user) {
-      window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    if (session) {
+      window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     } else {
       window.localStorage.removeItem(SESSION_KEY);
     }
@@ -183,43 +78,57 @@ function saveSession(user: User | null) {
   }
 }
 
-function loadAccounts(): StoredAccount[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(ACCOUNTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((a) => {
-      if (!a || typeof a.email !== "string" || typeof a.name !== "string") return false;
-      return isHashedAccount(a) || isLegacyAccount(a);
-    });
-  } catch {
-    return [];
-  }
-}
-
-function saveAccounts(accounts: StoredAccount[]) {
+function clearLegacyAccounts() {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    window.localStorage.removeItem(LEGACY_ACCOUNTS_KEY);
   } catch {
     // ignore storage errors
   }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUserState] = useState<User | null>(() => loadSession());
+  const initial = loadStoredSession();
+  const [session, setSessionState] = useState<StoredSession | null>(initial);
+  const tokenRef = useRef<string | null>(initial?.token ?? null);
+
+  const updateSession = (next: StoredSession | null) => {
+    tokenRef.current = next?.token ?? null;
+    saveStoredSession(next);
+    setSessionState(next);
+  };
 
   useEffect(() => {
-    // Touch storage so any tab open before this version still loads cleanly.
-    loadAccounts();
+    // Stop persisting locally-created accounts; the server is the source of truth now.
+    clearLegacyAccounts();
   }, []);
 
-  const setUser = (next: User | null) => {
-    saveSession(next);
-    setUserState(next);
-  };
+  useEffect(() => {
+    // Validate any restored session against the server. If the token is no
+    // longer valid (e.g. expired or revoked), drop it so the UI redirects to
+    // sign-in instead of pretending the user is authenticated.
+    let cancelled = false;
+    const current = tokenRef.current;
+    if (!current) return;
+    (async () => {
+      try {
+        const apiUser = await authApi.me(current);
+        if (cancelled) return;
+        if (!apiUser) {
+          updateSession(null);
+        } else {
+          updateSession({ token: current, user: toUser(apiUser) });
+        }
+      } catch {
+        // Network failure — keep the cached session so the user isn't kicked
+        // out unnecessarily; the next protected request will surface the issue.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (email: string, password: string) => {
     const lock = getLockoutState(email);
@@ -227,98 +136,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new LoginLockoutError(lock.msRemaining, lock.failures);
     }
 
-    await new Promise((r) => setTimeout(r, 400));
-    const normalized = email.trim().toLowerCase();
-
-    const failAndThrow = (): never => {
-      recordFailure(email);
-      throw new Error("Invalid email or password");
-    };
-
-    // Check stored accounts FIRST so a user-set password (including for the
-    // primary account, after they change it) shadows the built-in default.
-    const stored = loadAccounts();
-    const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
-
-    if (index !== -1) {
-      const account = stored[index];
-
-      if (isHashedAccount(account)) {
-        const ok = await verifyPassword(account, password);
-        if (!ok) failAndThrow();
-        recordSuccess(email);
-        setUser({ email: account.email, name: account.name });
-        return;
-      }
-
-      if (isLegacyAccount(account)) {
-        // One-time migration: verify the legacy plain-text password, then
-        // immediately upgrade the stored record to a hashed representation
-        // so the plain-text value never lives on disk again.
-        if (account.password !== password) {
-          failAndThrow();
-        }
-        const hashed = await hashPassword(password);
-        const upgraded: HashedAccount = {
-          email: account.email,
-          name: account.name,
-          ...hashed,
-        };
-        const next = [...stored];
-        next[index] = upgraded;
-        saveAccounts(next);
-        recordSuccess(email);
-        setUser({ email: upgraded.email, name: upgraded.name });
-        return;
-      }
-    }
-
-    // Fall back to the built-in primary credentials only when no stored
-    // account exists for that email.
-    if (normalized === PRIMARY_EMAIL && password === PRIMARY_PASSWORD) {
+    try {
+      const result = await authApi.login({ email, password });
       recordSuccess(email);
-      setUser({ email: PRIMARY_EMAIL, name: PRIMARY_NAME });
-      return;
+      updateSession({ token: result.token, user: toUser(result.user) });
+    } catch (err) {
+      recordFailure(email);
+      const fresh = getLockoutState(email);
+      if (fresh.locked) {
+        throw new LoginLockoutError(fresh.msRemaining, fresh.failures);
+      }
+      if (err instanceof Error) throw err;
+      throw new Error("Invalid email or password");
     }
-
-    failAndThrow();
   };
 
   const signup = async (name: string, email: string, password: string) => {
-    const normalized = email.trim().toLowerCase();
-
-    const passwordCheck = validatePassword(password);
-    if (!passwordCheck.ok) {
-      throw new Error(passwordCheck.error ?? "Please choose a stronger password.");
-    }
-
-    if (normalized === PRIMARY_EMAIL) {
-      throw new Error("An account with this email already exists. Please sign in instead.");
-    }
-    const existing = loadAccounts();
-    if (existing.some((a) => a.email.trim().toLowerCase() === normalized)) {
-      throw new Error("An account with this email already exists. Please sign in instead.");
-    }
-
-    const hashed = await hashPassword(password);
-    const newAccount: HashedAccount = {
-      email: email.trim(),
-      name: name.trim(),
-      ...hashed,
-    };
-    const updated = [...existing, newAccount];
-    saveAccounts(updated);
-    setUser({ email: newAccount.email, name: newAccount.name });
+    const result = await authApi.signup({ name, email, password });
+    updateSession({ token: result.token, user: toUser(result.user) });
 
     try {
-      await publicApi.registerClient({ name: newAccount.name, email: newAccount.email });
+      await publicApi.registerClient({ name: result.user.name, email: result.user.email });
     } catch {
-      // silent — don't block signup if the API is temporarily unavailable
+      // silent — don't block signup if the admin notification is unavailable
     }
   };
 
   const changePassword = async (currentPassword: string, newPassword: string) => {
-    if (!user) {
+    const token = tokenRef.current;
+    if (!token) {
       throw new Error("You must be signed in to change your password.");
     }
 
@@ -331,53 +177,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("New password must be different from your current password.");
     }
 
-    const normalized = user.email.trim().toLowerCase();
-    const stored = loadAccounts();
-    const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
-
-    let verified = false;
-    if (index !== -1) {
-      const account = stored[index];
-      if (isHashedAccount(account)) {
-        verified = await verifyPassword(account, currentPassword);
-      } else if (isLegacyAccount(account)) {
-        verified = account.password === currentPassword;
-      }
-    } else if (normalized === PRIMARY_EMAIL && currentPassword === PRIMARY_PASSWORD) {
-      verified = true;
-    }
-
-    if (!verified) {
-      throw new Error("Current password is incorrect.");
-    }
-
-    const hashed = await hashPassword(newPassword);
-    const newAccount: HashedAccount = {
-      email: user.email,
-      name: user.name,
-      ...hashed,
-    };
-
-    let next: StoredAccount[];
-    if (index !== -1) {
-      next = [...stored];
-      next[index] = newAccount;
-    } else {
-      next = [...stored, newAccount];
-    }
-    saveAccounts(next);
+    await authApi.changePassword(token, { currentPassword, newPassword });
   };
 
-  const accountExists = (email: string): boolean => {
-    const normalized = email.trim().toLowerCase();
-    if (!normalized) return false;
-    if (normalized === PRIMARY_EMAIL) return true;
-    return loadAccounts().some((a) => a.email.trim().toLowerCase() === normalized);
+  const accountExists = async (email: string): Promise<boolean> => {
+    const trimmed = email.trim();
+    if (!trimmed) return false;
+    try {
+      const { exists } = await authApi.exists(trimmed);
+      return exists;
+    } catch {
+      return false;
+    }
   };
 
   const resetPassword = async (email: string, newPassword: string) => {
-    const normalized = email.trim().toLowerCase();
-    if (!normalized) {
+    const trimmed = email.trim();
+    if (!trimmed) {
       throw new Error("Please enter the email address for the account.");
     }
 
@@ -386,45 +202,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(passwordCheck.error ?? "Please choose a stronger password.");
     }
 
-    const stored = loadAccounts();
-    const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
-    const isPrimary = normalized === PRIMARY_EMAIL;
-
-    if (index === -1 && !isPrimary) {
-      throw new Error("We couldn't find an account with that email address.");
-    }
-
-    const displayEmail = index !== -1 ? stored[index].email : PRIMARY_EMAIL;
-    const displayName = index !== -1 ? stored[index].name : PRIMARY_NAME;
-
-    const hashed = await hashPassword(newPassword);
-    const newAccount: HashedAccount = {
-      email: displayEmail,
-      name: displayName,
-      ...hashed,
-    };
-
-    let next: StoredAccount[];
-    if (index !== -1) {
-      next = [...stored];
-      next[index] = newAccount;
-    } else {
-      next = [...stored, newAccount];
-    }
-    saveAccounts(next);
+    await authApi.resetPassword({ email: trimmed, newPassword });
 
     // Clear any active lockout so the user can sign in immediately with
     // their new password.
     recordSuccess(email);
   };
 
-  const logout = () => setUser(null);
+  const logout = async () => {
+    const token = tokenRef.current;
+    updateSession(null);
+    if (token) {
+      try {
+        await authApi.logout(token);
+      } catch {
+        // ignore — we've already dropped the local session
+      }
+    }
+  };
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        isAuthenticated: !!user,
+        user: session?.user ?? null,
+        isAuthenticated: !!session,
         login,
         signup,
         changePassword,
