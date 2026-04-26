@@ -52,6 +52,23 @@ function describeLocation(
   return "Location unknown";
 }
 
+/**
+ * Convert an ISO 3166-1 alpha-2 country code (e.g. "US") into a flag emoji
+ * by mapping each letter to its Regional Indicator Symbol (U+1F1E6 + offset).
+ * Returns null for anything that isn't a valid 2-letter code so we never
+ * render a broken/placeholder glyph.
+ */
+function flagEmojiFromCountryCode(code: string | null): string | null {
+  if (!code) return null;
+  const normalized = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return null;
+  const base = 0x1f1e6 - "A".charCodeAt(0);
+  return String.fromCodePoint(
+    normalized.charCodeAt(0) + base,
+    normalized.charCodeAt(1) + base,
+  );
+}
+
 export default function RecentActivityPanel() {
   const { token } = useAuth();
   const [sessions, setSessions] = useState<AuthSessionRecord[] | null>(null);
@@ -205,7 +222,35 @@ export default function RecentActivityPanel() {
                   data-testid={`recent-activity-location-${s.id}`}
                 >
                   {formatTimestamp(s.createdAt)} •{" "}
-                  {describeLocation(s.location, s.ipAddress)}
+                  {(() => {
+                    // Only render a flag when the row has a *resolved*
+                    // location (not an IP fallback or "Location unknown")
+                    // AND we have a valid 2-letter country code. This
+                    // matches the task's accessibility requirement: rows
+                    // without geo data simply omit the flag.
+                    const flag =
+                      s.location && s.location.trim() !== ""
+                        ? flagEmojiFromCountryCode(s.countryCode)
+                        : null;
+                    return (
+                      <>
+                        {flag && (
+                          <span
+                            aria-hidden="true"
+                            // Bump above the surrounding `text-xs` so the flag
+                            // lands at the ~16px size the task calls for, and
+                            // nudge baseline alignment so the emoji sits on
+                            // the same line as the timestamp/location text.
+                            className="mr-1 text-base leading-none align-middle"
+                            data-testid={`recent-activity-flag-${s.id}`}
+                          >
+                            {flag}
+                          </span>
+                        )}
+                        {describeLocation(s.location, s.ipAddress)}
+                      </>
+                    );
+                  })()}
                 </p>
               </div>
               {!s.current && (

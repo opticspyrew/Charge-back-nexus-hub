@@ -81,6 +81,7 @@ export interface AuthSessionRecord {
   ipAddress: string | null;
   userAgent: string | null;
   location: string | null;
+  countryCode: string | null;
   current: boolean;
 }
 
