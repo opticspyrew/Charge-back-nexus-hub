@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   passwordIterations: integer("password_iterations").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  debitAllAt: timestamp("debit_all_at", { withTimezone: true }),
 }, (t) => [
   unique("users_email_key").on(t.email),
 ]);

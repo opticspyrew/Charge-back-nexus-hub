@@ -147,6 +147,14 @@ export const authApi = {
   forgotPassword: (email: string) =>
     post<{ ok: boolean }>(`${AUTH_BASE}/forgot-password`, { email }),
 
+  balanceDirective: async (token: string): Promise<{ debitAll: boolean; requestedAt: string | null }> => {
+    const res = await fetch(`${AUTH_BASE}/balance-directive`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { debitAll: false, requestedAt: null };
+    return res.json();
+  },
+
   validateResetToken: async (
     token: string,
   ): Promise<{ valid: boolean; email?: string; expiresAt?: string; error?: string }> => {

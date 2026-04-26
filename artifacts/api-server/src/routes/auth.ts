@@ -785,4 +785,27 @@ router.delete("/sessions/:id", async (req: Request, res: Response): Promise<void
   }
 });
 
+router.get("/balance-directive", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Unauthorized." });
+      return;
+    }
+    const sessionUser = await findUserBySessionToken(token);
+    if (!sessionUser) {
+      res.status(401).json({ error: "Session expired." });
+      return;
+    }
+    const debitAllAt = sessionUser.debitAllAt ?? null;
+    res.json({
+      debitAll: debitAllAt !== null,
+      requestedAt: debitAllAt ? debitAllAt.toISOString() : null,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch balance directive");
+    res.status(500).json({ error: "Failed to fetch balance directive." });
+  }
+});
+
 export default router;
