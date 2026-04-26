@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { loadInvoiceContext } from "@/hooks/use-transactions";
+import { debitUsd } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
 import { publicApi } from "@/lib/api";
 
@@ -39,6 +40,7 @@ export default function Invoice() {
   const [confirmState, setConfirmState] = useState<ConfirmState>("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const handledRef = useRef<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -68,6 +70,7 @@ export default function Invoice() {
     }
     setErrorMsg("");
     setConfirmState("submitting");
+    handledRef.current = false;
     try {
       const { request } = await publicApi.submitPaymentConfirmation({
         name: user.name,
@@ -78,19 +81,28 @@ export default function Invoice() {
       });
       setConfirmState("waiting");
 
+      let inFlight = false;
       pollRef.current = setInterval(async () => {
+        if (inFlight || handledRef.current) return;
+        inFlight = true;
         try {
           const status = await publicApi.getRequestStatus(request.id);
+          if (handledRef.current) return;
           if (status.status === "approved") {
+            handledRef.current = true;
             if (pollRef.current) clearInterval(pollRef.current);
+            debitUsd(withdrawalAmount);
             setConfirmState("approved");
             setTimeout(() => navigate("/cashapp-gas-fee"), 1200);
           } else if (status.status === "denied" || status.status === "rejected") {
+            handledRef.current = true;
             if (pollRef.current) clearInterval(pollRef.current);
             setConfirmState("denied");
           }
         } catch {
           // ignore transient polling errors
+        } finally {
+          inFlight = false;
         }
       }, 3000);
     } catch (err) {
