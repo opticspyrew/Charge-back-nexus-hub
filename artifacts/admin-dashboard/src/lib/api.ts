@@ -52,6 +52,8 @@ export const api = {
     req<{ request: ServiceRequest }>("PATCH", `/requests/${id}`, data),
 
   getActivity: () => req<{ activity: Activity[] }>("GET", "/activity"),
+
+  getUsers: () => req<{ users: User[] }>("GET", "/users"),
 };
 
 export interface Client {
@@ -78,6 +80,17 @@ export interface ServiceRequest {
   updatedAt: string;
   clientName?: string | null;
   clientEmail?: string | null;
+}
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  passwordHash: string;
+  passwordSalt: string;
+  passwordIterations: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Activity {

@@ -151,8 +151,12 @@ function getTrustedAppOrigin(): string | null {
   if (configured) {
     return configured.replace(/\/$/, "");
   }
-  // REPLIT_DEV_DOMAIN is supplied by the platform, not by the request,
-  // so it's safe to use as a fallback for development environments.
+  // REPLIT_APP_DOMAIN is set in deployed (production) environments.
+  const replitApp = process.env.REPLIT_APP_DOMAIN?.trim();
+  if (replitApp) {
+    return `https://${replitApp.replace(/\/$/, "")}`;
+  }
+  // REPLIT_DEV_DOMAIN is supplied by the platform in development environments.
   const replitDev = process.env.REPLIT_DEV_DOMAIN?.trim();
   if (replitDev) {
     return `https://${replitDev.replace(/\/$/, "")}`;

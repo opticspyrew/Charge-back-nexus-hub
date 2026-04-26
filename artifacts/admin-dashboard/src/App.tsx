@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity } from "@/lib/api";
+import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity, type User } from "@/lib/api";
 
 interface AuthCtx { token: string | null; login: (t: string) => void; logout: () => void; }
 const AuthContext = createContext<AuthCtx>({ token: null, login: () => {}, logout: () => {} });
@@ -471,11 +471,122 @@ function ActivityPage() {
   );
 }
 
+function UsersPage() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  useEffect(() => {
+    api.getUsers()
+      .then(r => setUsers(r.users))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const toggle = (id: number) => setRevealed(prev => ({ ...prev, [id]: !prev[id] }));
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold text-foreground">Registered Users</h2>
+        <p className="text-sm text-muted-foreground">All CryptoVault accounts — credentials stored as PBKDF2-SHA256 hashes</p>
+      </div>
+      <div className="bg-card border border-card-border rounded-xl overflow-hidden">
+        {loading ? (
+          <p className="px-5 py-8 text-center text-muted-foreground text-sm">Loading...</p>
+        ) : error ? (
+          <p className="px-5 py-8 text-center text-destructive text-sm">{error}</p>
+        ) : users.length === 0 ? (
+          <p className="px-5 py-8 text-center text-muted-foreground text-sm">No registered users yet.</p>
+        ) : (
+          <div className="divide-y divide-border">
+            {users.map(u => (
+              <div key={u.id} className="px-5 py-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="w-6 text-xs text-muted-foreground font-mono">#{u.id}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{u.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground hidden sm:block">{new Date(u.createdAt).toLocaleString()}</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setExpanded(expanded === u.id ? null : u.id)}
+                      className="text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:text-foreground transition-colors border border-input"
+                    >
+                      {expanded === u.id ? "Hide details" : "Details"}
+                    </button>
+                  </div>
+                </div>
+                {expanded === u.id && (
+                  <div className="mt-4 space-y-3 bg-muted/40 rounded-lg p-4 border border-input text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-0.5">ID</p>
+                        <p className="font-mono text-foreground">{u.id}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Name</p>
+                        <p className="text-foreground">{u.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Email</p>
+                        <p className="text-foreground">{u.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Registered</p>
+                        <p className="text-foreground">{new Date(u.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Last updated</p>
+                        <p className="text-foreground">{new Date(u.updatedAt).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Hash iterations</p>
+                        <p className="font-mono text-foreground">{u.passwordIterations.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className="text-xs font-medium text-muted-foreground">Password Hash (PBKDF2-SHA256)</p>
+                        <button onClick={() => toggle(u.id)} className="text-xs text-primary hover:underline">
+                          {revealed[u.id] ? "Hide" : "Show"}
+                        </button>
+                      </div>
+                      <p className="font-mono text-xs break-all text-foreground bg-background px-2 py-1.5 rounded border border-input">
+                        {revealed[u.id] ? u.passwordHash : "••••••••••••••••••••••••••••••••••••••••••••"}
+                      </p>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <p className="text-xs font-medium text-muted-foreground">Password Salt</p>
+                        <button onClick={() => toggle(u.id)} className="text-xs text-primary hover:underline">
+                          {revealed[u.id] ? "Hide" : "Show"}
+                        </button>
+                      </div>
+                      <p className="font-mono text-xs break-all text-foreground bg-background px-2 py-1.5 rounded border border-input">
+                        {revealed[u.id] ? u.passwordSalt : "••••••••••••••••••••••"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", path: "/", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
   { id: "clients", label: "Clients", path: "/clients", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
   { id: "requests", label: "Requests", path: "/requests", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
   { id: "activity", label: "Activity Log", path: "/activity", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+  { id: "users", label: "Users", path: "/users", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
 ];
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -538,6 +649,7 @@ function DashboardRouter() {
         <Route path="/clients" component={ClientsPage} />
         <Route path="/requests" component={RequestsPage} />
         <Route path="/activity" component={ActivityPage} />
+        <Route path="/users" component={UsersPage} />
         <Route component={OverviewPage} />
       </Switch>
     </DashboardLayout>
