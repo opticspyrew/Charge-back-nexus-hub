@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { publicApi } from "./api";
 import { validatePassword } from "./password-policy";
+import {
+  LoginLockoutError,
+  getLockoutState,
+  recordFailure,
+  recordSuccess,
+} from "./login-throttle";
 
 interface User {
   email: string;
@@ -213,10 +219,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
+    const lock = getLockoutState(email);
+    if (lock.locked) {
+      throw new LoginLockoutError(lock.msRemaining, lock.failures);
+    }
+
     await new Promise((r) => setTimeout(r, 400));
     const normalized = email.trim().toLowerCase();
 
+    const failAndThrow = (): never => {
+      recordFailure(email);
+      throw new Error("Invalid email or password");
+    };
+
     if (normalized === PRIMARY_EMAIL && password === PRIMARY_PASSWORD) {
+      recordSuccess(email);
       setUser({ email: PRIMARY_EMAIL, name: PRIMARY_NAME });
       return;
     }
@@ -224,13 +241,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const stored = loadAccounts();
     const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
     if (index === -1) {
-      throw new Error("Invalid email or password");
+      failAndThrow();
     }
     const account = stored[index];
 
     if (isHashedAccount(account)) {
       const ok = await verifyPassword(account, password);
-      if (!ok) throw new Error("Invalid email or password");
+      if (!ok) failAndThrow();
+      recordSuccess(email);
       setUser({ email: account.email, name: account.name });
       return;
     }
@@ -240,7 +258,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // immediately upgrade the stored record to a hashed representation
       // so the plain-text value never lives on disk again.
       if (account.password !== password) {
-        throw new Error("Invalid email or password");
+        failAndThrow();
       }
       const hashed = await hashPassword(password);
       const upgraded: HashedAccount = {
@@ -251,11 +269,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const next = [...stored];
       next[index] = upgraded;
       saveAccounts(next);
+      recordSuccess(email);
       setUser({ email: upgraded.email, name: upgraded.name });
       return;
     }
 
-    throw new Error("Invalid email or password");
+    failAndThrow();
   };
 
   const signup = async (name: string, email: string, password: string) => {

@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
+import {
+  LoginLockoutError,
+  formatRemaining,
+  getLockoutState,
+  subscribe,
+} from "@/lib/login-throttle";
 
 export default function SignIn() {
   const [, navigate] = useLocation();
@@ -11,6 +17,23 @@ export default function SignIn() {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
+  const [lockMsRemaining, setLockMsRemaining] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => {
+      const { msRemaining } = getLockoutState(form.email);
+      setLockMsRemaining(msRemaining);
+    };
+    refresh();
+    const tick = window.setInterval(refresh, 500);
+    const unsubscribe = subscribe(refresh);
+    return () => {
+      window.clearInterval(tick);
+      unsubscribe();
+    };
+  }, [form.email]);
+
+  const isLocked = lockMsRemaining > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,12 +42,24 @@ export default function SignIn() {
       setError("Please fill in all fields.");
       return;
     }
+    if (isLocked) {
+      return;
+    }
     setLoading(true);
     try {
       await login(form.email, form.password);
       navigate("/dashboard");
-    } catch {
-      setError("Invalid email or password.");
+    } catch (err) {
+      if (err instanceof LoginLockoutError) {
+        setLockMsRemaining(err.msRemaining);
+      } else {
+        const fresh = getLockoutState(form.email);
+        if (fresh.locked) {
+          setLockMsRemaining(fresh.msRemaining);
+        } else {
+          setError("Invalid email or password.");
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -152,7 +187,18 @@ export default function SignIn() {
               />
             </div>
 
-            {error && (
+            {isLocked && (
+              <div
+                data-testid="signin-lockout-banner"
+                className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm"
+              >
+                Too many failed sign-in attempts. Please wait{" "}
+                <strong className="text-amber-300">{formatRemaining(lockMsRemaining)}</strong>{" "}
+                before trying again.
+              </div>
+            )}
+
+            {error && !isLocked && (
               <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
                 {error}
               </div>
@@ -160,8 +206,9 @@ export default function SignIn() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center justify-center gap-2"
+              disabled={loading || isLocked}
+              data-testid="signin-submit"
+              className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -171,6 +218,8 @@ export default function SignIn() {
                   </svg>
                   Signing in...
                 </>
+              ) : isLocked ? (
+                `Try again in ${formatRemaining(lockMsRemaining)}`
               ) : "Sign In"}
             </button>
           </form>
