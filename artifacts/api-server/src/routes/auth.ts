@@ -8,7 +8,6 @@ import {
   verifyPassword,
 } from "../lib/passwords";
 import {
-  countSessionsForUser,
   createSession,
   deleteSessionByToken,
   ensurePrimaryUser,
@@ -278,23 +277,18 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
 
     const metadata = captureSessionMetadata(req);
 
-    // Check the historical sessions table BEFORE we insert the new one, so
-    // the "have we seen this (ip, ua) before?" check doesn't have to exclude
-    // the row we're about to add.
-    //   - If the user has zero prior sessions (i.e. this is the very first
-    //     login after signup), we skip the alert — the signup itself is the
-    //     introduction of the device, an alert here would just be noise.
-    //   - Otherwise, fire the "new sign-in" email only when this device
-    //     fingerprint has never been seen before for this user.
-    const priorSessionCount = await countSessionsForUser(user.id);
-    const historicallySeen =
-      priorSessionCount === 0
-        ? true // suppress the alert on first-ever login
-        : await hasSeenSessionMetadata({
-            userId: user.id,
-            ipAddress: metadata.ipAddress ?? null,
-            userAgent: metadata.userAgent ?? null,
-          });
+    // Check the historical sessions table BEFORE we insert the new row, so
+    // we don't have to exclude the just-created session from the lookup. If
+    // we've never seen this (ipAddress, userAgent) pair for this user, fire
+    // the "new sign-in" email. This intentionally also fires on the very
+    // first login after signup — the user's first device is itself a "new
+    // device" by definition, and a confirmation email at account creation
+    // is a security signal worth keeping.
+    const historicallySeen = await hasSeenSessionMetadata({
+      userId: user.id,
+      ipAddress: metadata.ipAddress ?? null,
+      userAgent: metadata.userAgent ?? null,
+    });
 
     const session = await createSession(user.id, metadata);
     logger.info({ userId: user.id, email: user.email }, "User signed in");

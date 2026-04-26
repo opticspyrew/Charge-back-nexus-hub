@@ -176,6 +176,7 @@ export function newSignInEmail(params: {
   signedInAt: Date;
   deviceLabel: string;
   ipAddress: string | null;
+  region?: string | null;
   activityUrl: string | null;
   changePasswordUrl: string | null;
   supportEmail: string;
@@ -186,15 +187,19 @@ export function newSignInEmail(params: {
     signedInAt,
     deviceLabel,
     ipAddress,
+    region,
     activityUrl,
     changePasswordUrl,
     supportEmail,
   } = params;
   const subject = "New sign-in to your CryptoVault account";
   const timestamp = signedInAt.toUTCString();
-  const ipLine = ipAddress
-    ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">IP address</td><td style="padding: 8px 0; color: #111827; font-size: 13px;">${ipAddress}</td></tr>`
-    : "";
+  // We always show an "IP / Region" row so the user can recognize the sign-in.
+  // Either field falls back to "Unavailable" when we don't have it (e.g. no
+  // geo-IP service configured for region, or X-Forwarded-For absent).
+  const ipText = ipAddress || "Unavailable";
+  const regionText = region || "Unavailable";
+  const ipLine = `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">IP / Region</td><td style="padding: 8px 0; color: #111827; font-size: 13px;">${ipText} &middot; ${regionText}</td></tr>`;
   const activityLink = activityUrl
     ? `<a href="${activityUrl}" style="color: #1e3a5f; font-weight: 600;">recent activity</a>`
     : `<strong>recent activity</strong>`;
