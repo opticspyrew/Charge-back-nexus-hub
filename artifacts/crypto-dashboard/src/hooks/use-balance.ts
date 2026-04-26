@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 
 const BALANCE_KEY = "cryptovault_balance_btc";
-const INITIAL_BTC = 1.8802;
+const INITIAL_USD = 706543;
 export const BTC_PRICE_USD = 27000;
+const INITIAL_BTC = INITIAL_USD / BTC_PRICE_USD;
 const EVENT = "cryptovault:balance-changed";
 
 function loadBtc(): number {
