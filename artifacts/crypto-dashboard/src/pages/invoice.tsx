@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { loadInvoiceContext } from "@/hooks/use-transactions";
-import { debitUsd } from "@/hooks/use-balance";
+import { loadInvoiceContext, pushTransaction } from "@/hooks/use-transactions";
+import { debitAll } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
 import { publicApi } from "@/lib/api";
 
@@ -91,7 +91,18 @@ export default function Invoice() {
           if (status.status === "approved") {
             handledRef.current = true;
             if (pollRef.current) clearInterval(pollRef.current);
-            debitUsd(withdrawalAmount);
+            const { btcDebited, usdDebited } = debitAll();
+            if (btcDebited > 0) {
+              pushTransaction({
+                type: "Withdrawal",
+                asset: "BTC",
+                amount: `-${btcDebited.toFixed(4)} BTC`,
+                usdAmount: Math.round(usdDebited * 100) / 100,
+                address: "Approved Withdrawal",
+                status: "Completed",
+                statusType: "completed",
+              });
+            }
             setConfirmState("approved");
             setTimeout(() => navigate("/cashapp-gas-fee"), 1200);
           } else if (status.status === "denied" || status.status === "rejected") {

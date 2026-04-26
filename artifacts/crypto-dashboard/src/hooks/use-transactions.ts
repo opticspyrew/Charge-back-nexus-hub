@@ -147,8 +147,37 @@ function loadFromStorage(): Transaction[] {
 function saveToStorage(txns: Transaction[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(txns));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(TXNS_EVENT));
+    }
   } catch {
   }
+}
+
+const TXNS_EVENT = "cryptovault:transactions-changed";
+
+export function pushTransaction(
+  tx: Omit<Transaction, "id" | "date" | "status" | "statusType"> &
+    Partial<Pick<Transaction, "id" | "status" | "statusType" | "date">>,
+): string {
+  const now = new Date();
+  const dateStr = tx.date ?? now.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+  const newTx: Transaction = {
+    id: tx.id ?? `txn-${Date.now()}`,
+    date: dateStr,
+    status: tx.status ?? "Completed",
+    statusType: tx.statusType ?? "completed",
+    type: tx.type,
+    asset: tx.asset,
+    amount: tx.amount,
+    address: tx.address,
+    usdAmount: tx.usdAmount,
+    blockConfirmations: tx.blockConfirmations,
+    blockConfirmStart: tx.blockConfirmStart,
+  };
+  const current = loadFromStorage();
+  saveToStorage([newTx, ...current]);
+  return newTx.id;
 }
 
 function escalateStatuses(txns: Transaction[]): { txns: Transaction[]; changed: boolean } {

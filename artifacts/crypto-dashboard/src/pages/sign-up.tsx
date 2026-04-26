@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
+import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
 
 export default function SignUp() {
   const [, navigate] = useLocation();
@@ -9,6 +10,11 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showForgot, setShowForgot] = useState(false);
+
+  const strengthHint = useMemo(
+    () => getPasswordStrengthHint(form.password),
+    [form.password],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +27,9 @@ export default function SignUp() {
       setError("Passwords do not match.");
       return;
     }
-    if (form.password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    const passwordCheck = validatePassword(form.password);
+    if (!passwordCheck.ok) {
+      setError(passwordCheck.error ?? "Please choose a stronger password.");
       return;
     }
     setLoading(true);
@@ -122,9 +129,30 @@ export default function SignUp() {
                 type="password"
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                placeholder="Min. 8 characters"
+                placeholder="Min. 8 chars, mix letters & numbers"
                 className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                aria-describedby="password-strength-hint"
               />
+              {strengthHint ? (
+                <p
+                  id="password-strength-hint"
+                  data-testid="password-strength-hint"
+                  className={
+                    "mt-1.5 text-xs " +
+                    (strengthHint.level === "strong"
+                      ? "text-emerald-500"
+                      : strengthHint.level === "fair"
+                      ? "text-amber-500"
+                      : "text-muted-foreground")
+                  }
+                >
+                  {strengthHint.message}
+                </p>
+              ) : (
+                <p id="password-strength-hint" className="mt-1.5 text-xs text-muted-foreground">
+                  Use 8+ characters and mix letters with numbers or symbols.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Confirm password</label>

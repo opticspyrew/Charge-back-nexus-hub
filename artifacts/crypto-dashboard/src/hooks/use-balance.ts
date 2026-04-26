@@ -36,6 +36,12 @@ export function debitUsd(usdAmount: number): { btcDebited: number; remainingBtc:
   return { btcDebited: btcToDebit, remainingBtc: next };
 }
 
+export function debitAll(): { btcDebited: number; usdDebited: number; remainingBtc: number } {
+  const current = loadBtc();
+  saveBtc(0);
+  return { btcDebited: current, usdDebited: current * BTC_PRICE_USD, remainingBtc: 0 };
+}
+
 export function resetBalance() {
   saveBtc(INITIAL_BTC);
 }
