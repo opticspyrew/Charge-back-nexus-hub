@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 
@@ -46,11 +46,38 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+router.get("/tx-approvals", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const raw = String(req.query.txnIds ?? "").trim();
+    if (!raw) {
+      res.json({ approvals: [] });
+      return;
+    }
+    const ids = raw.split(",").map(s => s.trim()).filter(Boolean).slice(0, 50);
+    if (ids.length === 0) {
+      res.json({ approvals: [] });
+      return;
+    }
+    const rows = await db
+      .select({ txnId: adminServiceRequests.txnId, status: adminServiceRequests.status })
+      .from(adminServiceRequests)
+      .where(
+        ids.length === 1
+          ? eq(adminServiceRequests.txnId, ids[0])
+          : inArray(adminServiceRequests.txnId, ids)
+      );
+    res.json({ approvals: rows.filter(r => r.txnId != null) });
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch tx approvals");
+    res.status(500).json({ error: "Failed to fetch approvals" });
+  }
+});
+
 router.post("/request", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, type, amount, currency, notes } = req.body as {
+    const { name, email, type, amount, currency, notes, txnId } = req.body as {
       name?: string; email?: string;
-      type?: string; amount?: string; currency?: string; notes?: string;
+      type?: string; amount?: string; currency?: string; notes?: string; txnId?: string;
     };
 
     if (!email) {
@@ -83,6 +110,7 @@ router.post("/request", async (req: Request, res: Response): Promise<void> => {
       amount: amount ? String(amount) : null,
       currency: currency ?? "USD",
       notes: notes?.trim() ?? null,
+      txnId: txnId?.trim() || null,
       status: "pending",
     }).returning();
 

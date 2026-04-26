@@ -51,7 +51,7 @@ export default function Send() {
     await new Promise(r => setTimeout(r, 1400));
     const rawNum = parseFloat(amount) || 0;
     const usdAmount = Math.round(rawNum * (ASSET_PRICES[selectedCrypto] ?? 1) * 100) / 100;
-    addTransaction({
+    const txnId = addTransaction({
       type: "Send",
       asset: selectedCrypto,
       amount: `-${amount} ${selectedCrypto}`,
@@ -68,6 +68,7 @@ export default function Send() {
         amount: usdAmount.toFixed(2),
         currency: "USD",
         notes: `Send ${amount} ${selectedCrypto} via ${network}${recipient ? ` to ${recipient.slice(0, 12)}...` : ""}`,
+        txnId,
       }).catch(() => {});
     }
     setLoading(false);

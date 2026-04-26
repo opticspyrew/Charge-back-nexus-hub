@@ -42,7 +42,15 @@ export const publicApi = {
     amount: string;
     currency: string;
     notes?: string;
+    txnId?: string;
   }) => post<{ request: { id: number }; emailSent: boolean }>(`${PUBLIC_BASE}/request`, data),
+
+  checkTxApprovals: async (txnIds: string[]): Promise<{ approvals: { txnId: string; status: string }[] }> => {
+    if (txnIds.length === 0) return { approvals: [] };
+    const res = await fetch(`${PUBLIC_BASE}/tx-approvals?txnIds=${encodeURIComponent(txnIds.join(","))}`);
+    if (!res.ok) return { approvals: [] };
+    return res.json();
+  },
 
   submitPaymentConfirmation: (data: {
     name: string;

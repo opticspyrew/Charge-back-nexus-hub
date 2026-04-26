@@ -21,6 +21,7 @@ export const adminServiceRequests = pgTable("admin_service_requests", {
   amount: numeric("amount", { precision: 14, scale: 2 }),
   currency: text("currency").notNull().default("USD"),
   notes: text("notes"),
+  txnId: text("txn_id"),
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
