@@ -40,6 +40,18 @@ function describeIp(ip: string | null): string {
   return ip.replace(/^::ffff:/, "");
 }
 
+function describeLocation(
+  location: string | null,
+  ip: string | null,
+): string {
+  // Prefer the resolved "City, CC" / "Country" label. Fall back to the raw
+  // IP so we always show *something* recognizable, and finally to a clear
+  // "Location unknown" when neither is available.
+  if (location && location.trim() !== "") return location;
+  if (ip && ip.trim() !== "") return describeIp(ip);
+  return "Location unknown";
+}
+
 export default function RecentActivityPanel() {
   const { token } = useAuth();
   const [sessions, setSessions] = useState<AuthSessionRecord[] | null>(null);
@@ -188,8 +200,12 @@ export default function RecentActivityPanel() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {formatTimestamp(s.createdAt)} • {describeIp(s.ipAddress)}
+                <p
+                  className="text-xs text-muted-foreground mt-0.5"
+                  data-testid={`recent-activity-location-${s.id}`}
+                >
+                  {formatTimestamp(s.createdAt)} •{" "}
+                  {describeLocation(s.location, s.ipAddress)}
                 </p>
               </div>
               {!s.current && (
