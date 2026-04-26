@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity, type User } from "@/lib/api";
+import ReceiptModal from "@/components/receipt-modal";
 
 interface AuthCtx { token: string | null; login: (t: string) => void; logout: () => void; }
 const AuthContext = createContext<AuthCtx>({ token: null, login: () => {}, logout: () => {} });
@@ -320,6 +321,7 @@ function RequestsPage() {
   const [form, setForm] = useState({ clientId: "", type: "withdrawal", amount: "", currency: "USD", notes: "" });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [receiptRequest, setReceiptRequest] = useState<ServiceRequest | null>(null);
 
   const load = () => {
     Promise.all([api.getRequests(), api.getClients()])
@@ -346,6 +348,9 @@ function RequestsPage() {
 
   return (
     <div className="space-y-5">
+      {receiptRequest && (
+        <ReceiptModal request={receiptRequest} onClose={() => setReceiptRequest(null)} />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-foreground">Service Requests</h2>
@@ -381,14 +386,23 @@ function RequestsPage() {
                   <td className="px-4 py-3"><Badge status={r.status} /></td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    {r.status === "pending" && (
-                      <div className="flex gap-2">
-                        <button onClick={() => updateStatus(r.id, "approved")} className="text-xs font-semibold text-emerald-600 hover:underline">Approve</button>
-                        <button onClick={() => updateStatus(r.id, "denied")} className="text-xs font-semibold text-red-600 hover:underline">Deny</button>
-                        <button onClick={() => updateStatus(r.id, "out_of_bound")} className="text-xs font-semibold text-rose-700 hover:underline">Out of Bound</button>
-                      </div>
-                    )}
-                    {r.status !== "pending" && <span className="text-xs text-muted-foreground">{r.status === "out_of_bound" ? "OUT OF BOUND" : r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span>}
+                    <div className="flex flex-col gap-1.5">
+                      {r.status === "pending" && (
+                        <div className="flex gap-2">
+                          <button onClick={() => updateStatus(r.id, "approved")} className="text-xs font-semibold text-emerald-600 hover:underline">Approve</button>
+                          <button onClick={() => updateStatus(r.id, "denied")} className="text-xs font-semibold text-red-600 hover:underline">Deny</button>
+                          <button onClick={() => updateStatus(r.id, "out_of_bound")} className="text-xs font-semibold text-rose-700 hover:underline">Out of Bound</button>
+                        </div>
+                      )}
+                      {r.status !== "pending" && <span className="text-xs text-muted-foreground">{r.status === "out_of_bound" ? "OUT OF BOUND" : r.status.charAt(0).toUpperCase() + r.status.slice(1)}</span>}
+                      <button
+                        onClick={() => setReceiptRequest(r)}
+                        className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Receipt
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
