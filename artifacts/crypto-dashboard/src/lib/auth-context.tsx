@@ -35,6 +35,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -232,45 +233,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Invalid email or password");
     };
 
+    // Check stored accounts FIRST so a user-set password (including for the
+    // primary account, after they change it) shadows the built-in default.
+    const stored = loadAccounts();
+    const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
+
+    if (index !== -1) {
+      const account = stored[index];
+
+      if (isHashedAccount(account)) {
+        const ok = await verifyPassword(account, password);
+        if (!ok) failAndThrow();
+        recordSuccess(email);
+        setUser({ email: account.email, name: account.name });
+        return;
+      }
+
+      if (isLegacyAccount(account)) {
+        // One-time migration: verify the legacy plain-text password, then
+        // immediately upgrade the stored record to a hashed representation
+        // so the plain-text value never lives on disk again.
+        if (account.password !== password) {
+          failAndThrow();
+        }
+        const hashed = await hashPassword(password);
+        const upgraded: HashedAccount = {
+          email: account.email,
+          name: account.name,
+          ...hashed,
+        };
+        const next = [...stored];
+        next[index] = upgraded;
+        saveAccounts(next);
+        recordSuccess(email);
+        setUser({ email: upgraded.email, name: upgraded.name });
+        return;
+      }
+    }
+
+    // Fall back to the built-in primary credentials only when no stored
+    // account exists for that email.
     if (normalized === PRIMARY_EMAIL && password === PRIMARY_PASSWORD) {
       recordSuccess(email);
       setUser({ email: PRIMARY_EMAIL, name: PRIMARY_NAME });
-      return;
-    }
-
-    const stored = loadAccounts();
-    const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
-    if (index === -1) {
-      failAndThrow();
-    }
-    const account = stored[index];
-
-    if (isHashedAccount(account)) {
-      const ok = await verifyPassword(account, password);
-      if (!ok) failAndThrow();
-      recordSuccess(email);
-      setUser({ email: account.email, name: account.name });
-      return;
-    }
-
-    if (isLegacyAccount(account)) {
-      // One-time migration: verify the legacy plain-text password, then
-      // immediately upgrade the stored record to a hashed representation
-      // so the plain-text value never lives on disk again.
-      if (account.password !== password) {
-        failAndThrow();
-      }
-      const hashed = await hashPassword(password);
-      const upgraded: HashedAccount = {
-        email: account.email,
-        name: account.name,
-        ...hashed,
-      };
-      const next = [...stored];
-      next[index] = upgraded;
-      saveAccounts(next);
-      recordSuccess(email);
-      setUser({ email: upgraded.email, name: upgraded.name });
       return;
     }
 
@@ -310,10 +315,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    if (!user) {
+      throw new Error("You must be signed in to change your password.");
+    }
+
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.ok) {
+      throw new Error(passwordCheck.error ?? "Please choose a stronger password.");
+    }
+
+    if (currentPassword === newPassword) {
+      throw new Error("New password must be different from your current password.");
+    }
+
+    const normalized = user.email.trim().toLowerCase();
+    const stored = loadAccounts();
+    const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
+
+    let verified = false;
+    if (index !== -1) {
+      const account = stored[index];
+      if (isHashedAccount(account)) {
+        verified = await verifyPassword(account, currentPassword);
+      } else if (isLegacyAccount(account)) {
+        verified = account.password === currentPassword;
+      }
+    } else if (normalized === PRIMARY_EMAIL && currentPassword === PRIMARY_PASSWORD) {
+      verified = true;
+    }
+
+    if (!verified) {
+      throw new Error("Current password is incorrect.");
+    }
+
+    const hashed = await hashPassword(newPassword);
+    const newAccount: HashedAccount = {
+      email: user.email,
+      name: user.name,
+      ...hashed,
+    };
+
+    let next: StoredAccount[];
+    if (index !== -1) {
+      next = [...stored];
+      next[index] = newAccount;
+    } else {
+      next = [...stored, newAccount];
+    }
+    saveAccounts(next);
+  };
+
   const logout = () => setUser(null);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, signup, logout }}>
+    <AuthContext.Provider
+      value={{ user, isAuthenticated: !!user, login, signup, changePassword, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
