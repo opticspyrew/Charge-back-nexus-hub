@@ -17,6 +17,8 @@ export const userSessions = pgTable("user_sessions", {
   token: text("token").notNull().unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {

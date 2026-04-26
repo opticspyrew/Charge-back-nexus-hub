@@ -1,4 +1,4 @@
-import { db, users, userSessions, type User } from "@workspace/db";
+import { db, users, userSessions, type User, type UserSession } from "@workspace/db";
 import { eq, lt } from "drizzle-orm";
 import { hashPassword, generateSessionToken } from "./passwords";
 import { logger } from "./logger";
@@ -23,14 +23,35 @@ export async function findUserByEmail(email: string): Promise<User | undefined> 
   return user;
 }
 
-export async function createSession(userId: number): Promise<{ token: string; expiresAt: Date }> {
+export interface SessionMetadata {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+export async function createSession(
+  userId: number,
+  metadata: SessionMetadata = {},
+): Promise<{ token: string; expiresAt: Date }> {
   const token = generateSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
-  await db.insert(userSessions).values({ userId, token, expiresAt });
+  await db.insert(userSessions).values({
+    userId,
+    token,
+    expiresAt,
+    ipAddress: metadata.ipAddress ?? null,
+    userAgent: metadata.userAgent ?? null,
+  });
   return { token, expiresAt };
 }
 
 export async function findUserBySessionToken(token: string): Promise<User | undefined> {
+  const row = await findSessionWithUser(token);
+  return row?.user;
+}
+
+export async function findSessionWithUser(
+  token: string,
+): Promise<{ user: User; session: UserSession } | undefined> {
   const [row] = await db
     .select({
       user: users,
@@ -45,7 +66,7 @@ export async function findUserBySessionToken(token: string): Promise<User | unde
     await db.delete(userSessions).where(eq(userSessions.id, row.session.id));
     return undefined;
   }
-  return row.user;
+  return row;
 }
 
 export async function deleteSessionByToken(token: string): Promise<void> {

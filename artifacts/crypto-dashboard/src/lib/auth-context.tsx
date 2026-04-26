@@ -22,6 +22,7 @@ interface StoredSession {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  token: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -235,6 +236,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user: session?.user ?? null,
         isAuthenticated: !!session,
+        token: session?.token ?? null,
         login,
         signup,
         changePassword,

@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { db, users, passwordResetTokens } from "@workspace/db";
-import { and, eq, isNull, gt } from "drizzle-orm";
+import { db, users, userSessions, passwordResetTokens } from "@workspace/db";
+import { and, eq, isNull, gt, desc } from "drizzle-orm";
 import {
   generateResetToken,
   hashPassword,
@@ -12,10 +12,12 @@ import {
   deleteSessionByToken,
   ensurePrimaryUser,
   extractBearerToken,
+  findSessionWithUser,
   findUserByEmail,
   findUserBySessionToken,
   normalizeEmail,
   publicUser,
+  type SessionMetadata,
 } from "../lib/auth";
 import { logger } from "../lib/logger";
 import {
@@ -29,6 +31,21 @@ import {
 } from "../lib/forgot-password-throttle";
 
 const SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+
+const MAX_USER_AGENT_LENGTH = 500;
+
+function captureSessionMetadata(req: Request): SessionMetadata {
+  const ip = getClientIp(req);
+  const rawUa = req.headers["user-agent"];
+  const userAgent =
+    typeof rawUa === "string" && rawUa.trim().length > 0
+      ? rawUa.slice(0, MAX_USER_AGENT_LENGTH)
+      : null;
+  return {
+    ipAddress: ip && ip !== "unknown" ? ip : null,
+    userAgent,
+  };
+}
 
 async function notifyPasswordChanged(
   user: { name: string; email: string },
@@ -154,7 +171,7 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       passwordIterations: hashed.passwordIterations,
     }).returning();
 
-    const session = await createSession(user.id);
+    const session = await createSession(user.id, captureSessionMetadata(req));
 
     logger.info({ userId: user.id, email: user.email }, "User signed up");
     res.status(201).json({
@@ -192,7 +209,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const session = await createSession(user.id);
+    const session = await createSession(user.id, captureSessionMetadata(req));
     logger.info({ userId: user.id, email: user.email }, "User signed in");
     res.json({
       user: publicUser(user),
@@ -505,7 +522,7 @@ router.post("/reset-password", async (req: Request, res: Response): Promise<void
       .where(eq(users.id, row.user.id));
 
     // Sign the user in immediately so they don't have to re-enter their new password.
-    const session = await createSession(row.user.id);
+    const session = await createSession(row.user.id, captureSessionMetadata(req));
     logger.info({ userId: row.user.id }, "User reset password via email link");
     void notifyPasswordChanged(
       { name: row.user.name, email: row.user.email },
@@ -538,6 +555,55 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     logger.error({ err }, "Failed to load session user");
     res.status(500).json({ error: "Failed to load session." });
+  }
+});
+
+const SESSIONS_LIST_LIMIT = 10;
+
+router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    const current = await findSessionWithUser(token);
+    if (!current) {
+      res.status(401).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        id: userSessions.id,
+        createdAt: userSessions.createdAt,
+        expiresAt: userSessions.expiresAt,
+        ipAddress: userSessions.ipAddress,
+        userAgent: userSessions.userAgent,
+      })
+      .from(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, current.user.id),
+          gt(userSessions.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(userSessions.createdAt))
+      .limit(SESSIONS_LIST_LIMIT);
+
+    res.json({
+      sessions: rows.map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt.toISOString(),
+        expiresAt: row.expiresAt.toISOString(),
+        ipAddress: row.ipAddress,
+        userAgent: row.userAgent,
+        current: row.id === current.session.id,
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to list sessions");
+    res.status(500).json({ error: "Failed to load recent activity." });
   }
 });
 

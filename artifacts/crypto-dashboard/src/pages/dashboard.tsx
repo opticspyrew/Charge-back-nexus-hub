@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import WalletModal from "@/components/wallet-modal";
+import RecentActivityPanel from "@/components/recent-activity-panel";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
 import { useBalance } from "@/hooks/use-balance";
 
@@ -183,6 +184,9 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+
+        {/* Recent Activity */}
+        <RecentActivityPanel />
 
         {/* Transaction History */}
         <div className="bg-card border border-card-border rounded-2xl p-6">
