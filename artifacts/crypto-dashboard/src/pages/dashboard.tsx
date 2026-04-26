@@ -5,6 +5,7 @@ import WalletModal from "@/components/wallet-modal";
 import RecentActivityPanel from "@/components/recent-activity-panel";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
 import { useBalance } from "@/hooks/use-balance";
+import { useApprovalPoller } from "@/hooks/use-approval-poller";
 
 function BlockConfirmationLabel({ tx }: { tx: Transaction }) {
   const count = useBlockConfirmations(tx);
@@ -21,7 +22,8 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
-  const { transactions, cancelTransaction } = useTransactions();
+  const { transactions, cancelTransaction, setTransactions } = useTransactions();
+  useApprovalPoller(transactions, setTransactions);
   const { usd: totalBalance, btcFormatted, usdFormatted } = useBalance();
 
   const portfolioAssets = [

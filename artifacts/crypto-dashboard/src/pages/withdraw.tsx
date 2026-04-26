@@ -51,7 +51,7 @@ export default function Withdraw() {
     await new Promise(r => setTimeout(r, 1400));
     const rawNum = parseFloat(amount) || 0;
     const usdAmount = Math.round(rawNum * (ASSET_PRICES[selectedCrypto] ?? 1) * 100) / 100;
-    addTransaction({
+    const txnId = addTransaction({
       type: "Withdrawal",
       asset: selectedCrypto,
       amount: `-${amount} ${selectedCrypto}`,
@@ -68,6 +68,7 @@ export default function Withdraw() {
         amount: usdAmount.toFixed(2),
         currency: "USD",
         notes: `Withdraw ${amount} ${selectedCrypto} via ${network}${destination ? ` to ${destination.slice(0, 12)}...` : ""}`,
+        txnId,
       }).catch(() => {});
     }
     setLoading(false);
