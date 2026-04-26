@@ -45,9 +45,10 @@ export default function RecentActivityPanel() {
   const [sessions, setSessions] = useState<AuthSessionRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  // Tracks which session is currently being revoked, so we can show a
-  // per-row spinner / disable just that one button instead of locking the
-  // whole panel.
+  // Tracks which session is currently being revoked. The active row shows
+  // a "Signing out…" label, and ALL revoke buttons are disabled while a
+  // request is in flight — this prevents accidental double-clicks across
+  // rows during the brief optimistic-update window.
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
 
