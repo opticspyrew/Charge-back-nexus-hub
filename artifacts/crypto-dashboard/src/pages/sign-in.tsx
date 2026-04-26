@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -7,17 +7,38 @@ import {
   getLockoutState,
   subscribe,
 } from "@/lib/login-throttle";
+import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
+
+type ForgotStep = "email" | "newPassword" | "done";
 
 export default function SignIn() {
   const [, navigate] = useLocation();
-  const { login } = useAuth();
+  const { login, resetPassword, accountExists } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showForgot, setShowForgot] = useState(false);
+  const [forgotStep, setForgotStep] = useState<ForgotStep>("email");
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState("");
+  const [forgotConfirm, setForgotConfirm] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [lockMsRemaining, setLockMsRemaining] = useState(0);
+
+  const forgotStrengthHint = useMemo(
+    () => getPasswordStrengthHint(forgotPassword),
+    [forgotPassword],
+  );
+
+  const closeForgot = () => {
+    setShowForgot(false);
+    setForgotStep("email");
+    setForgotEmail("");
+    setForgotPassword("");
+    setForgotConfirm("");
+    setForgotError("");
+  };
 
   useEffect(() => {
     const refresh = () => {
@@ -65,11 +86,56 @@ export default function SignIn() {
     }
   };
 
-  const handleForgot = async (e: React.FormEvent) => {
+  const handleForgotEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail) return;
-    await new Promise(r => setTimeout(r, 600));
-    setForgotSent(true);
+    setForgotError("");
+    const trimmed = forgotEmail.trim();
+    if (!trimmed) {
+      setForgotError("Please enter the email address for your account.");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await new Promise((r) => setTimeout(r, 300));
+      if (!accountExists(trimmed)) {
+        setForgotError("We couldn't find an account with that email address.");
+        return;
+      }
+      setForgotStep("newPassword");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError("");
+
+    if (!forgotPassword || !forgotConfirm) {
+      setForgotError("Please fill in both password fields.");
+      return;
+    }
+    if (forgotPassword !== forgotConfirm) {
+      setForgotError("Passwords do not match.");
+      return;
+    }
+    const policy = validatePassword(forgotPassword);
+    if (!policy.ok) {
+      setForgotError(policy.error ?? "Please choose a stronger password.");
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      await resetPassword(forgotEmail, forgotPassword);
+      setForgotStep("done");
+    } catch (err) {
+      setForgotError(
+        err instanceof Error ? err.message : "Failed to reset password. Please try again.",
+      );
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   if (showForgot) {
@@ -84,19 +150,21 @@ export default function SignIn() {
           </div>
 
           <div className="bg-card border border-card-border rounded-2xl p-8">
-            {forgotSent ? (
+            {forgotStep === "done" ? (
               <div className="text-center">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-foreground mb-2">Check your email</h2>
+                <h2 className="text-2xl font-bold text-foreground mb-2">Password updated</h2>
                 <p className="text-muted-foreground mb-6">
-                  We sent a password reset link to <strong className="text-foreground">{forgotEmail}</strong>
+                  You can now sign in to{" "}
+                  <strong className="text-foreground">{forgotEmail}</strong> with your new password.
                 </p>
                 <button
-                  onClick={() => { setShowForgot(false); setForgotSent(false); setForgotEmail(""); }}
+                  onClick={closeForgot}
+                  data-testid="forgot-back-to-signin"
                   className="text-primary hover:underline text-sm font-medium"
                 >
                   Back to Sign In
@@ -105,35 +173,145 @@ export default function SignIn() {
             ) : (
               <>
                 <button
-                  onClick={() => setShowForgot(false)}
+                  onClick={
+                    forgotStep === "newPassword"
+                      ? () => {
+                          setForgotStep("email");
+                          setForgotError("");
+                        }
+                      : closeForgot
+                  }
                   className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
-                  Back to Sign In
+                  {forgotStep === "newPassword" ? "Back" : "Back to Sign In"}
                 </button>
-                <h2 className="text-2xl font-bold text-foreground mb-2">Reset password</h2>
-                <p className="text-muted-foreground mb-6 text-sm">Enter your email and we'll send you a reset link.</p>
-                <form onSubmit={handleForgot} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-1.5">Email address</label>
-                    <input
-                      type="email"
-                      value={forgotEmail}
-                      onChange={e => setForgotEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity"
-                  >
-                    Send Reset Link
-                  </button>
-                </form>
+
+                {forgotStep === "email" ? (
+                  <>
+                    <h2 className="text-2xl font-bold text-foreground mb-2">Reset password</h2>
+                    <p className="text-muted-foreground mb-6 text-sm">
+                      Enter the email address for your account.
+                    </p>
+                    <form onSubmit={handleForgotEmailSubmit} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                          Email address
+                        </label>
+                        <input
+                          type="email"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          data-testid="forgot-email-input"
+                          className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                          required
+                        />
+                      </div>
+
+                      {forgotError && (
+                        <div
+                          data-testid="forgot-error"
+                          className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+                        >
+                          {forgotError}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={forgotLoading}
+                        data-testid="forgot-continue"
+                        className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
+                      >
+                        {forgotLoading ? "Checking..." : "Continue"}
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-2xl font-bold text-foreground mb-2">Set a new password</h2>
+                    <p className="text-muted-foreground mb-6 text-sm">
+                      Resetting password for{" "}
+                      <strong className="text-foreground">{forgotEmail}</strong>.
+                    </p>
+                    <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                          New password
+                        </label>
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          value={forgotPassword}
+                          onChange={(e) => setForgotPassword(e.target.value)}
+                          placeholder="Min. 8 chars, mix letters & numbers"
+                          aria-describedby="forgot-strength-hint"
+                          data-testid="forgot-new-password"
+                          className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        />
+                        {forgotStrengthHint ? (
+                          <p
+                            id="forgot-strength-hint"
+                            data-testid="forgot-strength-hint"
+                            className={
+                              "mt-1.5 text-xs " +
+                              (forgotStrengthHint.level === "strong"
+                                ? "text-emerald-500"
+                                : forgotStrengthHint.level === "fair"
+                                  ? "text-amber-500"
+                                  : "text-muted-foreground")
+                            }
+                          >
+                            {forgotStrengthHint.message}
+                          </p>
+                        ) : (
+                          <p
+                            id="forgot-strength-hint"
+                            className="mt-1.5 text-xs text-muted-foreground"
+                          >
+                            Use 8+ characters and mix letters with numbers or symbols.
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">
+                          Confirm new password
+                        </label>
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          value={forgotConfirm}
+                          onChange={(e) => setForgotConfirm(e.target.value)}
+                          placeholder="••••••••"
+                          data-testid="forgot-confirm-password"
+                          className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        />
+                      </div>
+
+                      {forgotError && (
+                        <div
+                          data-testid="forgot-error"
+                          className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+                        >
+                          {forgotError}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={forgotLoading}
+                        data-testid="forgot-reset-submit"
+                        className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
+                      >
+                        {forgotLoading ? "Updating..." : "Reset password"}
+                      </button>
+                    </form>
+                  </>
+                )}
               </>
             )}
           </div>

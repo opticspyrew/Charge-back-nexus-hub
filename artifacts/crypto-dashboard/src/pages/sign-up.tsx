@@ -9,7 +9,6 @@ export default function SignUp() {
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showForgot, setShowForgot] = useState(false);
 
   const strengthHint = useMemo(
     () => getPasswordStrengthHint(form.password),
@@ -42,51 +41,6 @@ export default function SignUp() {
       setLoading(false);
     }
   };
-
-  if (showForgot) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">C</span>
-            </div>
-            <span className="text-xl font-bold text-foreground">CryptoVault</span>
-          </div>
-          <div className="bg-card border border-card-border rounded-2xl p-8">
-            <button
-              onClick={() => setShowForgot(false)}
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Sign Up
-            </button>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Reset password</h2>
-            <p className="text-muted-foreground mb-6 text-sm">Enter your email and we'll send you a reset link.</p>
-            <form onSubmit={(e) => { e.preventDefault(); setShowForgot(false); }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Email address</label>
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity"
-              >
-                Send Reset Link
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -163,16 +117,6 @@ export default function SignUp() {
                 placeholder="••••••••"
                 className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
               />
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowForgot(true)}
-                className="text-xs text-primary hover:underline font-medium"
-              >
-                Forgot password?
-              </button>
             </div>
 
             {error && (
