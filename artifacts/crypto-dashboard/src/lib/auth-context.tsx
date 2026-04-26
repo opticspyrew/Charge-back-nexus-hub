@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { publicApi } from "./api";
+import { validatePassword } from "./password-policy";
 
 interface User {
   email: string;
@@ -259,6 +260,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signup = async (name: string, email: string, password: string) => {
     const normalized = email.trim().toLowerCase();
+
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.ok) {
+      throw new Error(passwordCheck.error ?? "Please choose a stronger password.");
+    }
 
     if (normalized === PRIMARY_EMAIL) {
       throw new Error("An account with this email already exists. Please sign in instead.");
