@@ -1,16 +1,18 @@
-import { pgTable, serial, text, numeric, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, integer, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
 
 export const adminClients = pgTable("admin_clients", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  email: text("email").notNull().unique(),
+  email: text("email").notNull(),
   phone: text("phone"),
   company: text("company"),
   status: text("status").notNull().default("pending"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  unique("admin_clients_email_key").on(t.email),
+]);
 
 export const adminServiceRequests = pgTable("admin_service_requests", {
   id: serial("id").primaryKey(),
