@@ -74,6 +74,15 @@ export interface AuthSessionResponse {
   expiresAt: string;
 }
 
+export interface AuthSessionRecord {
+  id: number;
+  createdAt: string;
+  expiresAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  current: boolean;
+}
+
 export const authApi = {
   signup: (data: { name: string; email: string; password: string }) =>
     post<AuthSessionResponse>(`${AUTH_BASE}/signup`, data),
@@ -92,6 +101,18 @@ export const authApi = {
     if (!res.ok) throw new Error("Failed to load session");
     const data = (await res.json()) as { user: AuthUser };
     return data.user;
+  },
+
+  sessions: async (token: string): Promise<AuthSessionRecord[]> => {
+    const res = await fetch(`${AUTH_BASE}/sessions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || "Failed to load recent activity");
+    }
+    const data = (await res.json()) as { sessions: AuthSessionRecord[] };
+    return data.sessions;
   },
 
   exists: (email: string) =>
