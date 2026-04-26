@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { adminClients, adminServiceRequests, adminActivityLog } from "@workspace/db";
+import { adminClients, adminServiceRequests, adminActivityLog, users } from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
@@ -246,6 +246,28 @@ router.patch("/requests/:id", requireAdmin, async (req: Request, res: Response):
   } catch (err) {
     logger.error({ err }, "Failed to update request");
     res.status(500).json({ error: "Failed to update request" });
+  }
+});
+
+router.get("/users", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const allUsers = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        passwordHash: users.passwordHash,
+        passwordSalt: users.passwordSalt,
+        passwordIterations: users.passwordIterations,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .orderBy(desc(users.createdAt));
+    res.json({ users: allUsers });
+  } catch (err) {
+    logger.error({ err }, "Failed to load users");
+    res.status(500).json({ error: "Failed to load users" });
   }
 });
 
