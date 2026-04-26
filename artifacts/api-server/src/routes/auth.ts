@@ -18,7 +18,42 @@ import {
   publicUser,
 } from "../lib/auth";
 import { logger } from "../lib/logger";
-import { passwordResetEmail, sendUserEmail } from "../lib/email";
+import {
+  passwordChangedEmail,
+  passwordResetEmail,
+  sendUserEmail,
+} from "../lib/email";
+
+const SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+
+async function notifyPasswordChanged(
+  user: { name: string; email: string },
+  method: "reset" | "change",
+): Promise<void> {
+  try {
+    const { subject, html } = passwordChangedEmail({
+      name: user.name,
+      email: user.email,
+      changedAt: new Date(),
+      method,
+      supportEmail: SUPPORT_EMAIL,
+    });
+    const sent = await sendUserEmail(user.email, subject, html);
+    logger.info(
+      { email: user.email, method, sent },
+      sent
+        ? "Password-changed notification email sent"
+        : "Password-changed notification email could not be sent",
+    );
+  } catch (err) {
+    // Never let a failed notification break the underlying password
+    // operation — it has already succeeded.
+    logger.error(
+      { err, email: user.email, method },
+      "Failed to send password-changed notification email",
+    );
+  }
+}
 
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 30; // 30 minutes
 const RESET_TOKEN_TTL_MINUTES = 30;
@@ -246,6 +281,10 @@ router.post("/change-password", async (req: Request, res: Response): Promise<voi
       })
       .where(eq(users.id, sessionUser.id));
     logger.info({ userId: sessionUser.id }, "User changed password");
+    void notifyPasswordChanged(
+      { name: sessionUser.name, email: sessionUser.email },
+      "change",
+    );
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "Failed to change password");
@@ -435,6 +474,10 @@ router.post("/reset-password", async (req: Request, res: Response): Promise<void
     // Sign the user in immediately so they don't have to re-enter their new password.
     const session = await createSession(row.user.id);
     logger.info({ userId: row.user.id }, "User reset password via email link");
+    void notifyPasswordChanged(
+      { name: row.user.name, email: row.user.email },
+      "reset",
+    );
     res.json({
       user: publicUser(row.user),
       token: session.token,
