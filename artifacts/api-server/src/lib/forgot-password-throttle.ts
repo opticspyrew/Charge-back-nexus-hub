@@ -109,16 +109,14 @@ export function checkForgotPasswordThrottle(
 
 // Returns the client IP for throttling purposes.
 //
-// SECURITY: this function intentionally does NOT read X-Forwarded-For or
-// X-Real-IP from the request. Trusting those headers directly would let
-// an attacker spoof any IP and trivially evade the per-IP throttle.
-// Instead, it uses Express's `req.ip`, which is computed from the
-// `trust proxy` setting in app.ts (1 trusted hop = the Replit platform
-// proxy). With that setting, Express picks the rightmost X-Forwarded-For
-// entry — the address the trusted proxy actually saw — and discards any
-// client-supplied entries to its left.
+// SECURITY: this relies on `app.set("trust proxy", 1)` in app.ts, which
+// makes Express derive `req.ip` from the rightmost X-Forwarded-For entry
+// (the address the trusted Replit platform proxy actually saw) and
+// discard any client-supplied entries to its left. We must NOT read
+// X-Forwarded-For or X-Real-IP directly here — that would let an
+// attacker spoof any IP and trivially evade the per-IP throttle.
 export function getClientIp(req: Request): string {
-  return req.ip ?? req.socket.remoteAddress ?? "unknown";
+  return req.ip ?? "unknown";
 }
 
 // Periodic cleanup so empty buckets don't accumulate forever.

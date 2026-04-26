@@ -18,10 +18,17 @@ app.use(
     logger,
     serializers: {
       req(req) {
+        // pino-http calls our serializer with its own wrapped object;
+        // the original Express request (which has the `req.ip` getter
+        // backed by the `trust proxy` setting above) is on `req.raw`.
+        // Logging it gives every HTTP line the real client IP rather
+        // than the proxy's address.
+        const raw = (req as { raw?: { ip?: string } }).raw;
         return {
           id: req.id,
           method: req.method,
           url: req.url?.split("?")[0],
+          ip: raw?.ip,
         };
       },
       res(res) {
