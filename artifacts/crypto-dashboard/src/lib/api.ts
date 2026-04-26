@@ -115,6 +115,17 @@ export const authApi = {
     return data.sessions;
   },
 
+  revokeSession: async (token: string, id: number): Promise<void> => {
+    const res = await fetch(`${AUTH_BASE}/sessions/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || "Failed to sign out that device");
+    }
+  },
+
   exists: (email: string) =>
     post<{ exists: boolean }>(`${AUTH_BASE}/exists`, { email }),
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authApi, type AuthSessionRecord } from "@/lib/api";
 
@@ -45,30 +45,69 @@ export default function RecentActivityPanel() {
   const [sessions, setSessions] = useState<AuthSessionRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  // Tracks which session is currently being revoked, so we can show a
+  // per-row spinner / disable just that one button instead of locking the
+  // whole panel.
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  const loadSessions = useCallback(
+    async (signal?: { cancelled: boolean }) => {
+      if (!token) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const rows = await authApi.sessions(token);
+        if (!signal?.cancelled) {
+          setSessions(rows);
+        }
+      } catch (err: unknown) {
+        if (!signal?.cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Failed to load recent activity.",
+          );
+        }
+      } finally {
+        if (!signal?.cancelled) {
+          setLoading(false);
+        }
+      }
+    },
+    [token],
+  );
 
   useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    authApi
-      .sessions(token)
-      .then((rows) => {
-        if (!cancelled) {
-          setSessions(rows);
-          setLoading(false);
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load recent activity.");
-          setLoading(false);
-        }
-      });
+    const signal = { cancelled: false };
+    void loadSessions(signal);
     return () => {
-      cancelled = true;
+      signal.cancelled = true;
     };
-  }, [token]);
+  }, [loadSessions]);
+
+  const handleRevoke = useCallback(
+    async (sessionId: number) => {
+      if (!token) return;
+      setRevokingId(sessionId);
+      setRevokeError(null);
+      try {
+        await authApi.revokeSession(token, sessionId);
+        // Optimistically remove the row so the user sees instant feedback,
+        // then re-fetch to stay in sync with the server (handles edge
+        // cases like the row already being expired/cleaned up).
+        setSessions((prev) =>
+          prev ? prev.filter((s) => s.id !== sessionId) : prev,
+        );
+        await loadSessions();
+      } catch (err: unknown) {
+        setRevokeError(
+          err instanceof Error ? err.message : "Failed to sign out that device.",
+        );
+      } finally {
+        setRevokingId(null);
+      }
+    },
+    [token, loadSessions],
+  );
 
   return (
     <div
@@ -100,6 +139,15 @@ export default function RecentActivityPanel() {
       {!loading && !error && sessions && sessions.length === 0 && (
         <p className="text-sm text-muted-foreground py-4" data-testid="recent-activity-empty">
           No recent sign-ins to show.
+        </p>
+      )}
+
+      {revokeError && (
+        <p
+          className="text-sm text-destructive pb-3"
+          data-testid="recent-activity-revoke-error"
+        >
+          {revokeError}
         </p>
       )}
 
@@ -143,6 +191,17 @@ export default function RecentActivityPanel() {
                   {formatTimestamp(s.createdAt)} • {describeIp(s.ipAddress)}
                 </p>
               </div>
+              {!s.current && (
+                <button
+                  type="button"
+                  onClick={() => void handleRevoke(s.id)}
+                  disabled={revokingId !== null}
+                  className="text-xs font-semibold text-destructive hover:text-destructive/80 disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1 rounded-md border border-destructive/30 hover:border-destructive/50 transition-colors flex-shrink-0"
+                  data-testid={`recent-activity-revoke-${s.id}`}
+                >
+                  {revokingId === s.id ? "Signing out…" : "Sign out this device"}
+                </button>
+              )}
             </li>
           ))}
         </ul>

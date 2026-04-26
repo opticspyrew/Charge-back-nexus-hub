@@ -689,8 +689,75 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
       })),
     });
   } catch (err) {
-    logger.error({ err }, "Failed to list sessions");
+    logger.error({ err }, "Failed to load recent sessions");
     res.status(500).json({ error: "Failed to load recent activity." });
+  }
+});
+
+router.delete("/sessions/:id", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    const current = await findSessionWithUser(token);
+    if (!current) {
+      res.status(401).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+
+    const rawId = req.params.id;
+    // Strict: reject anything that isn't a pure positive integer string
+    // (e.g. "1abc" must NOT be silently accepted as 1).
+    if (typeof rawId !== "string" || !/^[1-9]\d*$/.test(rawId)) {
+      res.status(400).json({ error: "Invalid session id." });
+      return;
+    }
+    const sessionId = Number.parseInt(rawId, 10);
+    if (!Number.isSafeInteger(sessionId)) {
+      res.status(400).json({ error: "Invalid session id." });
+      return;
+    }
+
+    // Disallow revoking the current session via this endpoint — the user
+    // should use POST /logout for that. Otherwise calling DELETE on the
+    // current session would silently sign them out without clearing their
+    // local token state.
+    if (sessionId === current.session.id) {
+      res.status(400).json({
+        error: "Use sign out to end your current session.",
+      });
+      return;
+    }
+
+    // Delete ONLY a row that matches both the id and the current user.
+    // Using `.returning()` lets us tell whether anything was actually
+    // deleted, so a request for someone else's session id falls into the
+    // 404 branch instead of silently succeeding.
+    const deleted = await db
+      .delete(userSessions)
+      .where(
+        and(
+          eq(userSessions.id, sessionId),
+          eq(userSessions.userId, current.user.id),
+        ),
+      )
+      .returning({ id: userSessions.id });
+
+    if (deleted.length === 0) {
+      res.status(404).json({ error: "Session not found." });
+      return;
+    }
+
+    logger.info(
+      { userId: current.user.id, sessionId },
+      "User revoked a session from the activity panel",
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "Failed to revoke session");
+    res.status(500).json({ error: "Failed to sign out that device." });
   }
 });
 
