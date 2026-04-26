@@ -87,9 +87,12 @@ export async function hasSeenSessionMetadata(params: {
   const { userId, ipAddress, userAgent, excludeSessionId } = params;
   if (!ipAddress && !userAgent) return true;
 
+  // We deliberately do NOT filter on expiresAt here: a returning user whose
+  // old sessions have all expired should still be recognized on the same
+  // device they used before, otherwise they would receive a "new device"
+  // email every time their inactivity exceeds the session TTL.
   const conditions = [
     eq(userSessions.userId, userId),
-    gt(userSessions.expiresAt, new Date()),
     ipAddress
       ? eq(userSessions.ipAddress, ipAddress)
       : isNull(userSessions.ipAddress),
@@ -109,19 +112,17 @@ export async function hasSeenSessionMetadata(params: {
 }
 
 /**
- * Count of currently-valid (non-expired) sessions for the user. We
- * deliberately exclude expired rows so the "first-ever login" suppression
- * matches the same time window used by hasSeenSessionMetadata. Otherwise a
- * stale expired session could make priorSessionCount > 0 while
- * historicallySeen is false, producing a spurious "new device" alert.
+ * Count of ALL session rows (active or expired) for the user. We use this as
+ * the "first-ever login after signup" check: only suppress the new-device
+ * alert when the user has literally never had a session before. Counting
+ * only active sessions would re-trigger the suppression after a returning
+ * user's old session expired, which would mistakenly skip a real alert.
  */
 export async function countSessionsForUser(userId: number): Promise<number> {
   const rows = await db
     .select({ id: userSessions.id })
     .from(userSessions)
-    .where(
-      and(eq(userSessions.userId, userId), gt(userSessions.expiresAt, new Date())),
-    );
+    .where(eq(userSessions.userId, userId));
   return rows.length;
 }
 
