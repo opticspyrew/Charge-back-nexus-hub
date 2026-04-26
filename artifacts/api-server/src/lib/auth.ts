@@ -1,5 +1,5 @@
 import { db, users, userSessions, type User, type UserSession } from "@workspace/db";
-import { and, eq, gt, isNull, lt, ne } from "drizzle-orm";
+import { and, eq, isNull, lt, ne } from "drizzle-orm";
 import { hashPassword, generateSessionToken } from "./passwords";
 import { logger } from "./logger";
 
@@ -70,9 +70,13 @@ export async function findSessionWithUser(
 }
 
 /**
- * Returns true if the user has any other (non-expired) session matching the
- * given (ipAddress, userAgent) pair. We pass `excludeSessionId` so that the
- * just-created session — which already has its own row — doesn't match itself.
+ * Returns true if the user has any session row (active OR expired) matching
+ * the given (ipAddress, userAgent) pair. We deliberately do not filter by
+ * expiry: a returning user on a previously-known device should not get a
+ * "new device" email just because their old session has timed out.
+ *
+ * `excludeSessionId` lets the caller skip a specific row (e.g. a session
+ * they just inserted) so it doesn't match itself.
  *
  * If both ipAddress and userAgent are null/empty we treat that as "unknown"
  * and conservatively return true so we don't fire a "new device" alert just
@@ -109,21 +113,6 @@ export async function hasSeenSessionMetadata(params: {
     .where(and(...conditions))
     .limit(1);
   return !!row;
-}
-
-/**
- * Count of ALL session rows (active or expired) for the user. We use this as
- * the "first-ever login after signup" check: only suppress the new-device
- * alert when the user has literally never had a session before. Counting
- * only active sessions would re-trigger the suppression after a returning
- * user's old session expired, which would mistakenly skip a real alert.
- */
-export async function countSessionsForUser(userId: number): Promise<number> {
-  const rows = await db
-    .select({ id: userSessions.id })
-    .from(userSessions)
-    .where(eq(userSessions.userId, userId));
-  return rows.length;
 }
 
 export async function deleteSessionByToken(token: string): Promise<void> {
