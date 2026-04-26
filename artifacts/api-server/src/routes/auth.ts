@@ -50,8 +50,8 @@ function captureSessionMetadata(req: Request): SessionMetadata {
   };
 }
 
-function buildAppUrl(path: string): string | null {
-  const origin = getTrustedAppOrigin();
+function buildAppUrl(path: string, req?: Request): string | null {
+  const origin = getTrustedAppOrigin(req);
   if (!origin) return null;
   return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }
@@ -146,26 +146,33 @@ async function notifyPasswordChanged(
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 30; // 30 minutes
 const RESET_TOKEN_TTL_MINUTES = 30;
 
-function getTrustedAppOrigin(): string | null {
+function getTrustedAppOrigin(req?: Request): string | null {
+  // 1. Explicit override always wins.
   const configured = process.env.APP_PUBLIC_URL?.trim();
-  if (configured) {
-    return configured.replace(/\/$/, "");
+  if (configured) return configured.replace(/\/$/, "");
+
+  // 2. Derive from the live request's forwarded headers.
+  //    Replit's production proxy sets X-Forwarded-Host and X-Forwarded-Proto.
+  if (req) {
+    const fwdHost = req.headers["x-forwarded-host"];
+    const fwdProto = req.headers["x-forwarded-proto"];
+    const host = (Array.isArray(fwdHost) ? fwdHost[0] : fwdHost)?.split(",")[0].trim();
+    const proto = (Array.isArray(fwdProto) ? fwdProto[0] : fwdProto)?.split(",")[0].trim() || "https";
+    if (host) return `${proto}://${host}`;
   }
-  // REPLIT_APP_DOMAIN is set in deployed (production) environments.
+
+  // 3. Static env fallbacks (dev / CI).
   const replitApp = process.env.REPLIT_APP_DOMAIN?.trim();
-  if (replitApp) {
-    return `https://${replitApp.replace(/\/$/, "")}`;
-  }
-  // REPLIT_DEV_DOMAIN is supplied by the platform in development environments.
+  if (replitApp) return `https://${replitApp.replace(/\/$/, "")}`;
+
   const replitDev = process.env.REPLIT_DEV_DOMAIN?.trim();
-  if (replitDev) {
-    return `https://${replitDev.replace(/\/$/, "")}`;
-  }
+  if (replitDev) return `https://${replitDev.replace(/\/$/, "")}`;
+
   return null;
 }
 
-function buildResetUrl(token: string): string | null {
-  const origin = getTrustedAppOrigin();
+function buildResetUrl(token: string, req?: Request): string | null {
+  const origin = getTrustedAppOrigin(req);
   if (!origin) return null;
   return `${origin}/reset-password?token=${encodeURIComponent(token)}`;
 }
@@ -480,11 +487,11 @@ router.post("/forgot-password", async (req: Request, res: Response): Promise<voi
       expiresAt,
     });
 
-    const resetUrl = buildResetUrl(rawToken);
+    const resetUrl = buildResetUrl(rawToken, req);
     if (!resetUrl) {
       logger.error(
         { userId: user.id },
-        "Cannot send password reset email: APP_PUBLIC_URL (or REPLIT_DEV_DOMAIN) is not configured.",
+        "Cannot send password reset email: no app origin could be determined.",
       );
     } else {
       const { subject, html } = passwordResetEmail({
