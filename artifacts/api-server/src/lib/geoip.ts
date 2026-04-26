@@ -15,8 +15,20 @@ function lookupEnabled(): boolean {
   return flag !== "false" && flag !== "0" && flag !== "no" && flag !== "off";
 }
 
+/**
+ * The resolved location for an IP address.
+ *  - `label` is the display string ("City, CC" / "Country") shown in the UI.
+ *  - `countryCode` is the raw 2-letter ISO country code (e.g. "US"), kept
+ *    separate so the UI can derive a flag emoji without re-parsing `label`.
+ *    May be null if the upstream returned a region/country name but no code.
+ */
+export interface ResolvedLocation {
+  label: string;
+  countryCode: string | null;
+}
+
 interface CacheEntry {
-  value: string | null;
+  value: ResolvedLocation | null;
   expiresAt: number;
 }
 
@@ -24,9 +36,9 @@ const cache = new Map<string, CacheEntry>();
 // Promises currently in flight, keyed by normalized IP. Coalescing here
 // means if two simultaneous /sessions calls (or two rows in the same
 // response) ask for the same uncached IP, we only hit the upstream once.
-const inflight = new Map<string, Promise<string | null>>();
+const inflight = new Map<string, Promise<ResolvedLocation | null>>();
 
-function setCache(ip: string, value: string | null) {
+function setCache(ip: string, value: ResolvedLocation | null) {
   if (cache.size >= MAX_CACHE_ENTRIES) {
     const firstKey = cache.keys().next().value;
     if (firstKey !== undefined) cache.delete(firstKey);
@@ -86,17 +98,23 @@ interface IpApiResponse {
   message?: string;
 }
 
-function formatLocation(data: IpApiResponse): string | null {
+function formatLocation(data: IpApiResponse): ResolvedLocation | null {
   if (data.status !== "success") return null;
   const region = data.city || data.regionName;
   const country = data.countryCode || data.country;
-  if (region && country) return `${region}, ${country}`;
-  if (country) return country;
-  if (region) return region;
-  return null;
+  // Only the 2-letter ISO code is useful for deriving a flag emoji.
+  // `data.country` is the full country name and must not be returned here.
+  const rawCode = data.countryCode?.trim().toUpperCase();
+  const countryCode = rawCode && /^[A-Z]{2}$/.test(rawCode) ? rawCode : null;
+  let label: string | null = null;
+  if (region && country) label = `${region}, ${country}`;
+  else if (country) label = country;
+  else if (region) label = region;
+  if (!label) return null;
+  return { label, countryCode };
 }
 
-async function fetchLocation(ip: string): Promise<string | null> {
+async function fetchLocation(ip: string): Promise<ResolvedLocation | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
   try {
@@ -133,7 +151,7 @@ async function fetchLocation(ip: string): Promise<string | null> {
  * failures (so one transient outage doesn't block the same IP all day).
  * The map is capped at 1000 entries with simple FIFO eviction.
  */
-export async function lookupLocation(rawIp: string | null): Promise<string | null> {
+export async function lookupLocation(rawIp: string | null): Promise<ResolvedLocation | null> {
   if (!lookupEnabled()) return null;
   const ip = normalizeIp(rawIp);
   if (!ip) return null;
