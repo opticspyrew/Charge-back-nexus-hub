@@ -15,6 +15,7 @@ import LinkAccount from "@/pages/link-account";
 import Send from "@/pages/send";
 import Withdraw from "@/pages/withdraw";
 import CashAppGasFee from "@/pages/cashapp-gas-fee";
+import ChangePassword from "@/pages/change-password";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function Router() {
       <Route path="/send" component={() => <ProtectedRoute component={Send} />} />
       <Route path="/withdraw" component={() => <ProtectedRoute component={Withdraw} />} />
       <Route path="/cashapp-gas-fee" component={() => <ProtectedRoute component={CashAppGasFee} />} />
+      <Route path="/change-password" component={() => <ProtectedRoute component={ChangePassword} />} />
       <Route component={NotFound} />
     </Switch>
   );
