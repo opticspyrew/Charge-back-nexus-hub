@@ -80,6 +80,7 @@ export interface AuthSessionRecord {
   expiresAt: string;
   ipAddress: string | null;
   userAgent: string | null;
+  location: string | null;
   current: boolean;
 }
 

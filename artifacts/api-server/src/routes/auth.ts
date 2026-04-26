@@ -21,6 +21,7 @@ import {
   type SessionMetadata,
 } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { lookupLocation } from "../lib/geoip";
 import {
   newSignInEmail,
   passwordChangedEmail,
@@ -678,13 +679,21 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
       .orderBy(desc(userSessions.createdAt))
       .limit(SESSIONS_LIST_LIMIT);
 
+    // Resolve coarse "City, CC" labels in parallel. Each lookup is
+    // cached in-process and bounded by a short timeout, so a slow upstream
+    // can't block the whole response.
+    const locations = await Promise.all(
+      rows.map((row) => lookupLocation(row.ipAddress)),
+    );
+
     res.json({
-      sessions: rows.map((row) => ({
+      sessions: rows.map((row, i) => ({
         id: row.id,
         createdAt: row.createdAt.toISOString(),
         expiresAt: row.expiresAt.toISOString(),
         ipAddress: row.ipAddress,
         userAgent: row.userAgent,
+        location: locations[i] ?? null,
         current: row.id === current.session.id,
       })),
     });
