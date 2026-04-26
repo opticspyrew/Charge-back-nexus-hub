@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
+import { ForgotPasswordPanel } from "@/components/forgot-password-panel";
 
 export default function SignUp() {
   const [, navigate] = useLocation();
@@ -9,6 +10,7 @@ export default function SignUp() {
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showForgot, setShowForgot] = useState(false);
 
   const strengthHint = useMemo(
     () => getPasswordStrengthHint(form.password),
@@ -41,6 +43,10 @@ export default function SignUp() {
       setLoading(false);
     }
   };
+
+  if (showForgot) {
+    return <ForgotPasswordPanel onClose={() => setShowForgot(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -149,6 +155,15 @@ export default function SignUp() {
               className="text-primary hover:underline font-medium"
             >
               Sign in
+            </button>
+          </p>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            <button
+              onClick={() => setShowForgot(true)}
+              data-testid="signup-forgot-password"
+              className="text-primary hover:underline font-medium"
+            >
+              Forgot your password?
             </button>
           </p>
         </div>

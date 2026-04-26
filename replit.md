@@ -34,12 +34,17 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API Server** (`artifacts/api-server`) — Express API at `/api`
   - Admin routes: `/api/admin/login`, `/api/admin/clients`, `/api/admin/requests`, `/api/admin/stats`, `/api/admin/activity`
   - Auth: `X-Admin-Token: <username>:<password>` header (env vars: `ADMIN_USERNAME`, `ADMIN_PASSWORD`)
+  - User auth routes: `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me` (Bearer token in `Authorization` header)
+  - Passwords are hashed server-side with PBKDF2 (sha256, 210k iterations) and stored in the `users` table; sessions live in `user_sessions` and last 30 days
+  - Primary user `pgeitz@hotmail.com` / `Centuryhacks` is seeded into the `users` table on startup if missing
 
 ## Database Tables
 
 - `admin_clients` — firm client records
 - `admin_service_requests` — withdrawal/payment/other requests linked to clients
 - `admin_activity_log` — chronological event log
+- `users` — CryptoVault end-user accounts (server-side, PBKDF2-hashed passwords)
+- `user_sessions` — opaque bearer tokens for end-user sessions (30-day expiry)
 
 ## Key Commands
 

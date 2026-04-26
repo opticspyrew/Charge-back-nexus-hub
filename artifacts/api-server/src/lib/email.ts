@@ -46,6 +46,130 @@ export async function sendAdminEmail(subject: string, html: string): Promise<boo
   }
 }
 
+export async function sendUserEmail(
+  to: string,
+  subject: string,
+  html: string,
+): Promise<boolean> {
+  const transporter = createTransporter();
+
+  if (!transporter) {
+    logger.warn(
+      { to, subject },
+      "Email not configured — SMTP_USER and SMTP_PASS env vars required. Email skipped.",
+    );
+    return false;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `"CryptoVault" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html,
+    });
+    logger.info({ to, subject }, "User email sent");
+    return true;
+  } catch (err) {
+    logger.error({ err, to }, "Failed to send user email");
+    return false;
+  }
+}
+
+export function passwordResetEmail(params: {
+  name: string;
+  resetUrl: string;
+  expiresInMinutes: number;
+}): { subject: string; html: string } {
+  const { name, resetUrl, expiresInMinutes } = params;
+  const subject = "Reset your CryptoVault password";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #1e3a5f; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Reset your password</h1>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${name || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">
+          We received a request to reset the password for your CryptoVault account. Click the
+          button below to set a new password. This link will expire in ${expiresInMinutes} minutes
+          and can only be used once.
+        </p>
+        <p style="text-align: center; margin: 24px 0;">
+          <a href="${resetUrl}" style="display: inline-block; background: #1e3a5f; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+            Reset password
+          </a>
+        </p>
+        <p style="font-size: 12px; color: #6b7280; margin: 0 0 8px;">
+          If the button doesn't work, copy and paste this URL into your browser:
+        </p>
+        <p style="font-size: 12px; color: #1e3a5f; word-break: break-all; margin: 0 0 16px;">
+          ${resetUrl}
+        </p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          If you didn't request a password reset, you can safely ignore this email — your password
+          will stay the same.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
+export function passwordChangedEmail(params: {
+  name: string;
+  email: string;
+  changedAt: Date;
+  method: "reset" | "change";
+  supportEmail: string;
+}): { subject: string; html: string } {
+  const { name, email, changedAt, method, supportEmail } = params;
+  const subject = "Your CryptoVault password was changed";
+  const methodLabel =
+    method === "reset"
+      ? "using the email-based password reset flow"
+      : "from your account settings";
+  const timestamp = changedAt.toUTCString();
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #1e3a5f; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Password changed</h1>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${name || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">
+          The password for your CryptoVault account (<strong>${email}</strong>) was just changed ${methodLabel}.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 130px;">When</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${timestamp}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Account</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${email}</td>
+          </tr>
+        </table>
+        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+          <p style="font-size: 13px; color: #92400e; margin: 0; font-weight: 600;">Didn't make this change?</p>
+          <p style="font-size: 13px; color: #78350f; margin: 6px 0 0;">
+            If you didn't change your password, your account may be compromised. Contact our support team immediately at
+            <a href="mailto:${supportEmail}" style="color: #1e3a5f; font-weight: 600;">${supportEmail}</a>
+            so we can help you secure your account.
+          </p>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          This is an automated security notification from CryptoVault. You're receiving it because the password
+          on your account was changed.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
 export function newClientEmail(client: {
   name: string;
   email: string;
