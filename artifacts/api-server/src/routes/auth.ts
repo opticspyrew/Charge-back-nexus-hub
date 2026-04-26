@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from "../lib/passwords";
 import {
+  countSessionsForUser,
   createSession,
   deleteSessionByToken,
   ensurePrimaryUser,
@@ -15,12 +16,14 @@ import {
   findSessionWithUser,
   findUserByEmail,
   findUserBySessionToken,
+  hasSeenSessionMetadata,
   normalizeEmail,
   publicUser,
   type SessionMetadata,
 } from "../lib/auth";
 import { logger } from "../lib/logger";
 import {
+  newSignInEmail,
   passwordChangedEmail,
   passwordResetEmail,
   sendUserEmail,
@@ -45,6 +48,70 @@ function captureSessionMetadata(req: Request): SessionMetadata {
     ipAddress: ip && ip !== "unknown" ? ip : null,
     userAgent,
   };
+}
+
+function buildAppUrl(path: string): string | null {
+  const origin = getTrustedAppOrigin();
+  if (!origin) return null;
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function deviceLabelFromUserAgent(ua: string | null | undefined): string {
+  if (!ua) return "Unknown device";
+  const browser = /Edg\//i.test(ua)
+    ? "Edge"
+    : /OPR\//i.test(ua)
+      ? "Opera"
+      : /Firefox\//i.test(ua)
+        ? "Firefox"
+        : /Chrome\//i.test(ua)
+          ? "Chrome"
+          : /Safari\//i.test(ua)
+            ? "Safari"
+            : "Browser";
+  const os = /Windows/i.test(ua)
+    ? "Windows"
+    : /Android/i.test(ua)
+      ? "Android"
+      : /iPhone|iPad|iPod/i.test(ua)
+        ? "iOS"
+        : /Mac OS X|Macintosh/i.test(ua)
+          ? "macOS"
+          : /Linux/i.test(ua)
+            ? "Linux"
+            : "Unknown OS";
+  return `${browser} on ${os}`;
+}
+
+async function notifyNewSignIn(
+  user: { name: string; email: string },
+  metadata: SessionMetadata,
+): Promise<void> {
+  try {
+    const { subject, html } = newSignInEmail({
+      name: user.name,
+      email: user.email,
+      signedInAt: new Date(),
+      deviceLabel: deviceLabelFromUserAgent(metadata.userAgent),
+      ipAddress: metadata.ipAddress ?? null,
+      activityUrl: buildAppUrl("/dashboard"),
+      changePasswordUrl: buildAppUrl("/change-password"),
+      supportEmail: SUPPORT_EMAIL,
+    });
+    const sent = await sendUserEmail(user.email, subject, html);
+    logger.info(
+      { email: user.email, sent },
+      sent
+        ? "New sign-in notification email sent"
+        : "New sign-in notification email could not be sent",
+    );
+  } catch (err) {
+    // Never let a failed notification break the underlying sign-in.
+    logger.error(
+      { err, email: user.email },
+      "Failed to send new sign-in notification email",
+    );
+  }
 }
 
 async function notifyPasswordChanged(
@@ -209,8 +276,34 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const session = await createSession(user.id, captureSessionMetadata(req));
+    const metadata = captureSessionMetadata(req);
+
+    // Check the historical sessions table BEFORE we insert the new one, so
+    // the "have we seen this (ip, ua) before?" check doesn't have to exclude
+    // the row we're about to add.
+    //   - If the user has zero prior sessions (i.e. this is the very first
+    //     login after signup), we skip the alert — the signup itself is the
+    //     introduction of the device, an alert here would just be noise.
+    //   - Otherwise, fire the "new sign-in" email only when this device
+    //     fingerprint has never been seen before for this user.
+    const priorSessionCount = await countSessionsForUser(user.id);
+    const historicallySeen =
+      priorSessionCount === 0
+        ? true // suppress the alert on first-ever login
+        : await hasSeenSessionMetadata({
+            userId: user.id,
+            ipAddress: metadata.ipAddress ?? null,
+            userAgent: metadata.userAgent ?? null,
+          });
+
+    const session = await createSession(user.id, metadata);
     logger.info({ userId: user.id, email: user.email }, "User signed in");
+
+    if (!historicallySeen) {
+      // Fire-and-forget: a failed email must not break sign-in.
+      void notifyNewSignIn({ name: user.name, email: user.email }, metadata);
+    }
+
     res.json({
       user: publicUser(user),
       token: session.token,
