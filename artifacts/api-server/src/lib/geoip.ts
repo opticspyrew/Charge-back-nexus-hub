@@ -5,6 +5,16 @@ const NEGATIVE_TTL_MS = 5 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 1000;
 const LOOKUP_TIMEOUT_MS = 1500;
 
+// Privacy/egress kill-switch. ip-api.com's free tier is HTTP-only, which
+// means client IPs (PII) cross the wire in plaintext. Set
+// GEOIP_LOOKUP_ENABLED=false to disable all outbound lookups in
+// privacy-sensitive deployments; the Recent Activity panel will then fall
+// back to showing the raw IP for every row.
+function lookupEnabled(): boolean {
+  const flag = (process.env.GEOIP_LOOKUP_ENABLED ?? "true").trim().toLowerCase();
+  return flag !== "false" && flag !== "0" && flag !== "no" && flag !== "off";
+}
+
 interface CacheEntry {
   value: string | null;
   expiresAt: number;
@@ -124,6 +134,7 @@ async function fetchLocation(ip: string): Promise<string | null> {
  * The map is capped at 1000 entries with simple FIFO eviction.
  */
 export async function lookupLocation(rawIp: string | null): Promise<string | null> {
+  if (!lookupEnabled()) return null;
   const ip = normalizeIp(rawIp);
   if (!ip) return null;
   if (isPrivateOrLocal(ip)) return null;
