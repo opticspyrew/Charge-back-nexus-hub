@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import WalletModal from "@/components/wallet-modal";
 import RecentActivityPanel from "@/components/recent-activity-panel";
+import TransactionReceiptModal from "@/components/transaction-receipt";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
 import { useBalance } from "@/hooks/use-balance";
 import { useApprovalPoller } from "@/hooks/use-approval-poller";
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
+  const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
   const { transactions, cancelTransaction, setTransactions } = useTransactions();
   useApprovalPoller(transactions, setTransactions);
   const { usd: totalBalance, btcFormatted, usdFormatted } = useBalance();
@@ -93,6 +95,12 @@ export default function Dashboard() {
         <WalletModal
           type={modal}
           onClose={() => setModal(null)}
+        />
+      )}
+      {receiptTx && (
+        <TransactionReceiptModal
+          tx={receiptTx}
+          onClose={() => setReceiptTx(null)}
         />
       )}
 
@@ -403,6 +411,19 @@ export default function Dashboard() {
                         </div>
                       </div>
                     )}
+
+                    {/* View Receipt — always visible */}
+                    <div className="pt-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setReceiptTx(tx); }}
+                        className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        View Receipt
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
