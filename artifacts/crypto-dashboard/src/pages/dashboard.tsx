@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import WalletModal from "@/components/wallet-modal";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
+import { useBalance } from "@/hooks/use-balance";
 
 function BlockConfirmationLabel({ tx }: { tx: Transaction }) {
   const count = useBlockConfirmations(tx);
@@ -13,10 +14,6 @@ function BlockConfirmationLabel({ tx }: { tx: Transaction }) {
   );
 }
 
-const portfolioAssets = [
-  { symbol: "BTC", name: "Bitcoin", amount: "1.8802", value: "$50,765.00", change: "+2.4%", up: true, color: "bg-amber-400" },
-];
-
 type ModalType = "receive" | "deposit" | null;
 
 export default function Dashboard() {
@@ -24,8 +21,11 @@ export default function Dashboard() {
   const [modal, setModal] = useState<ModalType>(null);
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const { transactions, cancelTransaction } = useTransactions();
+  const { usd: totalBalance, btcFormatted, usdFormatted } = useBalance();
 
-  const totalBalance = 50765.00;
+  const portfolioAssets = [
+    { symbol: "BTC", name: "Bitcoin", amount: btcFormatted, value: `$${usdFormatted}`, change: "+2.4%", up: true, color: "bg-amber-400" },
+  ];
   const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending" || t.statusType === "processing").length;
 
   function handleCancel(id: string, e: React.MouseEvent) {

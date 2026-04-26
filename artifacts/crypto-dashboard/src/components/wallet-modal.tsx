@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useBalance } from "@/hooks/use-balance";
 
 interface WalletModalProps {
   type: "send" | "receive" | "withdraw" | "deposit";
@@ -6,11 +7,11 @@ interface WalletModalProps {
   onConfirmed?: (tx: { type: string; asset: string; amount: string; address: string }) => void;
 }
 
-const cryptos = [
-  { symbol: "BTC", name: "Bitcoin", balance: "1.8802 BTC" },
-];
-
 export default function WalletModal({ type, onClose, onConfirmed }: WalletModalProps) {
+  const { btcFormatted } = useBalance();
+  const cryptos = [
+    { symbol: "BTC", name: "Bitcoin", balance: `${btcFormatted} BTC` },
+  ];
   const [step, setStep] = useState<"form" | "confirm" | "success">("form");
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState("");

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useTransactions } from "@/hooks/use-transactions";
+import { useBalance } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
 import { publicApi } from "@/lib/api";
 
@@ -11,10 +12,6 @@ const ASSET_PRICES: Record<string, number> = {
   USDT: 1,
   SOL: 89,
 };
-
-const cryptos = [
-  { symbol: "BTC", name: "Bitcoin", balance: "1.8802", color: "bg-amber-400" },
-];
 
 const networks = [
   "Bitcoin Network",
@@ -30,6 +27,10 @@ export default function Withdraw() {
   const [, navigate] = useLocation();
   const { addTransaction } = useTransactions();
   const { user } = useAuth();
+  const { btcFormatted } = useBalance();
+  const cryptos = [
+    { symbol: "BTC", name: "Bitcoin", balance: btcFormatted, color: "bg-amber-400" },
+  ];
 
   const [step, setStep] = useState<Step>("form");
   const [selectedCrypto, setSelectedCrypto] = useState("BTC");
