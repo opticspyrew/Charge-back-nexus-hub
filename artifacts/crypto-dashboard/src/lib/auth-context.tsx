@@ -36,6 +36,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  resetPassword: (email: string, newPassword: string) => Promise<void>;
+  accountExists: (email: string) => boolean;
   logout: () => void;
 }
 
@@ -366,11 +368,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     saveAccounts(next);
   };
 
+  const accountExists = (email: string): boolean => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return false;
+    if (normalized === PRIMARY_EMAIL) return true;
+    return loadAccounts().some((a) => a.email.trim().toLowerCase() === normalized);
+  };
+
+  const resetPassword = async (email: string, newPassword: string) => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
+      throw new Error("Please enter the email address for the account.");
+    }
+
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.ok) {
+      throw new Error(passwordCheck.error ?? "Please choose a stronger password.");
+    }
+
+    const stored = loadAccounts();
+    const index = stored.findIndex((a) => a.email.trim().toLowerCase() === normalized);
+    const isPrimary = normalized === PRIMARY_EMAIL;
+
+    if (index === -1 && !isPrimary) {
+      throw new Error("We couldn't find an account with that email address.");
+    }
+
+    const displayEmail = index !== -1 ? stored[index].email : PRIMARY_EMAIL;
+    const displayName = index !== -1 ? stored[index].name : PRIMARY_NAME;
+
+    const hashed = await hashPassword(newPassword);
+    const newAccount: HashedAccount = {
+      email: displayEmail,
+      name: displayName,
+      ...hashed,
+    };
+
+    let next: StoredAccount[];
+    if (index !== -1) {
+      next = [...stored];
+      next[index] = newAccount;
+    } else {
+      next = [...stored, newAccount];
+    }
+    saveAccounts(next);
+
+    // Clear any active lockout so the user can sign in immediately with
+    // their new password.
+    recordSuccess(email);
+  };
+
   const logout = () => setUser(null);
 
   return (
     <AuthContext.Provider
-      value={{ user, isAuthenticated: !!user, login, signup, changePassword, logout }}
+      value={{
+        user,
+        isAuthenticated: !!user,
+        login,
+        signup,
+        changePassword,
+        resetPassword,
+        accountExists,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
