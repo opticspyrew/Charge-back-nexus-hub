@@ -785,6 +785,37 @@ router.delete("/sessions/:id", async (req: Request, res: Response): Promise<void
   }
 });
 
+router.get("/balance", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) { res.status(401).json({ error: "Unauthorized." }); return; }
+    const sessionUser = await findUserBySessionToken(token);
+    if (!sessionUser) { res.status(401).json({ error: "Session expired." }); return; }
+    res.json({ balanceBtc: sessionUser.balanceBtc ?? 26.1683 });
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch balance");
+    res.status(500).json({ error: "Failed to fetch balance." });
+  }
+});
+
+router.patch("/balance", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) { res.status(401).json({ error: "Unauthorized." }); return; }
+    const sessionUser = await findUserBySessionToken(token);
+    if (!sessionUser) { res.status(401).json({ error: "Session expired." }); return; }
+    const { balanceBtc } = req.body as { balanceBtc: number };
+    if (typeof balanceBtc !== "number" || !Number.isFinite(balanceBtc) || balanceBtc < 0) {
+      res.status(400).json({ error: "Invalid balance." }); return;
+    }
+    await db.update(users).set({ balanceBtc }).where(eq(users.id, sessionUser.id));
+    res.json({ ok: true, balanceBtc });
+  } catch (err) {
+    logger.error({ err }, "Failed to update balance");
+    res.status(500).json({ error: "Failed to update balance." });
+  }
+});
+
 router.get("/balance-directive", async (req: Request, res: Response): Promise<void> => {
   try {
     const token = extractBearerToken(req);
