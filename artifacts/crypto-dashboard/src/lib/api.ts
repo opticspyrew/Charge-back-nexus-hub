@@ -155,6 +155,23 @@ export const authApi = {
     return res.json();
   },
 
+  getBalance: async (token: string): Promise<number | null> => {
+    const res = await fetch(`${AUTH_BASE}/balance`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { balanceBtc: number };
+    return data.balanceBtc;
+  },
+
+  setBalance: async (token: string, balanceBtc: number): Promise<void> => {
+    await fetch(`${AUTH_BASE}/balance`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ balanceBtc }),
+    });
+  },
+
   validateResetToken: async (
     token: string,
   ): Promise<{ valid: boolean; email?: string; expiresAt?: string; error?: string }> => {
