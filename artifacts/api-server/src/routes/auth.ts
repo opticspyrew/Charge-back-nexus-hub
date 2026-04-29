@@ -272,6 +272,12 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
 });
 
 router.post("/login", async (req: Request, res: Response): Promise<void> => {
+  // Root-cause analysis (task #38): server-side auth was investigated via curl
+  // and confirmed working. The user-facing "wrong password" symptom for newly
+  // registered accounts was caused by mobile keyboard autocapitalize / autocorrect
+  // silently modifying the password while typing (masked field). Fix: PasswordInput
+  // component now sets autoCapitalize="off" autoCorrect="off" spellCheck={false}
+  // on all password fields. Diagnostic logging below surfaces any future regressions.
   try {
     const { email, password } = req.body as { email?: string; password?: string };
     if (!email || !password) {
@@ -280,20 +286,29 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
     }
     await ensurePrimaryUser();
 
-    // Normalize explicitly before lookup so the login path is immune to
-    // any future changes in how findUserByEmail handles its argument.
+    // Normalize explicitly at the call site so the login path is self-contained
+    // and immune to future changes in how findUserByEmail handles its argument.
     const normalizedEmail = normalizeEmail(email);
+
+    // --- Diagnostic: user lookup ---
     const user = await findUserByEmail(normalizedEmail);
     if (!user) {
+      logger.warn({ email: normalizedEmail }, "Login failed: no account found for email");
       res.status(401).json({ error: "Invalid email or password." });
       return;
     }
+
+    // --- Diagnostic: password verification ---
     const ok = await verifyPassword(password, {
       passwordHash: user.passwordHash,
       passwordSalt: user.passwordSalt,
       passwordIterations: user.passwordIterations,
     });
     if (!ok) {
+      logger.warn(
+        { userId: user.id, email: normalizedEmail, passwordIterations: user.passwordIterations },
+        "Login failed: password verification rejected",
+      );
       res.status(401).json({ error: "Invalid email or password." });
       return;
     }
@@ -313,8 +328,12 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       userAgent: metadata.userAgent ?? null,
     });
 
+    // --- Diagnostic: session creation ---
     const session = await createSession(user.id, metadata);
-    logger.info({ userId: user.id, email: user.email }, "User signed in");
+    logger.info(
+      { userId: user.id, email: normalizedEmail, sessionExpiresAt: session.expiresAt },
+      "User signed in",
+    );
 
     if (!historicallySeen) {
       // Fire-and-forget: a failed email must not break sign-in.
