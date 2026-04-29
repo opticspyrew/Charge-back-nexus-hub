@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { publicApi } from "./api";
 
 export type CurrencyCode = "USD" | "EUR" | "GBP" | "BTC";
 
@@ -9,12 +10,30 @@ export interface CurrencyInfo {
   rateFromUsd: number;
 }
 
-export const CURRENCIES: CurrencyInfo[] = [
-  { code: "USD", symbol: "$",  label: "US Dollar",      rateFromUsd: 1 },
-  { code: "EUR", symbol: "€",  label: "Euro",           rateFromUsd: 0.92 },
-  { code: "GBP", symbol: "£",  label: "British Pound",  rateFromUsd: 0.79 },
-  { code: "BTC", symbol: "₿",  label: "Bitcoin",        rateFromUsd: 1 / 27000 },
+const STATIC_RATES: Record<CurrencyCode, number> = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  BTC: 1 / 27000,
+};
+
+const CURRENCY_META: Omit<CurrencyInfo, "rateFromUsd">[] = [
+  { code: "USD", symbol: "$",  label: "US Dollar" },
+  { code: "EUR", symbol: "€",  label: "Euro" },
+  { code: "GBP", symbol: "£",  label: "British Pound" },
+  { code: "BTC", symbol: "₿",  label: "Bitcoin" },
 ];
+
+function buildCurrencies(rates: Record<string, number>): CurrencyInfo[] {
+  return CURRENCY_META.map(meta => ({
+    ...meta,
+    rateFromUsd: rates[meta.code] ?? STATIC_RATES[meta.code],
+  }));
+}
+
+export let CURRENCIES: CurrencyInfo[] = buildCurrencies(STATIC_RATES);
+
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 const DEFAULT_CURRENCY = CURRENCIES[0];
 
@@ -23,15 +42,47 @@ export interface CurrencyContextType {
   setCurrency: (code: CurrencyCode) => void;
   convert: (usd: number) => number;
   fmt: (usd: number, opts?: { decimals?: number }) => string;
+  ratesLoading: boolean;
+  btcPriceUsd: number;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | null>(null);
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
+  const [currencies, setCurrencies] = useState<CurrencyInfo[]>(CURRENCIES);
   const [currency, setCurrencyState] = useState<CurrencyInfo>(DEFAULT_CURRENCY);
+  const [ratesLoading, setRatesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function fetchRates() {
+      publicApi.getExchangeRates()
+        .then(rates => {
+          if (cancelled) return;
+          const updated = buildCurrencies(rates);
+          CURRENCIES = updated;
+          setCurrencies(updated);
+          setCurrencyState(prev => updated.find(c => c.code === prev.code) ?? prev);
+        })
+        .catch(() => {
+        })
+        .finally(() => {
+          if (!cancelled) setRatesLoading(false);
+        });
+    }
+
+    fetchRates();
+    const intervalId = setInterval(fetchRates, REFRESH_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, []);
 
   const setCurrency = (code: CurrencyCode) => {
-    const found = CURRENCIES.find(c => c.code === code);
+    const found = currencies.find(c => c.code === code);
     if (found) setCurrencyState(found);
   };
 
@@ -49,8 +100,11 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     })}`;
   };
 
+  const btcInfo = currencies.find(c => c.code === "BTC");
+  const btcPriceUsd = btcInfo && btcInfo.rateFromUsd > 0 ? 1 / btcInfo.rateFromUsd : 0;
+
   return (
-    <CurrencyContext.Provider value={{ currency, setCurrency, convert, fmt }}>
+    <CurrencyContext.Provider value={{ currency, setCurrency, convert, fmt, ratesLoading, btcPriceUsd }}>
       {children}
     </CurrencyContext.Provider>
   );

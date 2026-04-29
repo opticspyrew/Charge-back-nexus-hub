@@ -7,6 +7,55 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+const STATIC_RATES: Record<string, number> = { USD: 1, EUR: 0.92, GBP: 0.79, BTC: 1 / 27000 };
+const CACHE_TTL_MS = 60_000;
+let ratesCache: { rates: Record<string, number>; fetchedAt: number } | null = null;
+
+router.get("/exchange-rates", async (_req: Request, res: Response): Promise<void> => {
+  const now = Date.now();
+  if (ratesCache && now - ratesCache.fetchedAt < CACHE_TTL_MS) {
+    res.json({ rates: ratesCache.rates, cached: true });
+    return;
+  }
+
+  const rates: Record<string, number> = { ...STATIC_RATES };
+
+  try {
+    const [fiatResult, btcResult] = await Promise.allSettled([
+      fetch("https://open.er-api.com/v6/latest/USD").then(r => {
+        if (!r.ok) throw new Error(`open.er-api returned ${r.status}`);
+        return r.json();
+      }),
+      fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd").then(r => {
+        if (!r.ok) throw new Error(`coingecko returned ${r.status}`);
+        return r.json();
+      }),
+    ]);
+
+    if (fiatResult.status === "fulfilled") {
+      const data = fiatResult.value as { rates?: Record<string, number> };
+      if (data.rates?.EUR) rates.EUR = data.rates.EUR;
+      if (data.rates?.GBP) rates.GBP = data.rates.GBP;
+    } else {
+      logger.warn({ err: fiatResult.reason }, "Fiat rate provider unavailable, using static EUR/GBP");
+    }
+
+    if (btcResult.status === "fulfilled") {
+      const data = btcResult.value as { bitcoin?: { usd?: number } };
+      if (data.bitcoin?.usd && data.bitcoin.usd > 0) {
+        rates.BTC = 1 / data.bitcoin.usd;
+      }
+    } else {
+      logger.warn({ err: btcResult.reason }, "BTC rate provider unavailable, using static BTC rate");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to fetch live exchange rates, using static fallback");
+  }
+
+  ratesCache = { rates, fetchedAt: now };
+  res.json({ rates, cached: false });
+});
+
 router.post("/register", async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email } = req.body as { name?: string; email?: string };

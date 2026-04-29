@@ -29,6 +29,13 @@ function post<T>(path: string, body: unknown, headers?: Record<string, string>):
 }
 
 export const publicApi = {
+  getExchangeRates: async (): Promise<Record<string, number>> => {
+    const res = await fetch(`${PUBLIC_BASE}/exchange-rates`);
+    if (!res.ok) throw new Error("Failed to fetch exchange rates");
+    const data = (await res.json()) as { rates: Record<string, number> };
+    return data.rates;
+  },
+
   registerClient: (data: { name: string; email: string }) =>
     post<{ client: { id: number }; alreadyExists: boolean; emailSent: boolean }>(
       `${PUBLIC_BASE}/register`,
