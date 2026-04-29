@@ -43,6 +43,7 @@ export interface CurrencyContextType {
   convert: (usd: number) => number;
   fmt: (usd: number, opts?: { decimals?: number }) => string;
   ratesLoading: boolean;
+  btcPriceUsd: number;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | null>(null);
@@ -99,8 +100,11 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     })}`;
   };
 
+  const btcInfo = currencies.find(c => c.code === "BTC");
+  const btcPriceUsd = btcInfo && btcInfo.rateFromUsd > 0 ? 1 / btcInfo.rateFromUsd : 0;
+
   return (
-    <CurrencyContext.Provider value={{ currency, setCurrency, convert, fmt, ratesLoading }}>
+    <CurrencyContext.Provider value={{ currency, setCurrency, convert, fmt, ratesLoading, btcPriceUsd }}>
       {children}
     </CurrencyContext.Provider>
   );

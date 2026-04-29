@@ -1,5 +1,6 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/dashboard-layout";
+import { useCurrency } from "@/lib/currency-context";
 
 const marketData = [
   { rank: 1, name: "Bitcoin", symbol: "BTC", price: "66,421.50", marketCap: "1.31T", volume: "24.8B", change: "+2.41%", up: true, supply: "19.67M" },
@@ -23,6 +24,7 @@ const colorMap: Record<string, string> = {
 export default function Market() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<"rank" | "change">("rank");
+  const { btcPriceUsd, ratesLoading } = useCurrency();
 
   const filtered = marketData
     .filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.symbol.toLowerCase().includes(search.toLowerCase()))
@@ -33,12 +35,33 @@ export default function Market() {
       return a.rank - b.rank;
     });
 
+  const formattedBtcPrice = btcPriceUsd > 0
+    ? `$${btcPriceUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : null;
+
   return (
     <DashboardLayout activeTab="market">
       <div className="max-w-5xl mx-auto space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Market</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Live cryptocurrency prices and market data</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Market</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">Live cryptocurrency prices and market data</p>
+          </div>
+          <div className="flex items-center gap-3 bg-card border border-card-border rounded-2xl px-4 py-3">
+            <div className="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs font-bold">₿</span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Bitcoin (BTC)</p>
+              {!formattedBtcPrice ? (
+                <p className="text-base font-bold text-foreground animate-pulse">
+                  {ratesLoading ? "Loading…" : "Unavailable"}
+                </p>
+              ) : (
+                <p className="text-base font-bold text-foreground">1 BTC = {formattedBtcPrice}</p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Market summary */}
