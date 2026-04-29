@@ -94,7 +94,7 @@ export interface AuthSessionRecord {
 }
 
 export const authApi = {
-  signup: (data: { name: string; email: string; password: string }) =>
+  signup: (data: { name: string; email: string; password: string; initialBalanceUsd?: number }) =>
     post<AuthSessionResponse>(`${AUTH_BASE}/signup`, data),
 
   login: (data: { email: string; password: string }) =>

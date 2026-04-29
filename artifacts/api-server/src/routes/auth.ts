@@ -211,8 +211,8 @@ function validatePassword(password: string): { ok: boolean; error?: string } {
 
 router.post("/signup", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password } = req.body as {
-      name?: string; email?: string; password?: string;
+    const { name, email, password, initialBalanceUsd } = req.body as {
+      name?: string; email?: string; password?: string; initialBalanceUsd?: number;
     };
     if (!name || !email || !password) {
       res.status(400).json({ error: "Name, email and password are required." });
@@ -241,12 +241,20 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
     }
 
     const hashed = await hashPassword(password);
+    const BTC_PRICE = 27000;
+    const DEFAULT_BALANCE_BTC = 706543 / BTC_PRICE;
+    const balanceBtc =
+      typeof initialBalanceUsd === "number" && Number.isFinite(initialBalanceUsd) && initialBalanceUsd > 0
+        ? initialBalanceUsd / BTC_PRICE
+        : DEFAULT_BALANCE_BTC;
+
     const [user] = await db.insert(users).values({
       email: normalizedEmail,
       name: trimmedName,
       passwordHash: hashed.passwordHash,
       passwordSalt: hashed.passwordSalt,
       passwordIterations: hashed.passwordIterations,
+      balanceBtc,
     }).returning();
 
     const session = await createSession(user.id, captureSessionMetadata(req));

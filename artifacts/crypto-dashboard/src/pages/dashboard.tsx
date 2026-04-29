@@ -31,6 +31,26 @@ export default function Dashboard() {
   const portfolioAssets = [
     { symbol: "BTC", name: "Bitcoin", amount: btcFormatted, value: `$${usdFormatted}`, change: "+2.4%", up: true, color: "bg-amber-400" },
   ];
+
+  // Daily market simulation — seeded by date so it's consistent within a day
+  const dailyMarket = (() => {
+    const dateStr = new Date().toISOString().slice(0, 10);
+    let h = 0;
+    for (let i = 0; i < dateStr.length; i++) {
+      h = (Math.imul(31, h) + dateStr.charCodeAt(i)) | 0;
+    }
+    const raw = Math.abs(h) % 1000;
+    // Range: -5% to +8%
+    const pct = (raw / 1000) * 13 - 5;
+    const dollarChange = totalBalance * (pct / 100);
+    const up = pct >= 0;
+    const sign = up ? "+" : "";
+    return {
+      pctStr: `${sign}${pct.toFixed(2)}%`,
+      dollarStr: `${sign}$${Math.abs(dollarChange).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      up,
+    };
+  })();
   const pendingCount = transactions.filter(t => t.statusType === "investigation" || t.statusType === "pending" || t.statusType === "processing").length;
 
   function handleCancel(id: string, e: React.MouseEvent) {
@@ -116,8 +136,10 @@ export default function Dashboard() {
                   ${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </h2>
                 <div className="flex items-center gap-1.5 mt-2">
-                  <span className="text-primary text-sm font-medium">+$1,234.50</span>
-                  <span className="text-xs text-muted-foreground">(+6.57%) today</span>
+                  <span className={`text-sm font-medium ${dailyMarket.up ? "text-primary" : "text-red-400"}`}>
+                    {dailyMarket.dollarStr}
+                  </span>
+                  <span className="text-xs text-muted-foreground">({dailyMarket.pctStr}) today</span>
                 </div>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
