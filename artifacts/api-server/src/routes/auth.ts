@@ -280,7 +280,10 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
     }
     await ensurePrimaryUser();
 
-    const user = await findUserByEmail(email);
+    // Normalize explicitly before lookup so the login path is immune to
+    // any future changes in how findUserByEmail handles its argument.
+    const normalizedEmail = normalizeEmail(email);
+    const user = await findUserByEmail(normalizedEmail);
     if (!user) {
       res.status(401).json({ error: "Invalid email or password." });
       return;
