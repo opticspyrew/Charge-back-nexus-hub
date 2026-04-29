@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useAuth } from "@/lib/auth-context";
 import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
+import PasswordInput from "@/components/password-input";
 
 export default function ChangePassword() {
   const [, navigate] = useLocation();
@@ -65,13 +66,12 @@ export default function ChangePassword() {
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 Current password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 autoComplete="current-password"
                 value={form.current}
                 onChange={(e) => setForm((f) => ({ ...f, current: e.target.value }))}
                 placeholder="••••••••"
-                className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
                 data-testid="change-password-current"
               />
             </div>
@@ -80,13 +80,12 @@ export default function ChangePassword() {
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 New password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 value={form.next}
                 onChange={(e) => setForm((f) => ({ ...f, next: e.target.value }))}
                 placeholder="Min. 8 chars, mix letters & numbers"
-                className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
                 aria-describedby="change-password-strength-hint"
                 data-testid="change-password-new"
               />
@@ -119,13 +118,12 @@ export default function ChangePassword() {
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 Confirm new password
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 value={form.confirm}
                 onChange={(e) => setForm((f) => ({ ...f, confirm: e.target.value }))}
                 placeholder="••••••••"
-                className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
                 data-testid="change-password-confirm"
               />
             </div>

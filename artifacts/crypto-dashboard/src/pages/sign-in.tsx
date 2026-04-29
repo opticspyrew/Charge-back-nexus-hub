@@ -8,6 +8,7 @@ import {
   subscribe,
 } from "@/lib/login-throttle";
 import { ForgotPasswordPanel } from "@/components/forgot-password-panel";
+import PasswordInput from "@/components/password-input";
 
 export default function SignIn() {
   const [, navigate] = useLocation();
@@ -109,13 +110,12 @@ export default function SignIn() {
                   Forgot password?
                 </button>
               </div>
-              <input
-                type="password"
+              <PasswordInput
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
               />
             </div>
 
