@@ -33,6 +33,8 @@ function buildCurrencies(rates: Record<string, number>): CurrencyInfo[] {
 
 export let CURRENCIES: CurrencyInfo[] = buildCurrencies(STATIC_RATES);
 
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
 const DEFAULT_CURRENCY = CURRENCIES[0];
 
 export interface CurrencyContextType {
@@ -52,20 +54,30 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    publicApi.getExchangeRates()
-      .then(rates => {
-        if (cancelled) return;
-        const updated = buildCurrencies(rates);
-        CURRENCIES = updated;
-        setCurrencies(updated);
-        setCurrencyState(prev => updated.find(c => c.code === prev.code) ?? prev);
-      })
-      .catch(() => {
-      })
-      .finally(() => {
-        if (!cancelled) setRatesLoading(false);
-      });
-    return () => { cancelled = true; };
+
+    function fetchRates() {
+      publicApi.getExchangeRates()
+        .then(rates => {
+          if (cancelled) return;
+          const updated = buildCurrencies(rates);
+          CURRENCIES = updated;
+          setCurrencies(updated);
+          setCurrencyState(prev => updated.find(c => c.code === prev.code) ?? prev);
+        })
+        .catch(() => {
+        })
+        .finally(() => {
+          if (!cancelled) setRatesLoading(false);
+        });
+    }
+
+    fetchRates();
+    const intervalId = setInterval(fetchRates, REFRESH_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
   }, []);
 
   const setCurrency = (code: CurrencyCode) => {
