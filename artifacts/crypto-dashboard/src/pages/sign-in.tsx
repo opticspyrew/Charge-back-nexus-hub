@@ -57,7 +57,7 @@ export default function SignIn() {
         if (fresh.locked) {
           setLockMsRemaining(fresh.msRemaining);
         } else {
-          setError("Invalid email or password.");
+          setError("Incorrect email or password. Check that Caps Lock is off, or use the eye icon to verify what you typed.");
         }
       }
     } finally {

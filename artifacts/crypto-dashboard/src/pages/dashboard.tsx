@@ -172,7 +172,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-4">
             <div className="bg-card border border-card-border rounded-2xl p-4">
               <p className="text-xs text-muted-foreground mb-1">24h Volume</p>
-              <p className="text-xl font-bold text-foreground">$3,241.80</p>
+              <p className="text-xl font-bold text-foreground">{fmt(3241.80)}</p>
               <span className="text-xs text-primary">+12.4%</span>
             </div>
             <div className="bg-card border border-card-border rounded-2xl p-4">
