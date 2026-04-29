@@ -38,7 +38,7 @@ const ADDRESS_PATTERNS: Record<string, { regex: RegExp; hint: string }> = {
 };
 
 function validateAddress(address: string, networkKey: string): string {
-  if (!address.trim()) return "";
+  if (!address.trim()) return "Please enter a wallet address.";
   const pattern = ADDRESS_PATTERNS[networkKey];
   if (!pattern) return "";
   if (!pattern.regex.test(address.trim())) {
@@ -73,7 +73,7 @@ export default function Withdraw() {
 
   const handleAddressChange = useCallback((value: string) => {
     setDestination(value);
-    if (value.trim()) {
+    if (value.length > 0) {
       setAddressError(validateAddress(value, currentNetwork.key));
     } else {
       setAddressError("");
