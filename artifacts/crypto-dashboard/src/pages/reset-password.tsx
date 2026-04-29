@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { authApi } from "@/lib/api";
 import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
+import PasswordInput from "@/components/password-input";
 
 type Status = "validating" | "valid" | "invalid" | "submitting" | "done";
 
@@ -166,15 +167,14 @@ export default function ResetPassword() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     New password
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min. 8 chars, mix letters & numbers"
                     aria-describedby="reset-strength-hint"
                     data-testid="reset-new-password"
-                    className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   />
                   {strengthHint ? (
                     <p
@@ -205,14 +205,13 @@ export default function ResetPassword() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Confirm new password
                   </label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     placeholder="••••••••"
                     data-testid="reset-confirm-password"
-                    className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   />
                 </div>
 

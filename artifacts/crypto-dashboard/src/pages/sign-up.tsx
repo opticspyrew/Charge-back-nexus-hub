@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
 import { ForgotPasswordPanel } from "@/components/forgot-password-panel";
+import PasswordInput from "@/components/password-input";
 
 export default function SignUp() {
   const [, navigate] = useLocation();
@@ -93,13 +94,12 @@ export default function SignUp() {
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={form.password}
                 onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 placeholder="Min. 8 chars, mix letters & numbers"
                 autoComplete="new-password"
-                className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
                 aria-describedby="password-strength-hint"
               />
               {strengthHint ? (
@@ -125,13 +125,12 @@ export default function SignUp() {
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Confirm password</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={form.confirm}
                 onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
                 placeholder="••••••••"
                 autoComplete="new-password"
-                className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
               />
             </div>
 

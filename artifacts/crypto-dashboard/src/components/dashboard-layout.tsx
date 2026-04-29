@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
+import { useCurrency, CURRENCIES, type CurrencyCode } from "@/lib/currency-context";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -64,6 +65,7 @@ const navItems = [
 export default function DashboardLayout({ children, activeTab }: LayoutProps) {
   const [, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const { currency, setCurrency } = useCurrency();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -184,6 +186,20 @@ export default function DashboardLayout({ children, activeTab }: LayoutProps) {
           </button>
 
           <div className="flex items-center gap-2 ml-auto">
+            {/* Currency Selector */}
+            <select
+              value={currency.code}
+              onChange={e => setCurrency(e.target.value as CurrencyCode)}
+              aria-label="Select currency"
+              className="px-3 py-1.5 bg-muted border border-input rounded-lg text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+            >
+              {CURRENCIES.map(c => (
+                <option key={c.code} value={c.code}>
+                  {c.symbol} {c.code}
+                </option>
+              ))}
+            </select>
+
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-full">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-xs font-medium text-primary">Live</span>

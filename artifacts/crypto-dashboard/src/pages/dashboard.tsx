@@ -7,6 +7,7 @@ import TransactionReceiptModal from "@/components/transaction-receipt";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
 import { useBalance } from "@/hooks/use-balance";
 import { useApprovalPoller } from "@/hooks/use-approval-poller";
+import { useCurrency } from "@/lib/currency-context";
 
 function BlockConfirmationLabel({ tx }: { tx: Transaction }) {
   const count = useBlockConfirmations(tx);
@@ -27,9 +28,10 @@ export default function Dashboard() {
   const { transactions, cancelTransaction, setTransactions } = useTransactions();
   useApprovalPoller(transactions, setTransactions);
   const { usd: totalBalance, btcFormatted, usdFormatted } = useBalance();
+  const { fmt } = useCurrency();
 
   const portfolioAssets = [
-    { symbol: "BTC", name: "Bitcoin", amount: btcFormatted, value: `$${usdFormatted}`, change: "+2.4%", up: true, color: "bg-amber-400" },
+    { symbol: "BTC", name: "Bitcoin", amount: btcFormatted, value: fmt(totalBalance), change: "+2.4%", up: true, color: "bg-amber-400" },
   ];
 
   // Daily market simulation — seeded by date so it's consistent within a day
@@ -47,7 +49,7 @@ export default function Dashboard() {
     const sign = up ? "+" : "";
     return {
       pctStr: `${sign}${pct.toFixed(2)}%`,
-      dollarStr: `${sign}$${Math.abs(dollarChange).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      changeStr: `${sign}${fmt(Math.abs(dollarChange))}`,
       up,
     };
   })();
@@ -133,11 +135,11 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm text-muted-foreground font-medium mb-1">Total Portfolio Value</p>
                 <h2 className="text-4xl font-bold text-foreground">
-                  ${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  {fmt(totalBalance)}
                 </h2>
                 <div className="flex items-center gap-1.5 mt-2">
                   <span className={`text-sm font-medium ${dailyMarket.up ? "text-primary" : "text-red-400"}`}>
-                    {dailyMarket.dollarStr}
+                    {dailyMarket.changeStr}
                   </span>
                   <span className="text-xs text-muted-foreground">({dailyMarket.pctStr}) today</span>
                 </div>

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useBalance } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
 import { publicApi } from "@/lib/api";
+import { useCurrency } from "@/lib/currency-context";
 
 const ASSET_PRICES: Record<string, number> = {
   BTC: 27000,
@@ -13,13 +14,38 @@ const ASSET_PRICES: Record<string, number> = {
   SOL: 89,
 };
 
-const networks = [
-  "Bitcoin Network",
-  "Ethereum (ERC-20)",
-  "BNB Smart Chain (BEP-20)",
-  "Solana",
-  "Polygon",
+const NETWORKS = [
+  { label: "Bitcoin Network",             key: "bitcoin" },
+  { label: "Ethereum (ERC-20)",           key: "evm" },
+  { label: "BNB Smart Chain (BEP-20)",    key: "evm" },
+  { label: "Solana",                      key: "solana" },
+  { label: "Polygon",                     key: "evm" },
 ];
+
+const ADDRESS_PATTERNS: Record<string, { regex: RegExp; hint: string }> = {
+  bitcoin: {
+    regex: /^(1|3|bc1)[a-zA-Z0-9]{25,62}$/,
+    hint: "Bitcoin addresses start with 1, 3, or bc1.",
+  },
+  evm: {
+    regex: /^0x[a-fA-F0-9]{40}$/,
+    hint: "Ethereum / BNB / Polygon addresses start with 0x and are 42 characters long.",
+  },
+  solana: {
+    regex: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
+    hint: "Solana addresses are 32–44 base-58 characters.",
+  },
+};
+
+function validateAddress(address: string, networkKey: string): string {
+  if (!address.trim()) return "";
+  const pattern = ADDRESS_PATTERNS[networkKey];
+  if (!pattern) return "";
+  if (!pattern.regex.test(address.trim())) {
+    return `Invalid address for this network. ${pattern.hint}`;
+  }
+  return "";
+}
 
 type Step = "form" | "review" | "success";
 
@@ -28,6 +54,7 @@ export default function Withdraw() {
   const { addTransaction } = useTransactions();
   const { user } = useAuth();
   const { btcFormatted } = useBalance();
+  const { fmt } = useCurrency();
   const cryptos = [
     { symbol: "BTC", name: "Bitcoin", balance: btcFormatted, color: "bg-amber-400" },
   ];
@@ -35,22 +62,42 @@ export default function Withdraw() {
   const [step, setStep] = useState<Step>("form");
   const [selectedCrypto, setSelectedCrypto] = useState("BTC");
   const [destination, setDestination] = useState("");
+  const [addressError, setAddressError] = useState("");
   const [amount, setAmount] = useState("");
-  const [network, setNetwork] = useState("Bitcoin Network");
+  const [networkLabel, setNetworkLabel] = useState(NETWORKS[0].label);
   const [loading, setLoading] = useState(false);
 
   const selected = cryptos.find(c => c.symbol === selectedCrypto)!;
+  const currentNetwork = NETWORKS.find(n => n.label === networkLabel) ?? NETWORKS[0];
+  const usdAmount = Math.round((parseFloat(amount) || 0) * (ASSET_PRICES[selectedCrypto] ?? 1) * 100) / 100;
+
+  const handleAddressChange = useCallback((value: string) => {
+    setDestination(value);
+    if (value.trim()) {
+      setAddressError(validateAddress(value, currentNetwork.key));
+    } else {
+      setAddressError("");
+    }
+  }, [currentNetwork.key]);
+
+  const handleNetworkChange = useCallback((label: string) => {
+    setNetworkLabel(label);
+    const net = NETWORKS.find(n => n.label === label) ?? NETWORKS[0];
+    if (destination.trim()) {
+      setAddressError(validateAddress(destination, net.key));
+    }
+  }, [destination]);
 
   const handleReview = (e: React.FormEvent) => {
     e.preventDefault();
+    const err = validateAddress(destination, currentNetwork.key);
+    if (err) { setAddressError(err); return; }
     setStep("review");
   };
 
   const handleConfirm = async () => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1400));
-    const rawNum = parseFloat(amount) || 0;
-    const usdAmount = Math.round(rawNum * (ASSET_PRICES[selectedCrypto] ?? 1) * 100) / 100;
     const txnId = addTransaction({
       type: "Withdrawal",
       asset: selectedCrypto,
@@ -67,7 +114,7 @@ export default function Withdraw() {
         type: "withdrawal",
         amount: usdAmount.toFixed(2),
         currency: "USD",
-        notes: `Withdraw ${amount} ${selectedCrypto} via ${network}${destination ? ` to ${destination.slice(0, 12)}...` : ""}`,
+        notes: `Withdraw ${amount} ${selectedCrypto} via ${networkLabel}${destination ? ` to ${destination.slice(0, 12)}...` : ""}`,
         txnId,
       }).catch(() => {});
     }
@@ -113,6 +160,10 @@ export default function Withdraw() {
                 <span className="text-foreground font-semibold">{amount} {selectedCrypto}</span>
               </div>
               <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Value</span>
+                <span className="text-foreground font-semibold">{fmt(usdAmount)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Destination</span>
                 <span className="text-foreground font-mono text-xs max-w-[180px] truncate">{destination.slice(0, 14)}...</span>
               </div>
@@ -138,7 +189,6 @@ export default function Withdraw() {
               <p className="text-xs text-muted-foreground mt-1">Please confirm the details before submitting</p>
             </div>
             <div className="p-6 space-y-4">
-              {/* Asset preview */}
               <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-xl border border-border">
                 <div className={`w-10 h-10 rounded-full ${selected.color} flex items-center justify-center flex-shrink-0`}>
                   <span className="text-white text-xs font-bold">{selectedCrypto.slice(0, 2)}</span>
@@ -147,7 +197,10 @@ export default function Withdraw() {
                   <p className="text-sm font-semibold text-foreground">{selected.name}</p>
                   <p className="text-xs text-muted-foreground">Balance: {selected.balance} {selectedCrypto}</p>
                 </div>
-                <p className="text-lg font-bold text-foreground">{amount}</p>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-foreground">{amount}</p>
+                  <p className="text-xs text-muted-foreground">{fmt(usdAmount)}</p>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -157,11 +210,11 @@ export default function Withdraw() {
                 </div>
                 <div className="flex justify-between py-2 border-b border-border/50 text-sm">
                   <span className="text-muted-foreground">Network</span>
-                  <span className="text-foreground font-medium">{network}</span>
+                  <span className="text-foreground font-medium">{networkLabel}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b border-border/50 text-sm">
                   <span className="text-muted-foreground">Estimated Fee</span>
-                  <span className="text-foreground font-medium">~$2.50</span>
+                  <span className="text-foreground font-medium">~{fmt(2.50)}</span>
                 </div>
                 <div className="flex justify-between py-2 text-sm">
                   <span className="text-muted-foreground">Status after submit</span>
@@ -241,18 +294,51 @@ export default function Withdraw() {
             <div className="bg-card border border-card-border rounded-2xl p-6 space-y-4">
               <h2 className="text-sm font-semibold text-foreground">Withdrawal Details</h2>
 
+              {/* Network (above address for clear context) */}
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">Network</label>
+                <select
+                  value={networkLabel}
+                  onChange={e => handleNetworkChange(e.target.value)}
+                  className="w-full px-4 py-3 bg-muted border border-input rounded-xl text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  {NETWORKS.map(n => <option key={n.label}>{n.label}</option>)}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Bank Account or Wallet Address
+                  Wallet Address
                 </label>
                 <input
                   type="text"
                   value={destination}
-                  onChange={e => setDestination(e.target.value)}
-                  placeholder="Enter bank account number or wallet address"
+                  onChange={e => handleAddressChange(e.target.value)}
+                  placeholder={
+                    currentNetwork.key === "bitcoin" ? "1A1zP1... or bc1q..." :
+                    currentNetwork.key === "evm" ? "0x..." :
+                    "Solana address"
+                  }
                   required
-                  className="w-full px-4 py-3 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className={`w-full px-4 py-3 bg-muted border rounded-xl text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors ${
+                    addressError ? "border-destructive focus:ring-destructive" : "border-input"
+                  }`}
                 />
+                {addressError ? (
+                  <p className="mt-1.5 text-xs text-destructive flex items-start gap-1.5">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {addressError}
+                  </p>
+                ) : destination.trim() && (
+                  <p className="mt-1.5 text-xs text-emerald-400 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Valid {networkLabel} address
+                  </p>
+                )}
               </div>
 
               <div>
@@ -272,26 +358,21 @@ export default function Withdraw() {
                     {selectedCrypto}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Available: {selected.balance} {selectedCrypto}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Network</label>
-                <select
-                  value={network}
-                  onChange={e => setNetwork(e.target.value)}
-                  className="w-full px-4 py-3 bg-muted border border-input rounded-xl text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  {networks.map(n => <option key={n}>{n}</option>)}
-                </select>
+                <div className="flex justify-between mt-1">
+                  <p className="text-xs text-muted-foreground">
+                    Available: {selected.balance} {selectedCrypto}
+                  </p>
+                  {amount && parseFloat(amount) > 0 && (
+                    <p className="text-xs text-muted-foreground">≈ {fmt(usdAmount)}</p>
+                  )}
+                </div>
               </div>
             </div>
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+              disabled={!!addressError}
+              className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
