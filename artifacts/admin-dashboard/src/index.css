@@ -35,31 +35,31 @@
 }
 
 :root {
-  --background: 214 32% 97%;
-  --foreground: 222 47% 11%;
-  --border: 214 20% 88%;
-  --input: 214 20% 88%;
-  --ring: 221 83% 53%;
+  --background: 210 40% 98%;
+  --foreground: 215 28% 25%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 235 75% 60%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --card-border: 214 20% 90%;
-  --primary: 221 83% 53%;
+  --card-foreground: 215 28% 25%;
+  --card-border: 214 32% 93%;
+  --primary: 235 75% 60%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 214 32% 92%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 214 32% 94%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 214 32% 94%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 60%;
+  --secondary: 214 32% 95%;
+  --secondary-foreground: 215 28% 25%;
+  --muted: 214 32% 95%;
+  --muted-foreground: 215 16% 50%;
+  --accent: 214 32% 95%;
+  --accent-foreground: 215 28% 25%;
+  --destructive: 0 78% 60%;
   --destructive-foreground: 0 0% 100%;
-  --sidebar: 222 47% 11%;
-  --sidebar-foreground: 214 32% 90%;
-  --sidebar-border: 222 40% 18%;
-  --sidebar-accent: 222 40% 18%;
-  --sidebar-accent-foreground: 0 0% 100%;
-  --app-font-sans: 'Inter', system-ui, sans-serif;
-  --radius: 0.5rem;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 215 25% 35%;
+  --sidebar-border: 214 32% 93%;
+  --sidebar-accent: 214 32% 96%;
+  --sidebar-accent-foreground: 235 75% 60%;
+  --app-font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  --radius: 1rem;
 }
 
 @layer base {
