@@ -258,18 +258,21 @@ router.get("/request-status/:id", async (req: Request, res: Response): Promise<v
 
 router.get("/wallet-configs", async (_req: Request, res: Response): Promise<void> => {
   try {
-    const [configs, sectionOrders] = await Promise.all([
-      db
-        .select()
-        .from(cryptoWalletConfigs)
-        .where(eq(cryptoWalletConfigs.isActive, true))
-        .orderBy(asc(cryptoWalletConfigs.sortOrder), asc(cryptoWalletConfigs.symbol)),
-      db
+    const configs = await db
+      .select()
+      .from(cryptoWalletConfigs)
+      .where(eq(cryptoWalletConfigs.isActive, true))
+      .orderBy(asc(cryptoWalletConfigs.sortOrder), asc(cryptoWalletConfigs.symbol));
+    let coinOrder: string[] = [];
+    try {
+      const sectionOrders = await db
         .select()
         .from(coinSectionOrders)
-        .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol)),
-    ]);
-    const coinOrder = sectionOrders.map(o => o.symbol);
+        .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol));
+      coinOrder = sectionOrders.map(o => o.symbol);
+    } catch (orderErr) {
+      logger.warn({ err: orderErr }, "coin_section_orders unavailable; returning empty coinOrder");
+    }
     res.json({ configs, coinOrder });
   } catch (err) {
     logger.error({ err }, "Failed to fetch wallet configs");
