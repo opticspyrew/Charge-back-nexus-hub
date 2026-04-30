@@ -111,42 +111,60 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-emerald-100/40 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-indigo-100/40 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 pointer-events-none" />
+      <div className="w-full max-w-sm relative z-10">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <svg className="w-7 h-7 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center mx-auto mb-5 shadow-md shadow-indigo-200">
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">Firm Admin Portal</h1>
-          <p className="text-slate-400 text-sm mt-1">Internal dashboard — authorized access only</p>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Firm Admin Portal</h1>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Internal dashboard — authorized access only</p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 shadow-xl space-y-4">
-          {error && <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
+        <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-7 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.08)] border border-slate-100 space-y-4">
+          {error && <div className="p-3 bg-rose-50/60 border border-rose-100 rounded-2xl text-sm text-rose-700 font-medium">{error}</div>}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Admin Username</label>
-            <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="Enter admin username" required className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Admin Username</label>
+            <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} placeholder="Enter admin username" required className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200 rounded-2xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Password</label>
-            <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Enter password" required className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
+            <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Enter password" required className="w-full px-4 py-2.5 bg-slate-50/60 border border-slate-200 rounded-2xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition" />
           </div>
-          <button type="submit" disabled={loading} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm transition-colors disabled:opacity-60">
+          <button type="submit" disabled={loading} className="w-full py-2.5 bg-gradient-to-br from-indigo-600 to-purple-600 hover:opacity-90 text-white rounded-2xl font-bold text-sm transition-opacity disabled:opacity-60 shadow-md shadow-indigo-200">
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-        <p className="text-center text-xs text-slate-500 mt-4">© 2026 Firm Admin System. All rights reserved.</p>
+        <p className="text-center text-xs text-slate-500 mt-5 font-medium">© 2026 Firm Admin System. All rights reserved.</p>
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
+const STAT_THEMES = [
+  { border: "border-emerald-100", iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  { border: "border-orange-100", iconBg: "bg-orange-100", iconColor: "text-orange-500" },
+  { border: "border-indigo-100", iconBg: "bg-indigo-100", iconColor: "text-indigo-500" },
+  { border: "border-rose-100", iconBg: "bg-rose-100", iconColor: "text-rose-500" },
+];
+
+function getActivityTone(type: string) {
+  if (type.includes("client")) return "border-l-emerald-300 bg-emerald-50/40";
+  if (type.includes("flagged") || type.includes("denied") || type.includes("out_of_bound")) return "border-l-rose-300 bg-rose-50/40";
+  if (type.includes("request")) return "border-l-indigo-300 bg-indigo-50/40";
+  return "border-l-slate-300 bg-slate-50/40";
+}
+
+function StatCard({ label, value, theme, icon }: { label: string; value: number; theme: typeof STAT_THEMES[number]; icon: React.ReactNode }) {
   return (
-    <div className="bg-card border border-card-border rounded-xl p-5 flex items-center gap-4">
-      <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0", color)}>{icon}</div>
-      <div>
-        <p className="text-2xl font-bold text-foreground">{value}</p>
-        <p className="text-xs text-muted-foreground font-medium">{label}</p>
+    <div className={cn("relative overflow-hidden bg-white rounded-3xl p-6 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.06)] border transition-transform hover:-translate-y-1 duration-300", theme.border)}>
+      <div className="flex flex-col gap-5">
+        <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner", theme.iconBg, theme.iconColor)}>{icon}</div>
+        <div>
+          <p className="text-4xl font-extrabold text-slate-800 tracking-tight">{value}</p>
+          <p className="text-sm font-semibold text-slate-500 mt-1">{label}</p>
+        </div>
       </div>
     </div>
   );
@@ -166,33 +184,35 @@ function OverviewPage() {
     return "📌";
   }
 
-  if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">Loading...</div>;
+  if (loading) return <div className="flex items-center justify-center h-48 text-slate-500 text-sm">Loading...</div>;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-foreground">Overview</h2>
-        <p className="text-sm text-muted-foreground">Dashboard summary and recent activity</p>
+    <div className="space-y-10">
+      <div className="pt-4">
+        <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight">Overview</h2>
+        <p className="text-base text-slate-500 font-medium mt-1">Dashboard summary and recent activity</p>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Clients" value={stats?.totalClients || 0} color="bg-blue-100" icon={<svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} />
-        <StatCard label="Pending Clients" value={stats?.pendingClients || 0} color="bg-amber-100" icon={<svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
-        <StatCard label="Total Requests" value={stats?.totalRequests || 0} color="bg-purple-100" icon={<svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
-        <StatCard label="Pending Requests" value={stats?.pendingRequests || 0} color="bg-red-100" icon={<svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard label="Total Clients" value={stats?.totalClients || 0} theme={STAT_THEMES[0]} icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>} />
+        <StatCard label="Pending Clients" value={stats?.pendingClients || 0} theme={STAT_THEMES[1]} icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+        <StatCard label="Total Requests" value={stats?.totalRequests || 0} theme={STAT_THEMES[2]} icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>} />
+        <StatCard label="Pending Requests" value={stats?.pendingRequests || 0} theme={STAT_THEMES[3]} icon={<svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>} />
       </div>
-      <div className="bg-card border border-card-border rounded-xl">
-        <div className="px-5 py-4 border-b border-border">
-          <h3 className="font-semibold text-foreground text-sm">Recent Activity</h3>
+      <div className="bg-white rounded-3xl p-2 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.06)] border border-slate-100">
+        <div className="px-6 py-6 border-b border-slate-100/80">
+          <h3 className="font-bold text-lg text-slate-800">Recent Activity</h3>
         </div>
-        <div className="divide-y divide-border">
+        <div className="p-4 space-y-3">
           {(stats?.recentActivity || []).length === 0 ? (
-            <p className="p-6 text-center text-muted-foreground text-sm">No activity yet</p>
+            <p className="p-6 text-center text-slate-400 text-sm font-medium">No activity yet</p>
           ) : stats?.recentActivity.map(a => (
-            <div key={a.id} className="px-5 py-3.5 flex items-start gap-3">
-              <span className="text-lg flex-shrink-0 mt-0.5">{eventIcon(a.eventType)}</span>
+            <div key={a.id} className={cn("group flex items-center gap-4 p-4 rounded-2xl border-l-4 transition-colors hover:bg-slate-50", getActivityTone(a.eventType))}>
+              <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-105 transition-transform">
+                {eventIcon(a.eventType)}
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-foreground">{a.description}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{new Date(a.createdAt).toLocaleString()}</p>
+                <p className="text-[15px] font-medium text-slate-700">{a.description}</p>
+                <p className="text-xs font-semibold text-slate-400 mt-1">{new Date(a.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
               </div>
             </div>
           ))}
@@ -454,10 +474,10 @@ function ActivityPage() {
   useEffect(() => { api.getActivity().then(r => setActivity(r.activity)).finally(() => setLoading(false)); }, []);
 
   const typeColor: Record<string, string> = {
-    client_registered: "bg-blue-100 text-blue-700",
-    client_status_changed: "bg-purple-100 text-purple-700",
-    service_request_submitted: "bg-amber-100 text-amber-700",
-    request_status_changed: "bg-emerald-100 text-emerald-700",
+    client_registered: "bg-emerald-50 text-emerald-700 border border-emerald-100",
+    client_status_changed: "bg-indigo-50 text-indigo-700 border border-indigo-100",
+    service_request_submitted: "bg-orange-50 text-orange-700 border border-orange-100",
+    request_status_changed: "bg-rose-50 text-rose-700 border border-rose-100",
   };
 
   return (
@@ -993,47 +1013,71 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      {mobileOpen && <div className="fixed inset-0 bg-black/60 z-20 lg:hidden" onClick={() => setMobileOpen(false)} />}
-      <aside className={cn("fixed lg:relative inset-y-0 left-0 z-30 w-56 bg-sidebar flex flex-col transition-transform duration-300", mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0")}>
-        <div className="flex items-center gap-2.5 px-5 py-4 border-b border-sidebar-border">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+    <div className="flex h-screen bg-slate-50/50 text-slate-800 overflow-hidden relative">
+      {/* Soft background gradient washes */}
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-emerald-100/40 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-indigo-100/40 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 pointer-events-none" />
+
+      {mobileOpen && <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-20 lg:hidden" onClick={() => setMobileOpen(false)} />}
+
+      <aside className={cn(
+        "fixed lg:relative inset-y-0 left-0 z-30 w-[260px] bg-white/60 backdrop-blur-md border-r border-slate-200/60 flex flex-col transition-transform duration-300 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)]",
+        mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
+        <div className="flex items-center gap-3 px-8 py-8">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-200 flex-shrink-0">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
           </div>
           <div>
-            <p className="text-sm font-bold text-sidebar-foreground">Admin Portal</p>
-            <p className="text-xs text-sidebar-foreground/50">Firm Dashboard</p>
+            <p className="text-base font-bold text-slate-800 tracking-tight">Admin Portal</p>
+            <p className="text-xs font-medium text-slate-500">Firm Dashboard</p>
           </div>
         </div>
-        <nav className="flex-1 p-3 space-y-0.5">
-          {NAV_ITEMS.map(item => (
-            <button key={item.id} onClick={() => { nav(item.path); setMobileOpen(false); }}
-              className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-left",
-                location === item.path ? "bg-sidebar-accent text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground")}>
-              {item.icon}{item.label}
-            </button>
-          ))}
+
+        <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto">
+          {NAV_ITEMS.map(item => {
+            const isActive = location === item.path;
+            return (
+              <button key={item.id} onClick={() => { nav(item.path); setMobileOpen(false); }}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[15px] font-semibold transition-all duration-200 text-left",
+                  isActive
+                    ? "bg-white text-indigo-600 shadow-sm border border-slate-100"
+                    : "text-slate-500 hover:bg-white/50 hover:text-slate-700 border border-transparent"
+                )}>
+                <div className={cn("transition-transform duration-200 flex-shrink-0", isActive && "scale-110")}>{item.icon}</div>
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border">
-          <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-sidebar-accent/60 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+
+        <div className="p-4 mb-4">
+          <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-[15px] font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all duration-200">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
             Sign Out
           </button>
         </div>
       </aside>
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex items-center justify-between px-6 h-14 bg-card border-b border-card-border flex-shrink-0">
-          <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 rounded-lg hover:bg-muted transition-colors">
-            <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+
+      <div className="flex-1 flex flex-col min-w-0 z-10 relative">
+        <header className="flex items-center justify-between px-8 md:px-12 h-20 flex-shrink-0">
+          <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 -ml-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-          <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-medium text-emerald-600">Monitoring Active</span>
+          <div className="ml-auto">
+            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-sm border border-slate-100">
+              <div className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </div>
+              <span className="text-xs font-bold tracking-wide text-slate-600 uppercase">Monitoring Active</span>
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto px-8 md:px-12 pb-12">
+          <div className="max-w-6xl mx-auto">{children}</div>
+        </main>
       </div>
     </div>
   );
