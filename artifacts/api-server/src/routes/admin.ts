@@ -21,13 +21,29 @@ function getAdminCredentials(): { user: string; pass: string } {
   return { user, pass };
 }
 
-// Constant-time comparison so the login handler does not leak credential
-// length or partial-match information through response timing.
-function safeCredentialMatch(a: string, b: string): boolean {
-  const ab = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
+// Constant-time comparison of the (username, password) pair against the
+// configured admin credentials. We concatenate with a NUL separator and pad
+// any length mismatch to the expected length before comparing, so neither
+// the response timing nor the early-exit branch can reveal which field was
+// wrong or how long the submitted values were.
+function safeCredentialsMatch(
+  submittedUser: string,
+  submittedPass: string,
+  expectedUser: string,
+  expectedPass: string,
+): boolean {
+  const expected = Buffer.from(`${expectedUser}\u0000${expectedPass}`, "utf8");
+  const submitted = Buffer.from(`${submittedUser}\u0000${submittedPass}`, "utf8");
+  // Always run timingSafeEqual against an equal-length buffer so the timing
+  // path is identical regardless of the submitted length. If lengths differ,
+  // pad/truncate the submitted buffer to the expected length and force the
+  // comparison to fail by short-circuiting after the constant-time call.
+  const sameLength = submitted.length === expected.length;
+  const compareBuf = sameLength
+    ? submitted
+    : Buffer.concat([submitted, Buffer.alloc(expected.length)], expected.length);
+  const equal = timingSafeEqual(compareBuf, expected);
+  return sameLength && equal;
 }
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -63,7 +79,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: "Username and password are required" });
     return;
   }
-  if (!safeCredentialMatch(username, creds.user) || !safeCredentialMatch(password, creds.pass)) {
+  if (!safeCredentialsMatch(username, password, creds.user, creds.pass)) {
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
