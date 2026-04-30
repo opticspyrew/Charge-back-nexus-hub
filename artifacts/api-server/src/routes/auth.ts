@@ -214,10 +214,12 @@ function validatePassword(password: string): { ok: boolean; error?: string } {
   return { ok: true };
 }
 
+const MAX_INITIAL_BALANCE_USD = 1_000_000;
+
 router.post("/signup", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password } = req.body as {
-      name?: string; email?: string; password?: string;
+    const { name, email, password, initialBalanceUsd } = req.body as {
+      name?: string; email?: string; password?: string; initialBalanceUsd?: unknown;
     };
     if (!name || !email || !password) {
       res.status(400).json({ error: "Name, email and password are required." });
@@ -239,6 +241,29 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Optional client-supplied starting balance. Validate strictly: must be a
+    // finite, non-negative number no larger than MAX_INITIAL_BALANCE_USD. Any
+    // other value (including the field being absent) falls back to the default.
+    let requestedInitialUsd: number | null = null;
+    if (initialBalanceUsd !== undefined && initialBalanceUsd !== null && initialBalanceUsd !== "") {
+      const n = typeof initialBalanceUsd === "number"
+        ? initialBalanceUsd
+        : typeof initialBalanceUsd === "string"
+          ? Number(initialBalanceUsd)
+          : NaN;
+      if (!Number.isFinite(n) || n < 0) {
+        res.status(400).json({ error: "Starting balance must be a non-negative number." });
+        return;
+      }
+      if (n > MAX_INITIAL_BALANCE_USD) {
+        res.status(400).json({
+          error: `Starting balance cannot exceed $${MAX_INITIAL_BALANCE_USD.toLocaleString("en-US")}.`,
+        });
+        return;
+      }
+      requestedInitialUsd = n;
+    }
+
     const existing = await findUserByEmail(normalizedEmail);
     if (existing) {
       res.status(409).json({ error: "An account with this email already exists. Please sign in instead." });
@@ -248,7 +273,9 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
     const hashed = await hashPassword(password);
     const BTC_PRICE = 27000;
     const DEFAULT_BALANCE_BTC = 706543 / BTC_PRICE;
-    const balanceBtc = DEFAULT_BALANCE_BTC;
+    const balanceBtc = requestedInitialUsd !== null
+      ? requestedInitialUsd / BTC_PRICE
+      : DEFAULT_BALANCE_BTC;
 
     const [user] = await db.insert(users).values({
       email: normalizedEmail,
