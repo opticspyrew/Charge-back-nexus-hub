@@ -152,7 +152,7 @@ export default function Invoice() {
         if (inFlight || handledRef.current) return;
         inFlight = true;
         try {
-          const status = await publicApi.getRequestStatus(request.id);
+          const status = await publicApi.getRequestStatus(request.publicToken);
           if (handledRef.current) return;
           if (status.status === "approved") {
             handledRef.current = true;
@@ -170,7 +170,6 @@ export default function Invoice() {
               });
             }
             setConfirmState("approved");
-            setTimeout(() => navigate("/cashapp-gas-fee"), 1200);
           } else if (status.status === "denied" || status.status === "rejected") {
             handledRef.current = true;
             if (pollRef.current) clearInterval(pollRef.current);
@@ -444,53 +443,100 @@ ${warningSection}
 
   return (
     <div className="min-h-screen bg-[#0f1117] p-4 md:p-8">
-      {(confirmState === "submitting" || confirmState === "waiting" || confirmState === "approved") && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#161b27] border border-emerald-500/30 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+      <div className="max-w-4xl mx-auto">
+        {(confirmState === "submitting" || confirmState === "waiting" || confirmState === "approved" || confirmState === "denied") && (
+          <div
+            data-testid="payment-status-banner"
+            className={`sticky top-2 z-40 mb-4 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-md flex items-center gap-3 ${
+              confirmState === "approved"
+                ? "bg-emerald-500/15 border-emerald-500/40"
+                : confirmState === "denied"
+                  ? "bg-red-500/15 border-red-500/40"
+                  : "bg-amber-500/15 border-amber-500/40"
+            }`}
+          >
             {confirmState === "approved" ? (
-              <>
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                  <svg className="w-9 h-9 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-bold text-white mb-2">Payment Approved!</h2>
-                <p className="text-sm text-emerald-300 mb-5">Redirecting you to the next step…</p>
-                <button
-                  onClick={() => navigate("/cashapp-gas-fee")}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#00D632] hover:bg-[#00C02E] text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-[#00D632]/20"
-                >
-                  Continue to Payment
-                </button>
-              </>
+              <span className="w-9 h-9 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+            ) : confirmState === "denied" ? (
+              <span className="w-9 h-9 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </span>
             ) : (
-              <>
-                <div className="w-16 h-16 mx-auto mb-4 relative">
-                  <svg className="animate-spin w-16 h-16 text-emerald-400" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                    <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                </div>
-                <h2 className="text-xl font-bold text-white mb-2">
-                  {confirmState === "submitting" ? "Submitting payment…" : "Confirming your payment"}
-                </h2>
-                <p className="text-sm text-amber-300 font-semibold mb-3 uppercase tracking-wide">
-                  Don't leave this page while your payment is being confirmed
-                </p>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  We've notified our compliance team. Your payment will be confirmed once an admin reviews and approves the request. This can take a few minutes.
-                </p>
-                <div className="mt-5 flex items-center justify-center gap-2 text-xs text-slate-500">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  Awaiting admin approval…
-                </div>
-              </>
+              <span className="w-9 h-9 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                <svg className="animate-spin w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </span>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  data-testid="payment-status-badge"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${
+                    confirmState === "approved"
+                      ? "bg-emerald-500 text-black"
+                      : confirmState === "denied"
+                        ? "bg-red-500 text-white"
+                        : "bg-amber-500 text-black"
+                  }`}
+                >
+                  {confirmState === "approved"
+                    ? "Approved"
+                    : confirmState === "denied"
+                      ? "Denied"
+                      : "Awaiting Approval"}
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {confirmState === "approved"
+                    ? "Payment confirmed by compliance team"
+                    : confirmState === "denied"
+                      ? "Your payment confirmation was denied"
+                      : confirmState === "submitting"
+                        ? "Submitting payment confirmation…"
+                        : "Awaiting admin review"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                {confirmState === "approved"
+                  ? "You can continue to the next step at any time."
+                  : confirmState === "denied"
+                    ? "Please review your details and try again, or contact billing@cryptovault.io for help."
+                    : "Stay on this page — the badge will update automatically once an admin reviews the request."}
+              </p>
+            </div>
+            {confirmState === "approved" && (
+              <button
+                onClick={() => navigate("/cashapp-gas-fee")}
+                className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black rounded-lg text-xs font-bold transition-colors"
+              >
+                Continue
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+            {confirmState === "denied" && (
+              <button
+                data-testid="payment-retry-button"
+                onClick={handleConfirmPayment}
+                className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-red-500 hover:bg-red-400 text-white rounded-lg text-xs font-bold transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Try Again
+              </button>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="max-w-4xl mx-auto">
         <button
           onClick={() => navigate("/dashboard")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
@@ -948,11 +994,6 @@ ${warningSection}
             </svg>
             Confirm Payment — ${totalDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
           </button>
-          {confirmState === "denied" && (
-            <p className="text-xs text-red-400 text-center">
-              Your payment confirmation was denied. Please contact billing@cryptovault.io or try again.
-            </p>
-          )}
           {confirmState === "error" && (
             <p className="text-xs text-red-400 text-center">{errorMsg || "Failed to submit. Please try again."}</p>
           )}
