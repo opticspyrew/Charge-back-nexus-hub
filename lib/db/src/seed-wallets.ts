@@ -2,16 +2,18 @@ import { db, pool } from "./index";
 import { cryptoWalletConfigs } from "./schema";
 import { count } from "drizzle-orm";
 
-const DEFAULT_WALLETS = [
-  { symbol: "BTC",  network: "Bitcoin",    address: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kjfjep9nq", sortOrder: 10 },
-  { symbol: "USDT", network: "TRC20",      address: "TQn9Y2khEsLJW1ChVWFMxshSbQnvtCzEEm",        sortOrder: 20 },
-  { symbol: "USDT", network: "ERC20",      address: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", sortOrder: 21 },
-  { symbol: "USDC", network: "ERC20",      address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", sortOrder: 30 },
-  { symbol: "USDC", network: "SOL",        address: "4zMMC9srt5Ri5X14GAgXbNwikMBFXuNknbhmY1L3xqRu", sortOrder: 31 },
-  { symbol: "ETH",  network: "ERC20",      address: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", sortOrder: 40 },
-  { symbol: "SOL",  network: "Solana",     address: "9WzDXwBbmkg8ZTbNMqUxNfXGSpKkMBFnuoJnhVPRLMpk", sortOrder: 50 },
-  { symbol: "XRP",  network: "XRP Ledger", address: "rEb8TK3gBgk5auZkwc6sHSGMLypR65b31o",          sortOrder: 60 },
-  { symbol: "BNB",  network: "BEP20",      address: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", sortOrder: 70 },
+const PLACEHOLDER_ADDRESS = "CONFIGURE_IN_ADMIN_DASHBOARD";
+
+const DEFAULT_WALLET_STUBS = [
+  { symbol: "BTC",  network: "Bitcoin",    sortOrder: 10 },
+  { symbol: "USDT", network: "TRC20",      sortOrder: 20 },
+  { symbol: "USDT", network: "ERC20",      sortOrder: 21 },
+  { symbol: "USDC", network: "ERC20",      sortOrder: 30 },
+  { symbol: "USDC", network: "SOL",        sortOrder: 31 },
+  { symbol: "ETH",  network: "ERC20",      sortOrder: 40 },
+  { symbol: "SOL",  network: "Solana",     sortOrder: 50 },
+  { symbol: "XRP",  network: "XRP Ledger", sortOrder: 60 },
+  { symbol: "BNB",  network: "BEP20",      sortOrder: 70 },
 ];
 
 async function seedWallets() {
@@ -22,16 +24,16 @@ async function seedWallets() {
   }
 
   await db.insert(cryptoWalletConfigs).values(
-    DEFAULT_WALLETS.map(w => ({
+    DEFAULT_WALLET_STUBS.map(w => ({
       symbol: w.symbol,
       network: w.network,
-      address: w.address,
-      label: null,
+      address: PLACEHOLDER_ADDRESS,
+      label: "⚠ Admin: replace with real address",
       isActive: true,
       sortOrder: w.sortOrder,
     }))
   );
-  console.log(`[seed-wallets] Inserted ${DEFAULT_WALLETS.length} default wallet rows.`);
+  console.log(`[seed-wallets] Inserted ${DEFAULT_WALLET_STUBS.length} wallet stub rows — admin must configure real addresses before going live.`);
 }
 
 seedWallets()
