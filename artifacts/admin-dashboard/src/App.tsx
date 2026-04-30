@@ -606,6 +606,9 @@ function WalletsPage() {
   const [addingFor, setAddingFor] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ network: "", address: "", label: "" });
   const [saving, setSaving] = useState(false);
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   const load = () => {
     api.getWalletConfigs()
@@ -615,7 +618,42 @@ function WalletsPage() {
   };
   useEffect(() => { load(); }, []);
 
-  const bySymbol = (sym: string) => configs.filter(c => c.symbol === sym);
+  const bySymbol = (sym: string) => configs.filter(c => c.symbol === sym).sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const handleReorder = async (sym: string, draggedId: number, targetId: number) => {
+    if (draggedId === targetId) return;
+    const entries = bySymbol(sym);
+    const fromIdx = entries.findIndex(e => e.id === draggedId);
+    const toIdx = entries.findIndex(e => e.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const reordered = [...entries];
+    const [moved] = reordered.splice(fromIdx, 1);
+    const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+    reordered.splice(insertIdx, 0, moved);
+
+    const baseSortOrder = entries.reduce((min, e) => Math.min(min, e.sortOrder), entries[0]?.sortOrder ?? 0);
+    const updates = reordered.map((e, i) => ({ id: e.id, sortOrder: baseSortOrder + i }));
+
+    setConfigs(prev => prev.map(c => {
+      const upd = updates.find(u => u.id === c.id);
+      return upd ? { ...c, sortOrder: upd.sortOrder } : c;
+    }));
+
+    setReordering(true);
+    try {
+      const changed = updates.filter(u => {
+        const orig = entries.find(e => e.id === u.id);
+        return orig && orig.sortOrder !== u.sortOrder;
+      });
+      await Promise.all(changed.map(u => api.updateWalletConfig(u.id, { sortOrder: u.sortOrder })));
+    } catch (err) {
+      setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      load();
+    } finally {
+      setReordering(false);
+    }
+  };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -675,7 +713,7 @@ function WalletsPage() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-foreground">Wallet Addresses</h2>
-        <p className="text-sm text-muted-foreground">Configure crypto wallet addresses shown on the invoice payment page</p>
+        <p className="text-sm text-muted-foreground">Configure crypto wallet addresses shown on the invoice payment page. Drag rows within a coin section to reorder them.</p>
       </div>
       {msg && (
         <div className={cn("p-3 rounded-lg text-sm border", msg.startsWith("Error") ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200")}>
@@ -725,7 +763,44 @@ function WalletsPage() {
                 ) : (
                   <div className="divide-y divide-border">
                     {entries.map(cfg => (
-                      <div key={cfg.id} className="px-5 py-3.5">
+                      <div
+                        key={cfg.id}
+                        draggable={editingId !== cfg.id && !reordering && entries.length > 1}
+                        onDragStart={(e) => {
+                          if (editingId === cfg.id) return;
+                          setDragId(cfg.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", String(cfg.id));
+                        }}
+                        onDragOver={(e) => {
+                          if (dragId === null || dragId === cfg.id) return;
+                          const draggedCfg = configs.find(c => c.id === dragId);
+                          if (!draggedCfg || draggedCfg.symbol !== sym) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (dragOverId !== cfg.id) setDragOverId(cfg.id);
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverId === cfg.id) setDragOverId(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragId !== null && dragId !== cfg.id) {
+                            const draggedCfg = configs.find(c => c.id === dragId);
+                            if (draggedCfg && draggedCfg.symbol === sym) {
+                              handleReorder(sym, dragId, cfg.id);
+                            }
+                          }
+                          setDragId(null);
+                          setDragOverId(null);
+                        }}
+                        onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                        className={cn(
+                          "px-5 py-3.5 transition-colors",
+                          dragId === cfg.id && "opacity-40",
+                          dragOverId === cfg.id && dragId !== cfg.id && "bg-blue-50 border-t-2 border-t-primary",
+                        )}
+                      >
                         {editingId === cfg.id ? (
                           <form onSubmit={handleEdit} className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -743,7 +818,24 @@ function WalletsPage() {
                             </div>
                           </form>
                         ) : (
-                          <div className="flex items-start gap-4 flex-wrap">
+                          <div className="flex items-start gap-3 flex-wrap">
+                            <div
+                              className={cn(
+                                "flex-shrink-0 mt-0.5 px-1 py-1 text-muted-foreground select-none",
+                                entries.length > 1 ? "cursor-grab active:cursor-grabbing hover:text-foreground" : "opacity-30 cursor-not-allowed",
+                              )}
+                              title={entries.length > 1 ? "Drag to reorder" : "Add another network to enable reordering"}
+                              aria-label="Drag handle"
+                            >
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="7" cy="5" r="1.4" />
+                                <circle cx="13" cy="5" r="1.4" />
+                                <circle cx="7" cy="10" r="1.4" />
+                                <circle cx="13" cy="10" r="1.4" />
+                                <circle cx="7" cy="15" r="1.4" />
+                                <circle cx="13" cy="15" r="1.4" />
+                              </svg>
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">{cfg.network}</span>
