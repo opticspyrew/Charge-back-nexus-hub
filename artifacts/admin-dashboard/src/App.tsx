@@ -516,18 +516,51 @@ function ActivityPage() {
   );
 }
 
+const ADMIN_BTC_PRICE_USD = 27000;
+const fmtUsd = (usd: number) => `$${usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [editing, setEditing] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({ amountUsd: "" });
+  const [saving, setSaving] = useState(false);
+  const [editMsg, setEditMsg] = useState("");
 
-  useEffect(() => {
+  const load = () => {
     api.getUsers()
       .then(r => setUsers(r.users))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const openEdit = (u: User) => {
+    const usd = (u.balanceBtc ?? 0) * ADMIN_BTC_PRICE_USD;
+    setEditForm({ amountUsd: usd.toFixed(2) });
+    setEditMsg("");
+    setEditing(u);
+  };
+
+  const submitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    const usd = Number(editForm.amountUsd);
+    if (!Number.isFinite(usd) || usd < 0) {
+      setEditMsg("Error: enter a non-negative number");
+      return;
+    }
+    setSaving(true); setEditMsg("");
+    try {
+      await api.setUserBalance(editing.id, { amountUsd: usd });
+      setEditing(null);
+      load();
+    } catch (err) {
+      setEditMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally { setSaving(false); }
+  };
 
   return (
     <div className="space-y-5">
@@ -544,55 +577,97 @@ function UsersPage() {
           <p className="px-5 py-8 text-center text-muted-foreground text-sm">No registered users yet.</p>
         ) : (
           <div className="divide-y divide-border">
-            {users.map(u => (
-              <div key={u.id} className="px-5 py-4">
-                <div className="flex items-center gap-4 flex-wrap">
-                  <span className="w-6 text-xs text-muted-foreground font-mono">#{u.id}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{u.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground hidden sm:block">{new Date(u.createdAt).toLocaleString()}</p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setExpanded(expanded === u.id ? null : u.id)}
-                      className="text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:text-foreground transition-colors border border-input"
-                    >
-                      {expanded === u.id ? "Hide details" : "Details"}
-                    </button>
-                  </div>
-                </div>
-                {expanded === u.id && (
-                  <div className="mt-4 space-y-3 bg-muted/40 rounded-lg p-4 border border-input text-sm">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">ID</p>
-                        <p className="font-mono text-foreground">{u.id}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Name</p>
-                        <p className="text-foreground">{u.name}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Email</p>
-                        <p className="text-foreground">{u.email}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Registered</p>
-                        <p className="text-foreground">{new Date(u.createdAt).toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Last updated</p>
-                        <p className="text-foreground">{new Date(u.updatedAt).toLocaleString()}</p>
-                      </div>
+            {users.map(u => {
+              const balanceUsd = (u.balanceBtc ?? 0) * ADMIN_BTC_PRICE_USD;
+              return (
+                <div key={u.id} className="px-5 py-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span className="w-6 text-xs text-muted-foreground font-mono">#{u.id}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{u.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-foreground">{fmtUsd(balanceUsd)}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">{(u.balanceBtc ?? 0).toFixed(8)} BTC</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground hidden sm:block">{new Date(u.createdAt).toLocaleString()}</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEdit(u)}
+                        className="text-xs px-2 py-1 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                      >
+                        Set balance
+                      </button>
+                      <button
+                        onClick={() => setExpanded(expanded === u.id ? null : u.id)}
+                        className="text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:text-foreground transition-colors border border-input"
+                      >
+                        {expanded === u.id ? "Hide details" : "Details"}
+                      </button>
                     </div>
                   </div>
-                )}
-              </div>
-            ))}
+                  {expanded === u.id && (
+                    <div className="mt-4 space-y-3 bg-muted/40 rounded-lg p-4 border border-input text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-0.5">ID</p>
+                          <p className="font-mono text-foreground">{u.id}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Name</p>
+                          <p className="text-foreground">{u.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Email</p>
+                          <p className="text-foreground">{u.email}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Available balance</p>
+                          <p className="text-foreground">{fmtUsd(balanceUsd)} <span className="text-muted-foreground text-xs font-mono">({(u.balanceBtc ?? 0).toFixed(8)} BTC)</span></p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Registered</p>
+                          <p className="text-foreground">{new Date(u.createdAt).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Last updated</p>
+                          <p className="text-foreground">{new Date(u.updatedAt).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
+
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing ? `Set balance — ${editing.name}` : "Set balance"}>
+        {editing && (
+          <form onSubmit={submitEdit} className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Sets the user's available balance. USD is converted to BTC at the ${ADMIN_BTC_PRICE_USD.toLocaleString("en-US")} display price used by the dashboard.
+            </p>
+            <Input
+              label="Available balance (USD)"
+              type="number"
+              min="0"
+              step="0.01"
+              value={editForm.amountUsd}
+              onChange={e => setEditForm({ amountUsd: e.target.value })}
+              placeholder="0.00"
+              required
+            />
+            {editMsg && <p className={cn("text-xs", editMsg.startsWith("Error") ? "text-red-600" : "text-emerald-600")}>{editMsg}</p>}
+            <div className="flex gap-3 justify-end pt-1">
+              <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 text-sm font-medium text-foreground bg-muted border border-border rounded-lg hover:bg-secondary transition-colors">Cancel</button>
+              <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-semibold text-primary-foreground bg-primary rounded-lg hover:opacity-90 transition-opacity disabled:opacity-60">{saving ? "Saving..." : "Save balance"}</button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }
