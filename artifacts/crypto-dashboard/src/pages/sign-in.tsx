@@ -9,6 +9,7 @@ import {
 } from "@/lib/login-throttle";
 import { ForgotPasswordPanel } from "@/components/forgot-password-panel";
 import PasswordInput from "@/components/password-input";
+import TotalAssetsBanner from "@/components/total-assets-banner";
 
 export default function SignIn() {
   const [, navigate] = useLocation();
@@ -78,6 +79,8 @@ export default function SignIn() {
           </div>
           <span className="text-xl font-bold text-foreground">CryptoVault</span>
         </div>
+
+        <TotalAssetsBanner />
 
         <div className="bg-card border border-card-border rounded-2xl p-8">
           <h1 className="text-2xl font-bold text-foreground mb-1">Welcome back</h1>
