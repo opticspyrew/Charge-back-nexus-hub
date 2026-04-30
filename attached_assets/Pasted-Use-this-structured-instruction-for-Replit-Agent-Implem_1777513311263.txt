@@ -1,0 +1,93 @@
+Use this structured instruction for Replit Agent:
+
+⸻
+
+Implement the following UI/UX and functional updates:
+
+1. Payment Methods Interaction
+
+* The “Cryptocurrency” payment option must be clickable.
+* On click, do not navigate away; dynamically load content on the same page.
+* Display a list of supported cryptocurrencies:
+    * Bitcoin (BTC)
+    * USDT
+    * USDC
+    * Ethereum (ETH)
+    * Solana (SOL)
+    * XRP
+    * BNB
+
+2. Crypto Network Selection + Wallet Display
+
+* When a user selects a cryptocurrency, show available networks under it. Example:
+    * USDT → TRC20, ERC20
+    * ETH → ERC20
+    * BNB → BEP20
+    * BTC → Bitcoin network
+    * SOL → Solana network
+    * XRP → XRP Ledger
+* Once a network is selected:
+    * Display the corresponding wallet address
+    * Generate and display a QR code (barcode) for the wallet address
+    * Include a “Copy Address” button
+* Prevent mismatched network/address usage (strict validation).
+
+3. Admin/Editable Wallet Section
+
+* Provide a backend or config section where the following can be supplied for each crypto:
+    * Wallet address
+    * Network type(s)
+    * QR code image (optional override)
+* Structure example:
+    * BTC → [Wallet Address + QR Upload]
+    * USDT → TRC20 [Address + QR], ERC20 [Address + QR]
+* Ensure easy updates without breaking frontend.
+
+4. UI Layout for Crypto Section
+
+* Clean card-based layout.
+* Each crypto should expand or open a panel when clicked.
+* QR code and wallet address should be clearly visible and centered.
+* Add warning text: “Send only via selected network to avoid loss of funds.”
+
+5. Invoice & Receipt Buttons
+
+* Activate both “Print Invoice” and “Print Receipt” buttons.
+* Buttons should:
+    * Generate a downloadable/printable document (PDF preferred).
+    * Include transaction details dynamically.
+
+6. Invoice & Receipt Template (Modern Design)
+
+* Use a professional layout with:
+    * Company name/logo at top
+    * Invoice/Receipt ID
+    * Date and time
+    * Payment method (crypto type + network)
+    * Amount (with currency toggle support)
+    * Wallet address used
+    * Transaction status
+* Clean typography, spacing, and alignment.
+* Ensure mobile and desktop print compatibility.
+
+7. Additional Security/UX Considerations
+
+* Add confirmation notice before showing wallet:
+    “Ensure you selected the correct network.”
+* Disable actions if required data is missing.
+* Optimize loading speed and responsiveness.
+
+⸻
+
+Optional UI Placeholder Section (for future content input):
+
+Create a section for each crypto where the admin can later upload:
+
+* QR Code Image
+* Wallet Address
+* Network Label
+
+Display placeholder text:
+“Wallet address and QR code will appear here once configured.”
+
+⸻
