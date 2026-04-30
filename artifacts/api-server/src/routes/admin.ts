@@ -375,8 +375,14 @@ router.get("/coin-section-orders", requireAdmin, async (_req: Request, res: Resp
       .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol));
     res.json({ orders });
   } catch (err) {
-    logger.warn({ err }, "coin_section_orders unavailable; returning empty list");
-    res.json({ orders: [] });
+    const code = (err as { code?: string } | null)?.code;
+    if (code === "42P01") {
+      logger.warn({ err }, "coin_section_orders table missing; returning empty list");
+      res.json({ orders: [] });
+      return;
+    }
+    logger.error({ err }, "Failed to fetch coin section orders");
+    res.status(500).json({ error: "Failed to fetch coin section orders" });
   }
 });
 

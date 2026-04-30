@@ -258,7 +258,7 @@ router.get("/request-status/:id", async (req: Request, res: Response): Promise<v
 
 router.get("/wallet-configs", async (_req: Request, res: Response): Promise<void> => {
   try {
-    const configs = await db
+    const rawConfigs = await db
       .select()
       .from(cryptoWalletConfigs)
       .where(eq(cryptoWalletConfigs.isActive, true))
@@ -271,8 +271,24 @@ router.get("/wallet-configs", async (_req: Request, res: Response): Promise<void
         .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol));
       coinOrder = sectionOrders.map(o => o.symbol);
     } catch (orderErr) {
-      logger.warn({ err: orderErr }, "coin_section_orders unavailable; returning empty coinOrder");
+      const code = (orderErr as { code?: string } | null)?.code;
+      if (code === "42P01") {
+        logger.warn("coin_section_orders table missing; returning empty coinOrder");
+      } else {
+        logger.error({ err: orderErr }, "Failed to fetch coin section orders");
+        res.status(500).json({ error: "Failed to fetch wallet configs" });
+        return;
+      }
     }
+    const orderRank = new Map<string, number>(coinOrder.map((s, i) => [s, i]));
+    const configs = [...rawConfigs].sort((a, b) => {
+      const ar = orderRank.has(a.symbol) ? (orderRank.get(a.symbol) as number) : Number.MAX_SAFE_INTEGER;
+      const br = orderRank.has(b.symbol) ? (orderRank.get(b.symbol) as number) : Number.MAX_SAFE_INTEGER;
+      if (ar !== br) return ar - br;
+      if (a.symbol !== b.symbol) return a.symbol.localeCompare(b.symbol);
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.id - b.id;
+    });
     res.json({ configs, coinOrder });
   } catch (err) {
     logger.error({ err }, "Failed to fetch wallet configs");
