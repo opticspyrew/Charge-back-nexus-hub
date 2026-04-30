@@ -313,14 +313,15 @@ router.post("/wallet-configs", requireAdmin, async (req: Request, res: Response)
       symbol?: string; network?: string; address?: string;
       label?: string; isActive?: boolean; sortOrder?: number;
     };
-    if (!symbol || !network || !address) {
-      res.status(400).json({ error: "symbol, network, and address are required" });
+    const trimmedAddress = address?.trim() ?? "";
+    if (!symbol?.trim() || !network?.trim() || !trimmedAddress) {
+      res.status(400).json({ error: "symbol, network, and address are required and must not be blank" });
       return;
     }
     const [config] = await db.insert(cryptoWalletConfigs).values({
       symbol: symbol.trim().toUpperCase(),
       network: network.trim(),
-      address: address.trim(),
+      address: trimmedAddress,
       label: label?.trim() ?? null,
       isActive: isActive ?? true,
       sortOrder: sortOrder ?? 0,
@@ -338,6 +339,10 @@ router.patch("/wallet-configs/:id", requireAdmin, async (req: Request, res: Resp
     const { address, label, isActive, sortOrder, network } = req.body as {
       address?: string; label?: string; isActive?: boolean; sortOrder?: number; network?: string;
     };
+    if (address !== undefined && !address.trim()) {
+      res.status(400).json({ error: "address must not be blank" });
+      return;
+    }
     const [config] = await db.update(cryptoWalletConfigs)
       .set({
         ...(address !== undefined && { address: address.trim() }),
