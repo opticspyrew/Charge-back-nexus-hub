@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { purgeExpiredSessions } from "./lib/auth";
 import { startForgotPasswordThrottleCleanup } from "./lib/forgot-password-throttle";
 import { startLoginThrottleCleanup } from "./lib/login-throttle";
+import { startAdminSessionCleanup } from "./lib/admin-sessions";
 import { seedDefaultWallets } from "./lib/seed-wallets";
 
 const rawPort = process.env["PORT"];
@@ -34,4 +35,5 @@ app.listen(port, (err) => {
   // Periodically prune throttle buckets to prevent memory growth.
   startForgotPasswordThrottleCleanup();
   startLoginThrottleCleanup();
+  startAdminSessionCleanup();
 });

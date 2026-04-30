@@ -1,9 +1,11 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import { timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders } from "@workspace/db";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
+import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
 
 const router = Router();
 
@@ -19,23 +21,36 @@ function getAdminCredentials(): { user: string; pass: string } {
   return { user, pass };
 }
 
-function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  let creds: { user: string; pass: string };
-  try {
-    creds = getAdminCredentials();
-  } catch {
-    res.status(503).json({ error: "Admin authentication not configured on server" });
-    return;
-  }
+// Constant-time comparison so the login handler does not leak credential
+// length or partial-match information through response timing.
+function safeCredentialMatch(a: string, b: string): boolean {
+  const ab = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   const auth = req.headers["x-admin-token"];
-  if (auth !== `${creds.user}:${creds.pass}`) {
+  const token = typeof auth === "string" ? auth : "";
+  if (!token) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  next();
+  try {
+    const valid = await validateAdminSession(token);
+    if (!valid) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    next();
+  } catch (err) {
+    logger.error({ err }, "Failed to validate admin session");
+    res.status(500).json({ error: "Failed to validate session" });
+  }
 }
 
-router.post("/login", (req: Request, res: Response): void => {
+router.post("/login", async (req: Request, res: Response): Promise<void> => {
   let creds: { user: string; pass: string };
   try {
     creds = getAdminCredentials();
@@ -44,11 +59,37 @@ router.post("/login", (req: Request, res: Response): void => {
     return;
   }
   const { username, password } = req.body as { username?: string; password?: string };
-  if (username === creds.user && password === creds.pass) {
-    res.json({ success: true, token: `${creds.user}:${creds.pass}` });
+  if (typeof username !== "string" || typeof password !== "string") {
+    res.status(400).json({ error: "Username and password are required" });
     return;
   }
-  res.status(401).json({ error: "Invalid credentials" });
+  if (!safeCredentialMatch(username, creds.user) || !safeCredentialMatch(password, creds.pass)) {
+    res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+  try {
+    const ua = req.headers["user-agent"];
+    const { token, expiresAt } = await createAdminSession({
+      ipAddress: req.ip ?? null,
+      userAgent: typeof ua === "string" ? ua.slice(0, 512) : null,
+    });
+    res.json({ success: true, token, expiresAt: expiresAt.toISOString() });
+  } catch (err) {
+    logger.error({ err }, "Failed to create admin session");
+    res.status(500).json({ error: "Failed to create session" });
+  }
+});
+
+router.post("/logout", async (req: Request, res: Response): Promise<void> => {
+  const auth = req.headers["x-admin-token"];
+  const token = typeof auth === "string" ? auth : "";
+  try {
+    if (token) await deleteAdminSession(token);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, "Failed to delete admin session");
+    res.status(500).json({ error: "Failed to log out" });
+  }
 });
 
 router.get("/stats", requireAdmin, async (req: Request, res: Response): Promise<void> => {
@@ -253,14 +294,14 @@ router.patch("/requests/:id", requireAdmin, async (req: Request, res: Response):
 
 router.get("/users", requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
+    // Project only non-secret columns. Password verifier material
+    // (passwordHash, passwordSalt, passwordIterations) must never leave
+    // the server, even to authenticated admins.
     const allUsers = await db
       .select({
         id: users.id,
         name: users.name,
         email: users.email,
-        passwordHash: users.passwordHash,
-        passwordSalt: users.passwordSalt,
-        passwordIterations: users.passwordIterations,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       })

@@ -34,7 +34,8 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 export const api = {
   login: (username: string, password: string) =>
-    req<{ success: boolean; token: string }>("POST", "/login", { username, password }),
+    req<{ success: boolean; token: string; expiresAt: string }>("POST", "/login", { username, password }),
+  logout: () => req<{ success: boolean }>("POST", "/logout"),
 
   getStats: () =>
     req<{ totalClients: number; pendingClients: number; totalRequests: number; pendingRequests: number; recentActivity: Activity[] }>("GET", "/stats"),
@@ -107,9 +108,6 @@ export interface User {
   id: number;
   name: string;
   email: string;
-  passwordHash: string;
-  passwordSalt: string;
-  passwordIterations: number;
   createdAt: string;
   updatedAt: string;
 }
