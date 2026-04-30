@@ -24,7 +24,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string, initialBalanceUsd?: number) => Promise<void>;
+  signup: (name: string, email: string, password: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPasswordWithToken: (token: string, newPassword: string) => Promise<void>;
@@ -153,8 +153,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signup = async (name: string, email: string, password: string, initialBalanceUsd?: number) => {
-    const result = await authApi.signup({ name, email, password, initialBalanceUsd });
+  const signup = async (name: string, email: string, password: string) => {
+    const result = await authApi.signup({ name, email, password });
     updateSession({ token: result.token, user: toUser(result.user) });
 
     try {

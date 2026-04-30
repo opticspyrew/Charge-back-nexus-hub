@@ -1,7 +1,9 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { ensurePrimaryUser, purgeExpiredSessions } from "./lib/auth";
+import { purgeExpiredSessions } from "./lib/auth";
 import { startForgotPasswordThrottleCleanup } from "./lib/forgot-password-throttle";
+import { startLoginThrottleCleanup } from "./lib/login-throttle";
+import { startAdminSessionCleanup } from "./lib/admin-sessions";
 import { seedDefaultWallets } from "./lib/seed-wallets";
 
 const rawPort = process.env["PORT"];
@@ -26,11 +28,12 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
 
-  // Seed primary user and clear expired sessions on startup (best-effort).
-  void ensurePrimaryUser();
+  // Clear expired sessions on startup (best-effort).
   void purgeExpiredSessions();
   void seedDefaultWallets();
 
-  // Periodically prune empty forgot-password throttle buckets.
+  // Periodically prune throttle buckets to prevent memory growth.
   startForgotPasswordThrottleCleanup();
+  startLoginThrottleCleanup();
+  startAdminSessionCleanup();
 });

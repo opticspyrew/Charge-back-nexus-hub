@@ -5,12 +5,6 @@ import { logger } from "./logger";
 
 export const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 
-export const PRIMARY_USER = {
-  email: "pgeitz@hotmail.com",
-  name: "Pgeitz",
-  password: "Centuryhacks",
-};
-
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -119,26 +113,31 @@ export async function deleteSessionByToken(token: string): Promise<void> {
   await db.delete(userSessions).where(eq(userSessions.token, token));
 }
 
-export async function purgeExpiredSessions(): Promise<void> {
-  await db.delete(userSessions).where(lt(userSessions.expiresAt, new Date()));
+/**
+ * Revoke all sessions for a user. If `exceptSessionId` is provided, that
+ * session is preserved (used to keep the caller's own session alive after a
+ * password change).
+ */
+export async function deleteAllUserSessions(
+  userId: number,
+  exceptSessionId?: number,
+): Promise<void> {
+  if (typeof exceptSessionId === "number") {
+    await db
+      .delete(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          ne(userSessions.id, exceptSessionId),
+        ),
+      );
+  } else {
+    await db.delete(userSessions).where(eq(userSessions.userId, userId));
+  }
 }
 
-export async function ensurePrimaryUser(): Promise<void> {
-  try {
-    const existing = await findUserByEmail(PRIMARY_USER.email);
-    if (existing) return;
-    const hashed = await hashPassword(PRIMARY_USER.password);
-    await db.insert(users).values({
-      email: normalizeEmail(PRIMARY_USER.email),
-      name: PRIMARY_USER.name,
-      passwordHash: hashed.passwordHash,
-      passwordSalt: hashed.passwordSalt,
-      passwordIterations: hashed.passwordIterations,
-    });
-    logger.info({ email: PRIMARY_USER.email }, "Seeded primary user account");
-  } catch (err) {
-    logger.error({ err }, "Failed to seed primary user account");
-  }
+export async function purgeExpiredSessions(): Promise<void> {
+  await db.delete(userSessions).where(lt(userSessions.expiresAt, new Date()));
 }
 
 export function extractBearerToken(req: { headers: Record<string, unknown> }): string | null {

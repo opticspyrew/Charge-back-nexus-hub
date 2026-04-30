@@ -8,7 +8,7 @@ import PasswordInput from "@/components/password-input";
 export default function SignUp() {
   const [, navigate] = useLocation();
   const { signup } = useAuth();
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", assets: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showForgot, setShowForgot] = useState(false);
@@ -36,8 +36,7 @@ export default function SignUp() {
     }
     setLoading(true);
     try {
-      const initialUsd = form.assets ? parseFloat(form.assets.replace(/,/g, "")) : undefined;
-      await signup(form.name, form.email, form.password, initialUsd);
+      await signup(form.name, form.email, form.password);
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create account. Please try again.");
@@ -132,29 +131,6 @@ export default function SignUp() {
                 autoComplete="new-password"
                 className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5 uppercase tracking-wider">
-                Assets in Total ($)
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-semibold">$</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={form.assets}
-                  onChange={e => {
-                    const raw = e.target.value.replace(/[^0-9.]/g, "");
-                    setForm(f => ({ ...f, assets: raw }));
-                  }}
-                  placeholder="0.00"
-                  className="w-full pl-8 pr-4 py-2.5 bg-muted border border-primary/40 rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all font-semibold"
-                />
-              </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Enter your total asset value — this becomes your available portfolio balance.
-              </p>
             </div>
 
             {error && (

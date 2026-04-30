@@ -32,6 +32,17 @@ export const adminServiceRequests = pgTable("admin_service_requests", {
   unique("admin_service_requests_public_token_key").on(t.publicToken),
 ]);
 
+export const adminSessions = pgTable("admin_sessions", {
+  id: serial("id").primaryKey(),
+  tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+}, (t) => [
+  unique("admin_sessions_token_hash_key").on(t.tokenHash),
+]);
+
 export const adminActivityLog = pgTable("admin_activity_log", {
   id: serial("id").primaryKey(),
   eventType: text("event_type").notNull(),

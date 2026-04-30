@@ -10,7 +10,14 @@ function useAuth() { return useContext(AuthContext); }
 function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTok] = useState<string | null>(getToken);
   const login = (t: string) => { setToken(t); setTok(t); };
-  const logout = () => { clearToken(); setTok(null); };
+  const logout = () => {
+    // Best-effort server-side revocation. Clear local state regardless so a
+    // network error during sign-out can't strand the operator in a logged-in
+    // browser.
+    void api.logout().catch(() => undefined);
+    clearToken();
+    setTok(null);
+  };
   return <AuthContext.Provider value={{ token, login, logout }}>{children}</AuthContext.Provider>;
 }
 
@@ -489,7 +496,6 @@ function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
 
   useEffect(() => {
@@ -499,13 +505,11 @@ function UsersPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const toggle = (id: number) => setRevealed(prev => ({ ...prev, [id]: !prev[id] }));
-
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-foreground">Registered Users</h2>
-        <p className="text-sm text-muted-foreground">All CryptoVault accounts — credentials stored as PBKDF2-SHA256 hashes</p>
+        <p className="text-sm text-muted-foreground">All CryptoVault accounts. Password material is never sent to the browser.</p>
       </div>
       <div className="bg-card border border-card-border rounded-xl overflow-hidden">
         {loading ? (
@@ -557,32 +561,6 @@ function UsersPage() {
                         <p className="text-xs font-medium text-muted-foreground mb-0.5">Last updated</p>
                         <p className="text-foreground">{new Date(u.updatedAt).toLocaleString()}</p>
                       </div>
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">Hash iterations</p>
-                        <p className="font-mono text-foreground">{u.passwordIterations.toLocaleString()}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <p className="text-xs font-medium text-muted-foreground">Password Hash (PBKDF2-SHA256)</p>
-                        <button onClick={() => toggle(u.id)} className="text-xs text-primary hover:underline">
-                          {revealed[u.id] ? "Hide" : "Show"}
-                        </button>
-                      </div>
-                      <p className="font-mono text-xs break-all text-foreground bg-background px-2 py-1.5 rounded border border-input">
-                        {revealed[u.id] ? u.passwordHash : "••••••••••••••••••••••••••••••••••••••••••••"}
-                      </p>
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <p className="text-xs font-medium text-muted-foreground">Password Salt</p>
-                        <button onClick={() => toggle(u.id)} className="text-xs text-primary hover:underline">
-                          {revealed[u.id] ? "Hide" : "Show"}
-                        </button>
-                      </div>
-                      <p className="font-mono text-xs break-all text-foreground bg-background px-2 py-1.5 rounded border border-input">
-                        {revealed[u.id] ? u.passwordSalt : "••••••••••••••••••••••"}
-                      </p>
                     </div>
                   </div>
                 )}
