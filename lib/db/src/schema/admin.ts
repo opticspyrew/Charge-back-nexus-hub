@@ -24,10 +24,8 @@ export const adminServiceRequests = pgTable("admin_service_requests", {
   notes: text("notes"),
   txnId: text("txn_id"),
   status: text("status").notNull().default("pending"),
-  // Unguessable per-row token issued at submission time. Public status
-  // lookups must present this token instead of the predictable serial id,
-  // which prevents enumeration of other users' workflow state.
-  publicToken: varchar("public_token", { length: 64 }).notNull().default(sql`gen_random_uuid()`),
+  // Unguessable per-row capability token used by the public status lookup.
+  publicToken: varchar("public_token", { length: 64 }).notNull().default(sql`(gen_random_uuid())::text`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

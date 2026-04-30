@@ -15,7 +15,7 @@ app.set("trust proxy", 1);
 
 // Paths whose final segment is a per-row capability token (presented in the
 // URL path) MUST NOT be logged verbatim, because every entry in the access
-// log would otherwise leak the token to anyone with log read access (proxy
+// log would otherwise expose the token to anyone with log read access (proxy
 // logs, Replit deployment logs, log aggregators, etc.). The pino serializer
 // below replaces the token segment with `:token` before it ever hits the log.
 function redactCapabilityToken(rawUrl: string | undefined): string | undefined {

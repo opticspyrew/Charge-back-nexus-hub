@@ -3,10 +3,7 @@ import { logger } from "./logger";
 
 const ADMIN_EMAIL = "Opticspycrew@gmail.com";
 
-// Escape characters that have special meaning in HTML so attacker-controlled
-// fields (names, emails, free-form notes, etc.) submitted through public
-// endpoints cannot inject markup, fake links, or tracking pixels into the
-// admin notification emails we send.
+// Escape user-supplied fields before interpolating into the HTML email body.
 function escapeHtml(value: unknown): string {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -267,8 +264,6 @@ export function newClientEmail(client: {
   company?: string | null;
   createdAt: Date;
 }): { subject: string; html: string } {
-  // The subject is plain text (header value), but the name still flows into
-  // the HTML body below, so we escape every attacker-controlled field there.
   const subject = `[Action Required] New Client Registration — ${client.name}`;
   const safeName = escapeHtml(client.name);
   const safeEmail = escapeHtml(client.email);
@@ -306,10 +301,6 @@ export function newServiceRequestEmail(params: {
   const typeLabel = request.type.charAt(0).toUpperCase() + request.type.slice(1);
   const subject = `[Action Required] ${typeLabel} Request — ${client.name}`;
   const amountStr = request.amount ? `${request.currency} ${Number(request.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "—";
-  // Every value below originates from a public, unauthenticated submission
-  // form, so escape before interpolating into the HTML body to prevent the
-  // attacker from injecting fake links, images, or markup into the trusted
-  // admin notification.
   const safeTypeLabel = escapeHtml(typeLabel);
   const safeClientName = escapeHtml(client.name);
   const safeClientEmail = escapeHtml(client.email);

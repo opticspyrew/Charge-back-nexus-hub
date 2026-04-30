@@ -8,18 +8,10 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
-// Per-IP rate limiter for the unauthenticated submission endpoints
-// (`/register`, `/request`, `/payment-confirmation`). Each of these routes
-// inserts rows and triggers an email to the hard-coded ADMIN_EMAIL inbox,
-// so without throttling a single attacker can flood the operational inbox,
-// exhaust SMTP quota, and bury legitimate requests in noise.
-//
-// The numbers below (10 successful writes per IP per minute) are deliberately
-// generous for real users — a person registers / submits a withdrawal a few
-// times an hour at most — while still capping abusive scripts at a tractable
-// rate. We also key by `req.ip` (which is correct because `app.ts` sets
-// `trust proxy: 1`), and we explicitly skip non-2xx responses so failed
-// attempts don't poison legitimate users' quota.
+// Per-IP throttle shared by the unauthenticated submission routes
+// (`/register`, `/request`, `/payment-confirmation`). 10 successful writes
+// per minute per IP; failed requests don't count against the budget.
+// Keyed by `req.ip` (valid because `app.ts` sets `trust proxy: 1`).
 const publicSubmissionLimiter = rateLimit({
   windowMs: 60_000,
   limit: 10,
@@ -91,12 +83,8 @@ router.post("/register", publicSubmissionLimiter, async (req: Request, res: Resp
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    // Lookup only the id column. Previously this returned `db.select().from(adminClients)`
-    // and serialized the whole row to the unauthenticated caller, which leaked
-    // phone, company, status, internal admin notes, and timestamps for any
-    // existing customer email. The public endpoint never needs that data — the
-    // client only needs to know whether registration succeeded — so we limit
-    // the column projection and limit the response payload to a boolean flag.
+    // Project only the id column — admin-only fields (phone, company, status,
+    // notes, timestamps) must never be returned to an unauthenticated caller.
     const [existing] = await db
       .select({ id: adminClients.id })
       .from(adminClients)
@@ -123,8 +111,6 @@ router.post("/register", publicSubmissionLimiter, async (req: Request, res: Resp
     const emailSent = await sendAdminEmail(subject, html);
 
     logger.info({ clientId: client.id, email: normalizedEmail, emailSent }, "New client registered via public endpoint");
-    // Only echo back the id of the newly-created row. Internal admin fields
-    // (status, notes, phone, company, timestamps) stay server-side.
     res.status(201).json({ client: { id: client.id }, alreadyExists: false, emailSent });
   } catch (err) {
     logger.error({ err }, "Failed to register client via public endpoint");
@@ -214,8 +200,6 @@ router.post("/request", publicSubmissionLimiter, async (req: Request, res: Respo
     const emailSent = await sendAdminEmail(subject, html);
 
     logger.info({ clientId: client.id, requestId: request.id, type, emailSent }, "Service request submitted via public endpoint");
-    // Return the unguessable `publicToken` so the client can poll status
-    // without enabling enumeration of other users' requests by serial id.
     res.status(201).json({ request: { id: request.id, publicToken: request.publicToken }, emailSent });
   } catch (err) {
     logger.error({ err }, "Failed to submit service request via public endpoint");
@@ -269,8 +253,6 @@ router.post("/payment-confirmation", publicSubmissionLimiter, async (req: Reques
     const emailSent = await sendAdminEmail(subject, html);
 
     logger.info({ clientId: client.id, requestId: request.id, emailSent }, "Payment confirmation submitted");
-    // Return the unguessable `publicToken` so the invoice page can poll
-    // status without exposing the predictable serial id to attackers.
     res.status(201).json({ request: { id: request.id, publicToken: request.publicToken }, emailSent });
   } catch (err) {
     logger.error({ err }, "Failed to submit payment confirmation");
@@ -278,20 +260,11 @@ router.post("/payment-confirmation", publicSubmissionLimiter, async (req: Reques
   }
 });
 
-// Public status lookup is keyed by the unguessable `publicToken` issued at
-// submission time (see `/request` and `/payment-confirmation`). The previous
-// version of this route accepted the serial primary key and returned status
-// for any existing row, which let an unauthenticated attacker enumerate
-// pending/approved/denied state for every other user's request by sweeping
-// `1, 2, 3, ...`. Switching to a 36-char random token effectively requires
-// the caller to already know the token, which only the submitting client
-// receives in the response body of the matching POST.
+// Public status lookup is keyed by the per-row `publicToken` (UUID) issued
+// in the response body of `/request` and `/payment-confirmation`.
 router.get("/request-status/:token", async (req: Request, res: Response): Promise<void> => {
   try {
     const token = String(req.params.token ?? "").trim();
-    // Defense-in-depth: require the path segment to look like the UUID format
-    // we issue (`gen_random_uuid()`), so callers cannot probe the endpoint
-    // with arbitrary short strings to learn anything beyond a generic 404.
     const isValidToken = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(token);
     if (!isValidToken) {
       res.status(404).json({ error: "Request not found" });
