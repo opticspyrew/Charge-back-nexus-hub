@@ -52,10 +52,6 @@ function escapeHtml(str: string | null | undefined): string {
     .replace(/'/g, "&#x27;");
 }
 
-function qrImageUrl(value: string, size = 150): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&format=png&margin=4`;
-}
-
 type ConfirmState = "idle" | "submitting" | "waiting" | "approved" | "denied" | "error";
 
 export default function Invoice() {
@@ -224,7 +220,7 @@ export default function Invoice() {
         </div>`
       : "";
 
-    const win = window.open("", "_blank", "width=900,height=700,noopener,noreferrer");
+    const win = window.open("", "_blank", "width=900,height=700");
     if (!win) return;
     win.document.write(`<!DOCTYPE html>
 <html>
@@ -352,7 +348,7 @@ ${paymentSection}
       ? `<div class="warning">&#x26A0; Ensure you are sending <strong>${escapeHtml(selectedCoin)}</strong> only via the <strong>${escapeHtml(selectedNetwork.network)}</strong> network. Sending to the wrong network will result in permanent loss of funds.</div>`
       : "";
 
-    const win = window.open("", "_blank", "width=700,height=600,noopener,noreferrer");
+    const win = window.open("", "_blank", "width=700,height=600");
     if (!win) return;
     win.onafterprint = () => win.close();
     win.document.write(`<!DOCTYPE html>
@@ -973,7 +969,6 @@ ${warningSection}
           </button>
         </div>
 
-        {/* Hidden QR code container for serializing to SVG data URL in print templates */}
         <div
           ref={qrContainerRef}
           aria-hidden="true"

@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { ensurePrimaryUser, purgeExpiredSessions } from "./lib/auth";
 import { startForgotPasswordThrottleCleanup } from "./lib/forgot-password-throttle";
+import { seedDefaultWallets } from "./lib/seed-wallets";
 
 const rawPort = process.env["PORT"];
 
@@ -28,6 +29,7 @@ app.listen(port, (err) => {
   // Seed primary user and clear expired sessions on startup (best-effort).
   void ensurePrimaryUser();
   void purgeExpiredSessions();
+  void seedDefaultWallets();
 
   // Periodically prune empty forgot-password throttle buckets.
   startForgotPasswordThrottleCleanup();
