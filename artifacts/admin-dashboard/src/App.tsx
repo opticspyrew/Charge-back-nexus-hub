@@ -792,7 +792,7 @@ function WalletsPage() {
                     sectionDragSymRef.current = sym;
                     setSectionDragSym(sym);
                     e.dataTransfer.effectAllowed = "move";
-                    try { e.dataTransfer.setData("text/plain", `section:${sym}`); } catch {}
+                    e.dataTransfer.setData("text/plain", `section:${sym}`);
                   }}
                   onDragOver={(e) => {
                     const dragged = sectionDragSymRef.current;
