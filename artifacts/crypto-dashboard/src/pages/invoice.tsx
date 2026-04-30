@@ -73,6 +73,15 @@ export default function Invoice() {
   const [walletConfigs, setWalletConfigs] = useState<WalletConfig[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const qrContainerRef = useRef<HTMLDivElement>(null);
+
+  function getQrDataUrl(): string {
+    if (!qrContainerRef.current) return "";
+    const svg = qrContainerRef.current.querySelector("svg");
+    if (!svg) return "";
+    const serialized = new XMLSerializer().serializeToString(svg);
+    return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(serialized)));
+  }
 
   useEffect(() => {
     return () => {
@@ -201,14 +210,15 @@ export default function Invoice() {
     const eDueDate = escapeHtml(dueDate);
     const eDate = escapeHtml(`${invoiceDate} ${invoiceTime}`);
 
+    const qrDataUrl = getQrDataUrl();
     const paymentSection = selectedNetwork
       ? `<div style="margin-top:24px;padding:16px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
           <div style="display:flex;gap:20px;align-items:flex-start">
-            <img src="${qrImageUrl(selectedNetwork.address, 120)}" alt="QR Code" style="width:120px;height:120px;border-radius:6px;flex-shrink:0;border:2px solid #e5e7eb;" />
+            ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code" style="width:120px;height:120px;border-radius:6px;flex-shrink:0;border:2px solid #e5e7eb;" />` : ""}
             <div>
               <p style="font-weight:700;color:#166534;margin:0 0 6px;">Payment Method: ${escapeHtml(selectedCoin)} (${escapeHtml(selectedNetwork.network)})</p>
               <p style="font-family:monospace;font-size:12px;color:#374151;margin:0 0 4px;word-break:break-all;">${escapeHtml(selectedNetwork.address)}</p>
-              <p style="color:#dc2626;font-size:11px;margin:0;">&amp;#x26A0; Send only ${escapeHtml(selectedCoin)} via the ${escapeHtml(selectedNetwork.network)} network. Sending to the wrong network may result in permanent loss of funds.</p>
+              <p style="color:#dc2626;font-size:11px;margin:0;">&#x26A0; Send only ${escapeHtml(selectedCoin)} via the ${escapeHtml(selectedNetwork.network)} network. Sending to the wrong network may result in permanent loss of funds.</p>
             </div>
           </div>
         </div>`
@@ -220,7 +230,7 @@ export default function Invoice() {
 <html>
 <head>
 <title>Invoice ${eInvNum}</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://api.qrserver.com; style-src 'unsafe-inline'; img-src 'self' https://api.qrserver.com data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:;">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; padding: 40px; }
@@ -334,8 +344,9 @@ ${paymentSection}
       ? `${escapeHtml(selectedCoin)} via ${escapeHtml(selectedNetwork.network)}`
       : "Cryptocurrency (method not selected)";
     const walletLine = escapeHtml(selectedNetwork?.address ?? "—");
-    const walletQr = selectedNetwork
-      ? `<div style="text-align:center;margin:16px 0;"><img src="${qrImageUrl(selectedNetwork.address, 130)}" alt="Wallet QR Code" style="width:130px;height:130px;border:2px solid #e5e7eb;border-radius:8px;display:inline-block;" /></div>`
+    const qrDataUrl = getQrDataUrl();
+    const walletQr = selectedNetwork && qrDataUrl
+      ? `<div style="text-align:center;margin:16px 0;"><img src="${qrDataUrl}" alt="Wallet QR Code" style="width:130px;height:130px;border:2px solid #e5e7eb;border-radius:8px;display:inline-block;" /></div>`
       : "";
     const warningSection = selectedNetwork
       ? `<div class="warning">&#x26A0; Ensure you are sending <strong>${escapeHtml(selectedCoin)}</strong> only via the <strong>${escapeHtml(selectedNetwork.network)}</strong> network. Sending to the wrong network will result in permanent loss of funds.</div>`
@@ -343,11 +354,12 @@ ${paymentSection}
 
     const win = window.open("", "_blank", "width=700,height=600,noopener,noreferrer");
     if (!win) return;
+    win.onafterprint = () => win.close();
     win.document.write(`<!DOCTYPE html>
 <html>
 <head>
 <title>Receipt ${eInvNum}</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://api.qrserver.com; style-src 'unsafe-inline'; img-src 'self' https://api.qrserver.com data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:;">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; padding: 40px; max-width: 600px; margin: 0 auto; }
@@ -959,6 +971,23 @@ ${warningSection}
           >
             Back to Dashboard
           </button>
+        </div>
+
+        {/* Hidden QR code container for serializing to SVG data URL in print templates */}
+        <div
+          ref={qrContainerRef}
+          aria-hidden="true"
+          style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, pointerEvents: "none", width: 160, height: 160 }}
+        >
+          {selectedNetwork && (
+            <QRCode
+              value={selectedNetwork.address}
+              size={160}
+              bgColor="#ffffff"
+              fgColor="#000000"
+              level="M"
+            />
+          )}
         </div>
       </div>
     </div>
