@@ -55,6 +55,8 @@ export const api = {
   getActivity: () => req<{ activity: Activity[] }>("GET", "/activity"),
 
   getUsers: () => req<{ users: User[] }>("GET", "/users"),
+  setUserBalance: (id: number, data: { amountUsd?: number; balanceBtc?: number }) =>
+    req<{ user: User }>("PATCH", `/users/${id}/balance`, data),
 
   getWalletConfigs: () => req<{ configs: WalletConfig[] }>("GET", "/wallet-configs"),
   createWalletConfig: (data: { symbol: string; network: string; address: string; label?: string; sortOrder?: number }) =>
@@ -108,6 +110,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
+  balanceBtc: number;
   createdAt: string;
   updatedAt: string;
 }

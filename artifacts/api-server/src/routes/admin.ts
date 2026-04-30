@@ -318,6 +318,7 @@ router.get("/users", requireAdmin, async (req: Request, res: Response): Promise<
         id: users.id,
         name: users.name,
         email: users.email,
+        balanceBtc: users.balanceBtc,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
       })
@@ -327,6 +328,78 @@ router.get("/users", requireAdmin, async (req: Request, res: Response): Promise<
   } catch (err) {
     logger.error({ err }, "Failed to load users");
     res.status(500).json({ error: "Failed to load users" });
+  }
+});
+
+// Display price used by the dashboard. Mirrors BTC_PRICE_USD in
+// crypto-dashboard/src/hooks/use-balance.ts and the seed price in
+// auth.ts signup so admin USD edits round-trip back to the same USD figure.
+const ADMIN_BTC_PRICE_USD = 27000;
+const ADMIN_MAX_BALANCE_USD = 1_000_000_000; // 1B USD safety cap
+
+router.patch("/users/:id/balance", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = Number.parseInt(String(rawId ?? ""), 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "Invalid user id" });
+      return;
+    }
+
+    const body = (req.body ?? {}) as { amountUsd?: unknown; balanceBtc?: unknown };
+    let nextBalanceBtc: number | null = null;
+
+    if (body.balanceBtc !== undefined) {
+      const btc = typeof body.balanceBtc === "number" ? body.balanceBtc : Number(body.balanceBtc);
+      if (!Number.isFinite(btc) || btc < 0) {
+        res.status(400).json({ error: "balanceBtc must be a finite, non-negative number" });
+        return;
+      }
+      nextBalanceBtc = btc;
+    } else if (body.amountUsd !== undefined) {
+      const usd = typeof body.amountUsd === "number" ? body.amountUsd : Number(body.amountUsd);
+      if (!Number.isFinite(usd) || usd < 0) {
+        res.status(400).json({ error: "amountUsd must be a finite, non-negative number" });
+        return;
+      }
+      if (usd > ADMIN_MAX_BALANCE_USD) {
+        res.status(400).json({ error: `amountUsd exceeds the $${ADMIN_MAX_BALANCE_USD.toLocaleString("en-US")} cap` });
+        return;
+      }
+      nextBalanceBtc = usd / ADMIN_BTC_PRICE_USD;
+    } else {
+      res.status(400).json({ error: "Provide either amountUsd or balanceBtc" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set({ balanceBtc: nextBalanceBtc, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        balanceBtc: users.balanceBtc,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      });
+
+    if (!updated) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    await db.insert(adminActivityLog).values({
+      eventType: "user_balance_updated",
+      description: `Admin set balance for ${updated.name} (${updated.email}) to ${updated.balanceBtc.toFixed(8)} BTC (~$${(updated.balanceBtc * ADMIN_BTC_PRICE_USD).toFixed(2)})`,
+      metadata: { userId: id, balanceBtc: updated.balanceBtc, btcPriceUsd: ADMIN_BTC_PRICE_USD },
+    });
+
+    res.json({ user: updated });
+  } catch (err) {
+    logger.error({ err }, "Failed to update user balance");
+    res.status(500).json({ error: "Failed to update user balance" });
   }
 });
 
