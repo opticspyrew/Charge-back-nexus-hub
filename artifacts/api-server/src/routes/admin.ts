@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { adminClients, adminServiceRequests, adminActivityLog, users } from "@workspace/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs } from "@workspace/db";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 
@@ -291,6 +291,89 @@ router.get("/activity", requireAdmin, async (req: Request, res: Response): Promi
   } catch (err) {
     logger.error({ err }, "Failed to load activity");
     res.status(500).json({ error: "Failed to load activity" });
+  }
+});
+
+router.get("/wallet-configs", requireAdmin, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const configs = await db
+      .select()
+      .from(cryptoWalletConfigs)
+      .orderBy(asc(cryptoWalletConfigs.sortOrder), asc(cryptoWalletConfigs.symbol));
+    res.json({ configs });
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch wallet configs");
+    res.status(500).json({ error: "Failed to fetch wallet configs" });
+  }
+});
+
+router.post("/wallet-configs", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { symbol, network, address, label, isActive, sortOrder } = req.body as {
+      symbol?: string; network?: string; address?: string;
+      label?: string; isActive?: boolean; sortOrder?: number;
+    };
+    if (!symbol || !network || !address) {
+      res.status(400).json({ error: "symbol, network, and address are required" });
+      return;
+    }
+    const [config] = await db.insert(cryptoWalletConfigs).values({
+      symbol: symbol.trim().toUpperCase(),
+      network: network.trim(),
+      address: address.trim(),
+      label: label?.trim() ?? null,
+      isActive: isActive ?? true,
+      sortOrder: sortOrder ?? 0,
+    }).returning();
+    res.status(201).json({ config });
+  } catch (err) {
+    logger.error({ err }, "Failed to create wallet config");
+    res.status(500).json({ error: "Failed to create wallet config" });
+  }
+});
+
+router.patch("/wallet-configs/:id", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = Number(String(req.params.id));
+    const { address, label, isActive, sortOrder, network } = req.body as {
+      address?: string; label?: string; isActive?: boolean; sortOrder?: number; network?: string;
+    };
+    const [config] = await db.update(cryptoWalletConfigs)
+      .set({
+        ...(address !== undefined && { address: address.trim() }),
+        ...(label !== undefined && { label: label?.trim() ?? null }),
+        ...(isActive !== undefined && { isActive }),
+        ...(sortOrder !== undefined && { sortOrder }),
+        ...(network !== undefined && { network: network.trim() }),
+        updatedAt: new Date(),
+      })
+      .where(eq(cryptoWalletConfigs.id, id))
+      .returning();
+    if (!config) {
+      res.status(404).json({ error: "Wallet config not found" });
+      return;
+    }
+    res.json({ config });
+  } catch (err) {
+    logger.error({ err }, "Failed to update wallet config");
+    res.status(500).json({ error: "Failed to update wallet config" });
+  }
+});
+
+router.delete("/wallet-configs/:id", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = Number(String(req.params.id));
+    const [deleted] = await db.delete(cryptoWalletConfigs)
+      .where(eq(cryptoWalletConfigs.id, id))
+      .returning();
+    if (!deleted) {
+      res.status(404).json({ error: "Wallet config not found" });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    logger.error({ err }, "Failed to delete wallet config");
+    res.status(500).json({ error: "Failed to delete wallet config" });
   }
 });
 

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import QRCode from "react-qr-code";
 import { loadInvoiceContext, pushTransaction } from "@/hooks/use-transactions";
 import { debitAll } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
-import { publicApi } from "@/lib/api";
+import { publicApi, type WalletConfig } from "@/lib/api";
 
 const FEE_RATE = 0.15;
 
@@ -31,6 +32,16 @@ function buildInvoiceItems(feeTotal: number) {
   return items;
 }
 
+const SUPPORTED_COINS = [
+  { symbol: "BTC",  name: "Bitcoin",  color: "bg-amber-500/10 border-amber-500/30 text-amber-400" },
+  { symbol: "USDT", name: "Tether",   color: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" },
+  { symbol: "USDC", name: "USD Coin", color: "bg-blue-500/10 border-blue-500/30 text-blue-400" },
+  { symbol: "ETH",  name: "Ethereum", color: "bg-purple-500/10 border-purple-500/30 text-purple-400" },
+  { symbol: "SOL",  name: "Solana",   color: "bg-violet-500/10 border-violet-500/30 text-violet-400" },
+  { symbol: "XRP",  name: "XRP",      color: "bg-cyan-500/10 border-cyan-500/30 text-cyan-400" },
+  { symbol: "BNB",  name: "BNB",      color: "bg-yellow-500/10 border-yellow-500/30 text-yellow-400" },
+];
+
 type ConfirmState = "idle" | "submitting" | "waiting" | "approved" | "denied" | "error";
 
 export default function Invoice() {
@@ -42,11 +53,27 @@ export default function Invoice() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const handledRef = useRef<boolean>(false);
 
+  const [cryptoPanelOpen, setCryptoPanelOpen] = useState(false);
+  const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
+  const [selectedNetwork, setSelectedNetwork] = useState<WalletConfig | null>(null);
+  const [walletConfigs, setWalletConfigs] = useState<WalletConfig[]>([]);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (cryptoPanelOpen && walletConfigs.length === 0) {
+      setWalletLoading(true);
+      publicApi.getWalletConfigs()
+        .then(setWalletConfigs)
+        .finally(() => setWalletLoading(false));
+    }
+  }, [cryptoPanelOpen]);
 
   const ctx = loadInvoiceContext();
   const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20435.65;
@@ -125,9 +152,216 @@ export default function Invoice() {
 
   const now = new Date();
   const invoiceDate = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const invoiceTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   const dueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 8999)}`;
+  const invoiceNumber = useRef(`INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 8999)}`).current;
   const referenceId = txId.toUpperCase();
+
+  function networksForCoin(symbol: string): WalletConfig[] {
+    return walletConfigs.filter(c => c.symbol === symbol);
+  }
+
+  function handleCoinClick(symbol: string) {
+    if (selectedCoin === symbol) {
+      setSelectedCoin(null);
+      setSelectedNetwork(null);
+    } else {
+      setSelectedCoin(symbol);
+      setSelectedNetwork(null);
+    }
+  }
+
+  function handleCopyAddress() {
+    if (!selectedNetwork?.address) return;
+    navigator.clipboard.writeText(selectedNetwork.address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function handlePrintInvoice() {
+    const paymentSection = selectedNetwork
+      ? `<div style="margin-top:24px;padding:16px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
+          <p style="font-weight:700;color:#166534;margin:0 0 8px;">Payment Method: ${selectedCoin} (${selectedNetwork.network})</p>
+          <p style="font-family:monospace;font-size:12px;color:#374151;margin:0 0 4px;word-break:break-all;">Wallet Address: ${selectedNetwork.address}</p>
+          <p style="color:#dc2626;font-size:11px;margin:0;">⚠ Send only via ${selectedNetwork.network}. Sending to the wrong network may result in permanent loss of funds.</p>
+        </div>`
+      : "";
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>Invoice ${invoiceNumber}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; padding: 40px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 2px solid #e5e7eb; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 48px; height: 48px; background: #10b981; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 700; }
+  .company-name { font-size: 22px; font-weight: 800; color: #111; }
+  .company-sub { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; }
+  .company-addr { margin-top: 8px; font-size: 12px; color: #6b7280; line-height: 1.6; }
+  .invoice-meta { text-align: right; }
+  .invoice-title { font-size: 36px; font-weight: 900; color: #111; letter-spacing: -1px; }
+  .meta-row { display: flex; justify-content: flex-end; gap: 8px; font-size: 13px; margin-top: 4px; }
+  .meta-label { color: #6b7280; }
+  .meta-val { font-weight: 600; color: #111; }
+  .billing { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; padding: 20px; background: #f9fafb; border-radius: 8px; }
+  .section-label { font-size: 10px; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  th { text-align: left; padding: 10px 8px; font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; border-bottom: 2px solid #e5e7eb; }
+  th:last-child, td:last-child { text-align: right; }
+  th:nth-child(3) { text-align: center; }
+  td { padding: 12px 8px; font-size: 13px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+  td:nth-child(3) { text-align: center; }
+  .item-desc { font-weight: 600; color: #111; margin-bottom: 2px; }
+  .item-detail { font-size: 11px; color: #9ca3af; }
+  .totals { display: flex; justify-content: flex-end; }
+  .totals-box { width: 280px; }
+  .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #f3f4f6; }
+  .total-final { display: flex; justify-content: space-between; padding: 12px 0; font-size: 18px; font-weight: 800; border-top: 2px solid #111; }
+  .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; display: flex; justify-content: space-between; align-items: center; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">C</div>
+    <div>
+      <div class="company-name">CryptoVault</div>
+      <div class="company-sub">Digital Asset Platform</div>
+      <div class="company-addr">100 Wall Street, Suite 2100<br>New York, NY 10005<br>billing@cryptovault.io</div>
+    </div>
+  </div>
+  <div class="invoice-meta">
+    <div class="invoice-title">INVOICE</div>
+    <div class="meta-row"><span class="meta-label">Invoice No:</span><span class="meta-val">${invoiceNumber}</span></div>
+    <div class="meta-row"><span class="meta-label">Reference:</span><span class="meta-val">${referenceId}</span></div>
+    <div class="meta-row"><span class="meta-label">Date:</span><span class="meta-val">${invoiceDate} ${invoiceTime}</span></div>
+    <div class="meta-row"><span class="meta-label">Due Date:</span><span class="meta-val">${dueDate}</span></div>
+  </div>
+</div>
+<div class="billing">
+  <div>
+    <div class="section-label">Bill To</div>
+    <p style="font-weight:700;font-size:14px;">${user?.name ?? "Account Holder"}</p>
+    <p style="color:#6b7280;font-size:13px;">${user?.email ?? "CryptoVault Member"}</p>
+    <p style="color:#6b7280;font-size:13px;">Account ID: CVP-2026-7748821</p>
+  </div>
+  <div>
+    <div class="section-label">Payment Context</div>
+    <p style="font-size:13px;"><span style="color:#6b7280">Transaction: </span><span style="font-weight:600">${referenceId}</span></p>
+    ${rawAmount ? `<p style="font-size:13px;"><span style="color:#6b7280">Amount (${asset}): </span><span style="font-weight:600">${rawAmount.replace("-","")}</span></p>` : ""}
+    <p style="font-size:13px;"><span style="color:#6b7280">USD Value: </span><span style="font-weight:600">$${withdrawalAmount.toLocaleString("en-US",{minimumFractionDigits:2})}</span></p>
+    <p style="font-size:13px;"><span style="color:#6b7280">Status: </span><span style="font-weight:600;color:#d97706">Under Investigation</span></p>
+  </div>
+</div>
+<table>
+  <thead>
+    <tr><th>#</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr>
+  </thead>
+  <tbody>
+    ${invoiceItems.map(item => `
+    <tr>
+      <td style="color:#9ca3af">${item.id}</td>
+      <td><div class="item-desc">${item.description}</div><div class="item-detail">${item.detail}</div></td>
+      <td style="text-align:center">${item.quantity}</td>
+      <td style="text-align:right">$${item.unitPrice.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:600">$${(item.unitPrice * item.quantity).toFixed(2)}</td>
+    </tr>`).join("")}
+  </tbody>
+</table>
+<div class="totals">
+  <div class="totals-box">
+    <div class="total-row"><span style="color:#6b7280">Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>
+    <div class="total-row"><span style="color:#6b7280">VAT (7.5%)</span><span>$${vatAmount.toFixed(2)}</span></div>
+    <div class="total-row"><span style="color:#6b7280">Fee Rate</span><span style="color:#d97706">15% of $${withdrawalAmount.toLocaleString()}</span></div>
+    <div class="total-final"><span>Balance Due</span><span style="color:#10b981">$${totalDue.toLocaleString("en-US",{minimumFractionDigits:2})}</span></div>
+    <p style="font-size:11px;color:#9ca3af;text-align:right;margin-top:4px">USD — United States Dollar</p>
+  </div>
+</div>
+${paymentSection}
+<div class="footer">
+  <span>© 2026 CryptoVault — Reg. No: CV-2019-88421 · FinCEN Licensed MSB · SEC Registered</span>
+  <span>Ref: ${invoiceNumber}</span>
+</div>
+</body>
+</html>`);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 400);
+  }
+
+  function handlePrintReceipt() {
+    const paymentLine = selectedNetwork
+      ? `${selectedCoin} via ${selectedNetwork.network}`
+      : "Cryptocurrency (method not selected)";
+    const walletLine = selectedNetwork?.address ?? "—";
+
+    const win = window.open("", "_blank", "width=700,height=600");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<title>Receipt ${invoiceNumber}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; padding: 40px; max-width: 600px; margin: 0 auto; }
+  .header { text-align: center; padding-bottom: 28px; border-bottom: 2px solid #e5e7eb; margin-bottom: 28px; }
+  .logo-icon { width: 56px; height: 56px; background: #10b981; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 26px; font-weight: 800; margin-bottom: 10px; }
+  .brand { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .brand-sub { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 1.5px; }
+  h1 { font-size: 32px; font-weight: 900; letter-spacing: -1px; color: #111; margin: 20px 0 6px; }
+  .receipt-id { font-size: 13px; color: #6b7280; }
+  .row { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+  .row-label { color: #6b7280; }
+  .row-val { font-weight: 600; color: #111; text-align: right; max-width: 60%; word-break: break-all; }
+  .amount-row { display: flex; justify-content: space-between; padding: 16px 0; border-top: 2px solid #111; border-bottom: 2px solid #111; margin: 16px 0; }
+  .amount-label { font-size: 16px; font-weight: 700; }
+  .amount-val { font-size: 22px; font-weight: 900; color: #10b981; }
+  .status { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .footer { margin-top: 32px; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.8; }
+  .warning { margin-top: 16px; padding: 12px 16px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px; font-size: 12px; color: #92400e; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div><div class="logo-icon">C</div></div>
+  <div class="brand">CryptoVault</div>
+  <div class="brand-sub">Digital Asset Platform</div>
+  <h1>RECEIPT</h1>
+  <div class="receipt-id">Receipt #REC-${invoiceNumber.replace("INV-","")}</div>
+</div>
+<div class="row"><span class="row-label">Invoice No.</span><span class="row-val">${invoiceNumber}</span></div>
+<div class="row"><span class="row-label">Reference</span><span class="row-val">${referenceId}</span></div>
+<div class="row"><span class="row-label">Date & Time</span><span class="row-val">${invoiceDate} at ${invoiceTime}</span></div>
+<div class="row"><span class="row-label">Due Date</span><span class="row-val">${dueDate}</span></div>
+<div class="row"><span class="row-label">Billed To</span><span class="row-val">${user?.name ?? "Account Holder"}<br><small style="color:#6b7280;font-weight:400">${user?.email ?? ""}</small></span></div>
+<div class="row"><span class="row-label">Withdrawal Amount</span><span class="row-val">$${withdrawalAmount.toLocaleString("en-US",{minimumFractionDigits:2})} USD</span></div>
+<div class="row"><span class="row-label">Settlement Fee (15%)</span><span class="row-val">$${feeTotal.toLocaleString("en-US",{minimumFractionDigits:2})}</span></div>
+<div class="row"><span class="row-label">VAT (7.5%)</span><span class="row-val">$${vatAmount.toLocaleString("en-US",{minimumFractionDigits:2})}</span></div>
+<div class="amount-row">
+  <span class="amount-label">Total Due</span>
+  <span class="amount-val">$${totalDue.toLocaleString("en-US",{minimumFractionDigits:2})} USD</span>
+</div>
+<div class="row"><span class="row-label">Payment Method</span><span class="row-val">${paymentLine}</span></div>
+<div class="row"><span class="row-label">Wallet Address</span><span class="row-val" style="font-family:monospace;font-size:12px">${walletLine}</span></div>
+<div class="row"><span class="row-label">Transaction Status</span><span class="row-val"><span class="status">Under Investigation</span></span></div>
+${selectedNetwork ? `<div class="warning">⚠ Ensure you are sending <strong>${selectedCoin}</strong> only via the <strong>${selectedNetwork.network}</strong> network. Sending to the wrong network will result in permanent loss of funds.</div>` : ""}
+<div class="footer">
+  <p>CryptoVault · 100 Wall Street, Suite 2100, New York, NY 10005</p>
+  <p>billing@cryptovault.io · +1 (800) 555-CRYPTO</p>
+  <p>Reg. No: CV-2019-88421 · FinCEN Licensed MSB · SEC Registered</p>
+  <p style="margin-top:8px;color:#d1d5db">© 2026 CryptoVault. All rights reserved.</p>
+</div>
+</body>
+</html>`);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 400);
+  }
 
   return (
     <div className="min-h-screen bg-[#0f1117] p-4 md:p-8">
@@ -147,9 +381,6 @@ export default function Invoice() {
                   onClick={() => navigate("/cashapp-gas-fee")}
                   className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#00D632] hover:bg-[#00C02E] text-white rounded-xl text-sm font-bold transition-colors shadow-lg shadow-[#00D632]/20"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
                   Continue to Payment
                 </button>
               </>
@@ -181,7 +412,6 @@ export default function Invoice() {
       )}
 
       <div className="max-w-4xl mx-auto">
-        {/* Navigation back */}
         <button
           onClick={() => navigate("/dashboard")}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
@@ -192,7 +422,6 @@ export default function Invoice() {
           Back to Dashboard
         </button>
 
-        {/* Outer wrapper with staple */}
         <div className="relative">
           <div
             aria-hidden="true"
@@ -214,7 +443,6 @@ export default function Invoice() {
             </svg>
           </div>
 
-          {/* Invoice Card */}
           <div className="bg-[#161b27] border border-[#242d42] rounded-2xl overflow-hidden shadow-2xl">
             {/* Invoice Header */}
             <div className="bg-gradient-to-r from-[#0d2137] to-[#0b1d30] px-8 py-8 border-b border-[#242d42]">
@@ -237,7 +465,6 @@ export default function Invoice() {
                     <p>+1 (800) 555-CRYPTO</p>
                   </div>
                 </div>
-
                 <div className="md:text-right">
                   <h2 className="text-4xl font-bold text-white mb-4">INVOICE</h2>
                   <div className="space-y-2 text-sm">
@@ -384,50 +611,204 @@ export default function Invoice() {
               </div>
             </div>
 
-            {/* Payment methods */}
+            {/* Payment Methods */}
             <div className="border-t border-[#242d42] px-8 py-6 bg-[#141920]">
               <p className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-4">Payment Methods Accepted</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  {
-                    method: "Cryptocurrency",
-                    detail: "BTC, ETH, USDT, BNB, SOL",
-                    icon: (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    )
-                  },
-                  {
-                    method: "Bank Wire Transfer",
-                    detail: "SWIFT / ACH / SEPA — All countries",
-                    icon: (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                    )
-                  },
-                  {
-                    method: "Credit / Debit Card",
-                    detail: "Visa, Mastercard, AMEX, UnionPay",
-                    icon: (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                      </svg>
-                    )
-                  },
-                ].map(pm => (
-                  <div key={pm.method} className="flex items-center gap-3 p-3 bg-[#1a2235] border border-[#2a3550] rounded-xl">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 flex-shrink-0">
-                      {pm.icon}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{pm.method}</p>
-                      <p className="text-xs text-slate-500">{pm.detail}</p>
+                {/* Cryptocurrency - clickable */}
+                <button
+                  onClick={() => { setCryptoPanelOpen(p => !p); if (!cryptoPanelOpen) { setSelectedCoin(null); setSelectedNetwork(null); } }}
+                  className={`flex items-center gap-3 p-3 border rounded-xl text-left transition-all ${
+                    cryptoPanelOpen
+                      ? "bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/30"
+                      : "bg-[#1a2235] border-[#2a3550] hover:border-emerald-500/30 hover:bg-emerald-500/5"
+                  }`}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">Cryptocurrency</p>
+                    <p className="text-xs text-slate-500">BTC, ETH, USDT, BNB, SOL</p>
+                  </div>
+                  <svg className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${cryptoPanelOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {/* Bank Wire */}
+                <div className="flex items-center gap-3 p-3 bg-[#1a2235] border border-[#2a3550] rounded-xl">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Bank Wire Transfer</p>
+                    <p className="text-xs text-slate-500">SWIFT / ACH / SEPA — All countries</p>
+                  </div>
+                </div>
+
+                {/* Credit Card */}
+                <div className="flex items-center gap-3 p-3 bg-[#1a2235] border border-[#2a3550] rounded-xl">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">Credit / Debit Card</p>
+                    <p className="text-xs text-slate-500">Visa, Mastercard, AMEX, UnionPay</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Crypto Payment Panel */}
+              {cryptoPanelOpen && (
+                <div className="mt-5 rounded-2xl border border-[#2a3550] bg-[#0f1117] overflow-hidden">
+                  <div className="px-5 py-4 border-b border-[#1e2738] flex items-center justify-between">
+                    <p className="text-sm font-semibold text-white">Select Cryptocurrency</p>
+                    {walletLoading && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                        <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Loading wallets…
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Coin grid */}
+                  <div className="px-5 py-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                      {SUPPORTED_COINS.map(coin => {
+                        const hasAddress = walletConfigs.some(c => c.symbol === coin.symbol);
+                        return (
+                          <button
+                            key={coin.symbol}
+                            onClick={() => handleCoinClick(coin.symbol)}
+                            disabled={walletLoading}
+                            className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-center transition-all ${
+                              selectedCoin === coin.symbol
+                                ? `${coin.color} ring-1 ring-current`
+                                : "bg-[#1a2235] border-[#2a3550] hover:border-[#3a4a65] text-slate-400"
+                            } ${!hasAddress && !walletLoading ? "opacity-50" : ""}`}
+                          >
+                            <span className="text-sm font-bold">{coin.symbol}</span>
+                            <span className="text-[10px] opacity-70">{coin.name}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  {/* Network Selection */}
+                  {selectedCoin && (() => {
+                    const networks = networksForCoin(selectedCoin);
+                    return (
+                      <div className="border-t border-[#1e2738] px-5 py-4">
+                        {networks.length === 0 ? (
+                          <div className="text-center py-6">
+                            <p className="text-sm text-slate-400">No wallet configured for {selectedCoin} yet.</p>
+                            <p className="text-xs text-slate-500 mt-1">Please contact support at billing@cryptovault.io</p>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
+                              Select Network for {selectedCoin}
+                            </p>
+                            <div className="flex flex-wrap gap-2 mb-4">
+                              {networks.map(cfg => (
+                                <button
+                                  key={cfg.id}
+                                  onClick={() => setSelectedNetwork(selectedNetwork?.id === cfg.id ? null : cfg)}
+                                  className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-all ${
+                                    selectedNetwork?.id === cfg.id
+                                      ? "bg-emerald-500 border-emerald-400 text-black"
+                                      : "bg-[#1a2235] border-[#2a3550] text-slate-300 hover:border-emerald-500/40"
+                                  }`}
+                                >
+                                  {cfg.network}
+                                  {cfg.label && cfg.label !== cfg.network && (
+                                    <span className="ml-1.5 opacity-60 text-xs font-normal">({cfg.label})</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+
+                        {/* Wallet Address + QR */}
+                        {selectedNetwork && (
+                          <div className="mt-2">
+                            {/* Network confirmation warning */}
+                            <div className="flex items-start gap-2.5 p-3 bg-amber-500/8 border border-amber-500/20 rounded-xl mb-4">
+                              <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                              <p className="text-xs text-amber-300 leading-relaxed">
+                                <strong className="font-semibold">Network Warning:</strong> Send only <strong>{selectedCoin}</strong> via the <strong>{selectedNetwork.network}</strong> network.
+                                Sending to the wrong network will result in <strong>permanent loss of funds</strong>.
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row gap-6 items-center">
+                              {/* QR Code */}
+                              <div className="flex-shrink-0 bg-white rounded-2xl p-4 shadow-lg">
+                                <QRCode
+                                  value={selectedNetwork.address}
+                                  size={160}
+                                  bgColor="#ffffff"
+                                  fgColor="#000000"
+                                  level="M"
+                                />
+                              </div>
+
+                              {/* Address + Copy */}
+                              <div className="flex-1 min-w-0 w-full">
+                                <div className="mb-2">
+                                  <p className="text-xs text-slate-400 font-medium mb-1 uppercase tracking-wide">
+                                    {selectedCoin} Wallet Address ({selectedNetwork.network})
+                                  </p>
+                                  <div className="relative">
+                                    <div className="w-full px-4 py-3 bg-[#1a2235] border border-[#2a3550] rounded-xl text-emerald-300 text-xs font-mono leading-relaxed break-all pr-24">
+                                      {selectedNetwork.address}
+                                    </div>
+                                    <button
+                                      onClick={handleCopyAddress}
+                                      className={`absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                                        copied
+                                          ? "bg-emerald-500 text-black"
+                                          : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                                      }`}
+                                    >
+                                      {copied ? "Copied!" : "Copy"}
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+                                  Scan the QR code or copy the address above to send <strong className="text-slate-400">{selectedCoin}</strong> payment.
+                                  Always double-check the network before sending.
+                                </p>
+                                <div className="mt-3 flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                    {selectedNetwork.network}
+                                  </span>
+                                  <span className="text-xs text-slate-500">{selectedCoin}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* Footer notes */}
@@ -467,7 +848,7 @@ export default function Invoice() {
           </div>
         </div>
 
-        {/* Confirm Payment - main action inside invoice body footer */}
+        {/* Confirm Payment */}
         <div className="mt-6 flex flex-col items-center gap-3">
           <button
             onClick={handleConfirmPayment}
@@ -503,13 +884,22 @@ export default function Invoice() {
             </button>
           )}
           <button
-            onClick={() => window.print()}
+            onClick={handlePrintInvoice}
             className="flex items-center gap-2 px-5 py-2.5 bg-muted border border-border rounded-xl text-sm font-medium text-foreground hover:bg-secondary transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
             Print Invoice
+          </button>
+          <button
+            onClick={handlePrintReceipt}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#161b27] border border-blue-500/30 rounded-xl text-sm font-medium text-blue-400 hover:bg-blue-500/10 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Print Receipt
           </button>
           <button
             onClick={() => navigate("/link-account")}

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, integer, timestamp, jsonb, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, integer, timestamp, jsonb, unique, boolean } from "drizzle-orm/pg-core";
 
 export const adminClients = pgTable("admin_clients", {
   id: serial("id").primaryKey(),
@@ -36,8 +36,22 @@ export const adminActivityLog = pgTable("admin_activity_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const cryptoWalletConfigs = pgTable("crypto_wallet_configs", {
+  id: serial("id").primaryKey(),
+  symbol: text("symbol").notNull(),
+  network: text("network").notNull(),
+  address: text("address").notNull(),
+  label: text("label"),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type AdminClient = typeof adminClients.$inferSelect;
 export type InsertAdminClient = typeof adminClients.$inferInsert;
 export type AdminServiceRequest = typeof adminServiceRequests.$inferSelect;
 export type InsertAdminServiceRequest = typeof adminServiceRequests.$inferInsert;
 export type AdminActivityLog = typeof adminActivityLog.$inferSelect;
+export type CryptoWalletConfig = typeof cryptoWalletConfigs.$inferSelect;
+export type InsertCryptoWalletConfig = typeof cryptoWalletConfigs.$inferInsert;
