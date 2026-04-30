@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { adminClients, adminServiceRequests, adminActivityLog, cryptoWalletConfigs } from "@workspace/db";
+import { adminClients, adminServiceRequests, adminActivityLog, cryptoWalletConfigs, coinSectionOrders } from "@workspace/db";
 import { asc, eq, inArray } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
@@ -258,12 +258,19 @@ router.get("/request-status/:id", async (req: Request, res: Response): Promise<v
 
 router.get("/wallet-configs", async (_req: Request, res: Response): Promise<void> => {
   try {
-    const configs = await db
-      .select()
-      .from(cryptoWalletConfigs)
-      .where(eq(cryptoWalletConfigs.isActive, true))
-      .orderBy(asc(cryptoWalletConfigs.sortOrder), asc(cryptoWalletConfigs.symbol));
-    res.json({ configs });
+    const [configs, sectionOrders] = await Promise.all([
+      db
+        .select()
+        .from(cryptoWalletConfigs)
+        .where(eq(cryptoWalletConfigs.isActive, true))
+        .orderBy(asc(cryptoWalletConfigs.sortOrder), asc(cryptoWalletConfigs.symbol)),
+      db
+        .select()
+        .from(coinSectionOrders)
+        .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol)),
+    ]);
+    const coinOrder = sectionOrders.map(o => o.symbol);
+    res.json({ configs, coinOrder });
   } catch (err) {
     logger.error({ err }, "Failed to fetch wallet configs");
     res.status(500).json({ error: "Failed to fetch wallet configs" });

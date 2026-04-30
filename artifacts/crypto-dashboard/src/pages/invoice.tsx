@@ -72,6 +72,7 @@ export default function Invoice() {
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
   const [selectedNetwork, setSelectedNetwork] = useState<WalletConfig | null>(null);
   const [walletConfigs, setWalletConfigs] = useState<WalletConfig[]>([]);
+  const [coinOrder, setCoinOrder] = useState<string[]>([]);
   const [walletLoading, setWalletLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const qrContainerRef = useRef<HTMLDivElement>(null);
@@ -94,10 +95,24 @@ export default function Invoice() {
     if (cryptoPanelOpen && walletConfigs.length === 0) {
       setWalletLoading(true);
       publicApi.getWalletConfigs()
-        .then(setWalletConfigs)
+        .then(({ configs, coinOrder: order }) => {
+          setWalletConfigs(configs);
+          setCoinOrder(order);
+        })
         .finally(() => setWalletLoading(false));
     }
   }, [cryptoPanelOpen]);
+
+  const orderedCoins = (() => {
+    if (coinOrder.length === 0) return SUPPORTED_COINS;
+    const orderMap = new Map(coinOrder.map((sym, i) => [sym, i]));
+    return [...SUPPORTED_COINS].sort((a, b) => {
+      const ai = orderMap.has(a.symbol) ? (orderMap.get(a.symbol) as number) : Number.MAX_SAFE_INTEGER;
+      const bi = orderMap.has(b.symbol) ? (orderMap.get(b.symbol) as number) : Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      return SUPPORTED_COINS.indexOf(a) - SUPPORTED_COINS.indexOf(b);
+    });
+  })();
 
   const ctx = loadInvoiceContext();
   const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20435.65;
@@ -748,7 +763,7 @@ ${warningSection}
                   {/* Coin grid */}
                   <div className="px-5 py-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                      {SUPPORTED_COINS.map(coin => {
+                      {orderedCoins.map(coin => {
                         const hasAddress = walletConfigs.some(c => c.symbol === coin.symbol);
                         return (
                           <button

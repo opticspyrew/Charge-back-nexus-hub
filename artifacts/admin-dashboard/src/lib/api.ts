@@ -62,7 +62,20 @@ export const api = {
     req<{ config: WalletConfig }>("PATCH", `/wallet-configs/${id}`, data),
   deleteWalletConfig: (id: number) =>
     req<{ success: boolean }>("DELETE", `/wallet-configs/${id}`),
+
+  getCoinSectionOrders: () =>
+    req<{ orders: CoinSectionOrder[] }>("GET", "/coin-section-orders"),
+  setCoinSectionOrders: (orders: Array<{ symbol: string; sortOrder: number }>) =>
+    req<{ orders: CoinSectionOrder[] }>("PUT", "/coin-section-orders", { orders }),
 };
+
+export interface CoinSectionOrder {
+  id: number;
+  symbol: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Client {
   id: number;

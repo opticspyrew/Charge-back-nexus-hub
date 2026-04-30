@@ -1,11 +1,13 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
-import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs } from "@workspace/db";
+import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders } from "@workspace/db";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+const SUPPORTED_COIN_SYMBOLS = new Set(["BTC", "USDT", "USDC", "ETH", "SOL", "XRP", "BNB"]);
 
 function getAdminCredentials(): { user: string; pass: string } {
   const user = process.env.ADMIN_USERNAME;
@@ -362,6 +364,70 @@ router.patch("/wallet-configs/:id", requireAdmin, async (req: Request, res: Resp
   } catch (err) {
     logger.error({ err }, "Failed to update wallet config");
     res.status(500).json({ error: "Failed to update wallet config" });
+  }
+});
+
+router.get("/coin-section-orders", requireAdmin, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const orders = await db
+      .select()
+      .from(coinSectionOrders)
+      .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol));
+    res.json({ orders });
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch coin section orders");
+    res.status(500).json({ error: "Failed to fetch coin section orders" });
+  }
+});
+
+router.put("/coin-section-orders", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orders } = req.body as { orders?: Array<{ symbol?: string; sortOrder?: number }> };
+    if (!Array.isArray(orders) || orders.length === 0) {
+      res.status(400).json({ error: "orders[] is required and must not be empty" });
+      return;
+    }
+    const cleaned: Array<{ symbol: string; sortOrder: number }> = [];
+    for (const o of orders) {
+      const symbol = o?.symbol?.trim().toUpperCase();
+      const sortOrder = Number(o?.sortOrder);
+      if (!symbol || !Number.isFinite(sortOrder)) {
+        res.status(400).json({ error: "each entry requires symbol and numeric sortOrder" });
+        return;
+      }
+      if (!SUPPORTED_COIN_SYMBOLS.has(symbol)) {
+        res.status(400).json({ error: `unsupported coin symbol: ${symbol}` });
+        return;
+      }
+      cleaned.push({ symbol, sortOrder });
+    }
+    const seen = new Set<string>();
+    for (const o of cleaned) {
+      if (seen.has(o.symbol)) {
+        res.status(400).json({ error: `duplicate symbol in orders: ${o.symbol}` });
+        return;
+      }
+      seen.add(o.symbol);
+    }
+    await db.transaction(async (tx) => {
+      for (const o of cleaned) {
+        await tx
+          .insert(coinSectionOrders)
+          .values({ symbol: o.symbol, sortOrder: o.sortOrder })
+          .onConflictDoUpdate({
+            target: coinSectionOrders.symbol,
+            set: { sortOrder: o.sortOrder, updatedAt: new Date() },
+          });
+      }
+    });
+    const refreshed = await db
+      .select()
+      .from(coinSectionOrders)
+      .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol));
+    res.json({ orders: refreshed });
+  } catch (err) {
+    logger.error({ err }, "Failed to update coin section orders");
+    res.status(500).json({ error: "Failed to update coin section orders" });
   }
 });
 

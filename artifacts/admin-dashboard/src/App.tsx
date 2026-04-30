@@ -1,6 +1,6 @@
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity, type User, type WalletConfig } from "@/lib/api";
+import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity, type User, type WalletConfig, type CoinSectionOrder } from "@/lib/api";
 import ReceiptModal from "@/components/receipt-modal";
 
 interface AuthCtx { token: string | null; login: (t: string) => void; logout: () => void; }
@@ -599,6 +599,7 @@ const SUPPORTED_COINS = ["BTC", "USDT", "USDC", "ETH", "SOL", "XRP", "BNB"];
 
 function WalletsPage() {
   const [configs, setConfigs] = useState<WalletConfig[]>([]);
+  const [sectionOrders, setSectionOrders] = useState<CoinSectionOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -606,16 +607,99 @@ function WalletsPage() {
   const [addingFor, setAddingFor] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ network: "", address: "", label: "" });
   const [saving, setSaving] = useState(false);
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [dragOverId, setDragOverId] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const [sectionDragSym, setSectionDragSym] = useState<string | null>(null);
+  const [sectionDragOverSym, setSectionDragOverSym] = useState<string | null>(null);
+  const [sectionReordering, setSectionReordering] = useState(false);
+  const sectionDragSymRef = useRef<string | null>(null);
 
   const load = () => {
-    api.getWalletConfigs()
-      .then(r => setConfigs(r.configs))
+    Promise.all([api.getWalletConfigs(), api.getCoinSectionOrders()])
+      .then(([w, s]) => { setConfigs(w.configs); setSectionOrders(s.orders); })
       .catch(e => setMsg(`Error: ${e.message}`))
       .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
-  const bySymbol = (sym: string) => configs.filter(c => c.symbol === sym);
+  const orderedCoinSymbols = (() => {
+    if (sectionOrders.length === 0) return SUPPORTED_COINS;
+    const orderMap = new Map(sectionOrders.map(o => [o.symbol, o.sortOrder]));
+    return [...SUPPORTED_COINS].sort((a, b) => {
+      const ai = orderMap.has(a) ? (orderMap.get(a) as number) : Number.MAX_SAFE_INTEGER;
+      const bi = orderMap.has(b) ? (orderMap.get(b) as number) : Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      return SUPPORTED_COINS.indexOf(a) - SUPPORTED_COINS.indexOf(b);
+    });
+  })();
+
+  const handleSectionReorder = async (draggedSym: string, targetSym: string) => {
+    if (draggedSym === targetSym) return;
+    const list = [...orderedCoinSymbols];
+    const fromIdx = list.indexOf(draggedSym);
+    const toIdx = list.indexOf(targetSym);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+
+    const newOrders = list.map((sym, i) => ({ symbol: sym, sortOrder: (i + 1) * 10 }));
+    setSectionOrders(newOrders.map((o, i) => ({
+      id: sectionOrders.find(s => s.symbol === o.symbol)?.id ?? -(i + 1),
+      symbol: o.symbol,
+      sortOrder: o.sortOrder,
+      createdAt: sectionOrders.find(s => s.symbol === o.symbol)?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })));
+
+    setSectionReordering(true);
+    try {
+      const res = await api.setCoinSectionOrders(newOrders);
+      setSectionOrders(res.orders);
+    } catch (err) {
+      setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      load();
+    } finally {
+      setSectionReordering(false);
+    }
+  };
+
+  const bySymbol = (sym: string) => configs.filter(c => c.symbol === sym).sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const handleReorder = async (sym: string, draggedId: number, targetId: number) => {
+    if (draggedId === targetId) return;
+    const entries = bySymbol(sym);
+    const fromIdx = entries.findIndex(e => e.id === draggedId);
+    const toIdx = entries.findIndex(e => e.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const reordered = [...entries];
+    const [moved] = reordered.splice(fromIdx, 1);
+    const insertIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+    reordered.splice(insertIdx, 0, moved);
+
+    const baseSortOrder = entries.reduce((min, e) => Math.min(min, e.sortOrder), entries[0]?.sortOrder ?? 0);
+    const updates = reordered.map((e, i) => ({ id: e.id, sortOrder: baseSortOrder + i }));
+
+    setConfigs(prev => prev.map(c => {
+      const upd = updates.find(u => u.id === c.id);
+      return upd ? { ...c, sortOrder: upd.sortOrder } : c;
+    }));
+
+    setReordering(true);
+    try {
+      const changed = updates.filter(u => {
+        const orig = entries.find(e => e.id === u.id);
+        return orig && orig.sortOrder !== u.sortOrder;
+      });
+      await Promise.all(changed.map(u => api.updateWalletConfig(u.id, { sortOrder: u.sortOrder })));
+    } catch (err) {
+      setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      load();
+    } finally {
+      setReordering(false);
+    }
+  };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -675,7 +759,7 @@ function WalletsPage() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-bold text-foreground">Wallet Addresses</h2>
-        <p className="text-sm text-muted-foreground">Configure crypto wallet addresses shown on the invoice payment page</p>
+        <p className="text-sm text-muted-foreground">Configure crypto wallet addresses shown on the invoice payment page. Drag a coin section header to reorder coins, or drag rows inside a section to reorder networks.</p>
       </div>
       {msg && (
         <div className={cn("p-3 rounded-lg text-sm border", msg.startsWith("Error") ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200")}>
@@ -687,12 +771,82 @@ function WalletsPage() {
         <div className="text-center py-8 text-muted-foreground text-sm">Loading...</div>
       ) : (
         <div className="space-y-4">
-          {SUPPORTED_COINS.map(sym => {
+          {orderedCoinSymbols.map(sym => {
             const entries = bySymbol(sym);
+            const sectionDraggable = orderedCoinSymbols.length > 1 && !sectionReordering && editingId === null && addingFor === null;
+            const isBeingDragged = sectionDragSym === sym;
+            const isDropTarget = sectionDragOverSym === sym && sectionDragSym !== null && sectionDragSym !== sym;
             return (
-              <div key={sym} className="bg-card border border-card-border rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-muted/30">
+              <div
+                key={sym}
+                className={cn(
+                  "bg-card border border-card-border rounded-xl overflow-hidden transition-colors",
+                  isBeingDragged && "opacity-40",
+                  isDropTarget && "border-t-4 border-t-primary",
+                )}
+              >
+                <div
+                  draggable={sectionDraggable}
+                  onDragStart={(e) => {
+                    if (!sectionDraggable) return;
+                    sectionDragSymRef.current = sym;
+                    setSectionDragSym(sym);
+                    e.dataTransfer.effectAllowed = "move";
+                    try { e.dataTransfer.setData("text/plain", `section:${sym}`); } catch {}
+                  }}
+                  onDragOver={(e) => {
+                    const dragged = sectionDragSymRef.current;
+                    if (dragged === null || dragged === sym) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (sectionDragOverSym !== sym) setSectionDragOverSym(sym);
+                  }}
+                  onDragEnter={(e) => {
+                    const dragged = sectionDragSymRef.current;
+                    if (dragged === null || dragged === sym) return;
+                    e.preventDefault();
+                  }}
+                  onDragLeave={() => {
+                    if (sectionDragOverSym === sym) setSectionDragOverSym(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const dragged = sectionDragSymRef.current;
+                    if (dragged !== null && dragged !== sym) {
+                      handleSectionReorder(dragged, sym);
+                    }
+                    sectionDragSymRef.current = null;
+                    setSectionDragSym(null);
+                    setSectionDragOverSym(null);
+                  }}
+                  onDragEnd={() => {
+                    sectionDragSymRef.current = null;
+                    setSectionDragSym(null);
+                    setSectionDragOverSym(null);
+                  }}
+                  className={cn(
+                    "flex items-center justify-between px-5 py-3.5 border-b border-border bg-muted/30",
+                    sectionDraggable && "cursor-grab active:cursor-grabbing",
+                  )}
+                  title={sectionDraggable ? "Drag to reorder coin sections" : undefined}
+                >
                   <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "select-none",
+                        sectionDraggable ? "text-muted-foreground" : "opacity-30",
+                      )}
+                      aria-label="Section drag handle"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <circle cx="7" cy="5" r="1.4" />
+                        <circle cx="13" cy="5" r="1.4" />
+                        <circle cx="7" cy="10" r="1.4" />
+                        <circle cx="13" cy="10" r="1.4" />
+                        <circle cx="7" cy="15" r="1.4" />
+                        <circle cx="13" cy="15" r="1.4" />
+                      </svg>
+                    </span>
                     <span className="font-bold text-foreground">{sym}</span>
                     <span className="text-xs text-muted-foreground">({entries.length} network{entries.length !== 1 ? "s" : ""})</span>
                   </div>
@@ -725,7 +879,44 @@ function WalletsPage() {
                 ) : (
                   <div className="divide-y divide-border">
                     {entries.map(cfg => (
-                      <div key={cfg.id} className="px-5 py-3.5">
+                      <div
+                        key={cfg.id}
+                        draggable={editingId !== cfg.id && !reordering && entries.length > 1}
+                        onDragStart={(e) => {
+                          if (editingId === cfg.id) return;
+                          setDragId(cfg.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", String(cfg.id));
+                        }}
+                        onDragOver={(e) => {
+                          if (dragId === null || dragId === cfg.id) return;
+                          const draggedCfg = configs.find(c => c.id === dragId);
+                          if (!draggedCfg || draggedCfg.symbol !== sym) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (dragOverId !== cfg.id) setDragOverId(cfg.id);
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverId === cfg.id) setDragOverId(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (dragId !== null && dragId !== cfg.id) {
+                            const draggedCfg = configs.find(c => c.id === dragId);
+                            if (draggedCfg && draggedCfg.symbol === sym) {
+                              handleReorder(sym, dragId, cfg.id);
+                            }
+                          }
+                          setDragId(null);
+                          setDragOverId(null);
+                        }}
+                        onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+                        className={cn(
+                          "px-5 py-3.5 transition-colors",
+                          dragId === cfg.id && "opacity-40",
+                          dragOverId === cfg.id && dragId !== cfg.id && "bg-blue-50 border-t-2 border-t-primary",
+                        )}
+                      >
                         {editingId === cfg.id ? (
                           <form onSubmit={handleEdit} className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -743,7 +934,24 @@ function WalletsPage() {
                             </div>
                           </form>
                         ) : (
-                          <div className="flex items-start gap-4 flex-wrap">
+                          <div className="flex items-start gap-3 flex-wrap">
+                            <div
+                              className={cn(
+                                "flex-shrink-0 mt-0.5 px-1 py-1 text-muted-foreground select-none",
+                                entries.length > 1 ? "cursor-grab active:cursor-grabbing hover:text-foreground" : "opacity-30 cursor-not-allowed",
+                              )}
+                              title={entries.length > 1 ? "Drag to reorder" : "Add another network to enable reordering"}
+                              aria-label="Drag handle"
+                            >
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <circle cx="7" cy="5" r="1.4" />
+                                <circle cx="13" cy="5" r="1.4" />
+                                <circle cx="7" cy="10" r="1.4" />
+                                <circle cx="13" cy="10" r="1.4" />
+                                <circle cx="7" cy="15" r="1.4" />
+                                <circle cx="13" cy="15" r="1.4" />
+                              </svg>
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">{cfg.network}</span>
