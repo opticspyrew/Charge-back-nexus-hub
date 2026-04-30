@@ -37,11 +37,6 @@ export const publicApi = {
   },
 
   registerClient: (data: { name: string; email: string }) =>
-    // The server intentionally never echoes back the existing client row for
-    // an already-registered email (that previously leaked phone, company,
-    // status, and internal admin notes to anyone on the internet). For brand
-    // new registrations we still receive `{ client: { id } }`, so callers
-    // that need it can read it; the only consumer here just fires-and-forgets.
     post<{ client?: { id: number }; alreadyExists: boolean; emailSent: boolean }>(
       `${PUBLIC_BASE}/register`,
       data,
@@ -78,9 +73,6 @@ export const publicApi = {
     data,
   ),
 
-  // Status polling is keyed by the unguessable `publicToken` we receive from
-  // the matching POST. The previous version used the serial primary key,
-  // which let anyone enumerate other users' requests by sweeping numeric ids.
   getRequestStatus: async (token: string): Promise<{ id: number; status: string; type: string }> => {
     const res = await fetch(`${PUBLIC_BASE}/request-status/${encodeURIComponent(token)}`);
     if (!res.ok) throw new Error("Failed to fetch request status");
