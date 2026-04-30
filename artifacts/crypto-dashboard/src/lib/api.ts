@@ -75,7 +75,24 @@ export const publicApi = {
     if (!res.ok) throw new Error("Failed to fetch request status");
     return res.json();
   },
+
+  getWalletConfigs: async (): Promise<WalletConfig[]> => {
+    const res = await fetch(`${PUBLIC_BASE}/wallet-configs`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { configs: WalletConfig[] };
+    return data.configs;
+  },
 };
+
+export interface WalletConfig {
+  id: number;
+  symbol: string;
+  network: string;
+  address: string;
+  label: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 export interface AuthUser {
   id: number;

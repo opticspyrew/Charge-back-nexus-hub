@@ -54,6 +54,14 @@ export const api = {
   getActivity: () => req<{ activity: Activity[] }>("GET", "/activity"),
 
   getUsers: () => req<{ users: User[] }>("GET", "/users"),
+
+  getWalletConfigs: () => req<{ configs: WalletConfig[] }>("GET", "/wallet-configs"),
+  createWalletConfig: (data: { symbol: string; network: string; address: string; label?: string; sortOrder?: number }) =>
+    req<{ config: WalletConfig }>("POST", "/wallet-configs", data),
+  updateWalletConfig: (id: number, data: Partial<{ address: string; network: string; label: string; isActive: boolean; sortOrder: number }>) =>
+    req<{ config: WalletConfig }>("PATCH", `/wallet-configs/${id}`, data),
+  deleteWalletConfig: (id: number) =>
+    req<{ success: boolean }>("DELETE", `/wallet-configs/${id}`),
 };
 
 export interface Client {
@@ -101,4 +109,16 @@ export interface Activity {
   metadata?: Record<string, unknown> | null;
   createdAt: string;
   clientName?: string | null;
+}
+
+export interface WalletConfig {
+  id: number;
+  symbol: string;
+  network: string;
+  address: string;
+  label: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity, type User } from "@/lib/api";
+import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity, type User, type WalletConfig } from "@/lib/api";
 import ReceiptModal from "@/components/receipt-modal";
 
 interface AuthCtx { token: string | null; login: (t: string) => void; logout: () => void; }
@@ -595,12 +595,210 @@ function UsersPage() {
   );
 }
 
+const SUPPORTED_COINS = ["BTC", "USDT", "USDC", "ETH", "SOL", "XRP", "BNB"];
+
+function WalletsPage() {
+  const [configs, setConfigs] = useState<WalletConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ address: "", network: "", label: "", isActive: true });
+  const [addingFor, setAddingFor] = useState<string | null>(null);
+  const [addForm, setAddForm] = useState({ network: "", address: "", label: "" });
+  const [saving, setSaving] = useState(false);
+
+  const load = () => {
+    api.getWalletConfigs()
+      .then(r => setConfigs(r.configs))
+      .catch(e => setMsg(`Error: ${e.message}`))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+
+  const bySymbol = (sym: string) => configs.filter(c => c.symbol === sym);
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await api.updateWalletConfig(editingId, {
+        address: editForm.address,
+        network: editForm.network,
+        label: editForm.label,
+        isActive: editForm.isActive,
+      });
+      setEditingId(null);
+      load();
+    } catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
+    finally { setSaving(false); }
+  };
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addingFor) return;
+    setSaving(true);
+    try {
+      const existingForCoin = configs.filter(c => c.symbol === addingFor);
+      await api.createWalletConfig({
+        symbol: addingFor,
+        network: addForm.network,
+        address: addForm.address,
+        label: addForm.label || undefined,
+        sortOrder: existingForCoin.length > 0
+          ? Math.max(...existingForCoin.map(c => c.sortOrder)) + 1
+          : SUPPORTED_COINS.indexOf(addingFor) * 10,
+      });
+      setAddingFor(null);
+      setAddForm({ network: "", address: "", label: "" });
+      load();
+    } catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Delete this wallet address?")) return;
+    try {
+      await api.deleteWalletConfig(id);
+      load();
+    } catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
+  };
+
+  const handleToggleActive = async (id: number, isActive: boolean) => {
+    try {
+      await api.updateWalletConfig(id, { isActive: !isActive });
+      load();
+    } catch (err) { setMsg(`Error: ${err instanceof Error ? err.message : String(err)}`); }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold text-foreground">Wallet Addresses</h2>
+        <p className="text-sm text-muted-foreground">Configure crypto wallet addresses shown on the invoice payment page</p>
+      </div>
+      {msg && (
+        <div className={cn("p-3 rounded-lg text-sm border", msg.startsWith("Error") ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200")}>
+          {msg}
+          <button onClick={() => setMsg("")} className="ml-2 opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground text-sm">Loading...</div>
+      ) : (
+        <div className="space-y-4">
+          {SUPPORTED_COINS.map(sym => {
+            const entries = bySymbol(sym);
+            return (
+              <div key={sym} className="bg-card border border-card-border rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-foreground">{sym}</span>
+                    <span className="text-xs text-muted-foreground">({entries.length} network{entries.length !== 1 ? "s" : ""})</span>
+                  </div>
+                  <button
+                    onClick={() => { setAddingFor(sym); setAddForm({ network: "", address: "", label: "" }); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    Add Network
+                  </button>
+                </div>
+
+                {addingFor === sym && (
+                  <form onSubmit={handleAdd} className="px-5 py-4 bg-blue-50/50 border-b border-border space-y-3">
+                    <p className="text-xs font-semibold text-foreground">Add new {sym} network</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <Input label="Network Name *" required value={addForm.network} onChange={e => setAddForm(f => ({ ...f, network: e.target.value }))} placeholder="e.g. TRC20" />
+                      <Input label="Wallet Address *" required value={addForm.address} onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))} placeholder="Wallet address..." />
+                      <Input label="Label (optional)" value={addForm.label} onChange={e => setAddForm(f => ({ ...f, label: e.target.value }))} placeholder="Display label..." />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={saving} className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60">{saving ? "Saving..." : "Save"}</button>
+                      <button type="button" onClick={() => setAddingFor(null)} className="px-3 py-1.5 bg-muted border border-border rounded-lg text-xs font-medium text-foreground">Cancel</button>
+                    </div>
+                  </form>
+                )}
+
+                {entries.length === 0 && addingFor !== sym ? (
+                  <p className="px-5 py-4 text-sm text-muted-foreground italic">No addresses configured yet. Click "Add Network" to set one up.</p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {entries.map(cfg => (
+                      <div key={cfg.id} className="px-5 py-3.5">
+                        {editingId === cfg.id ? (
+                          <form onSubmit={handleEdit} className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <Input label="Network" required value={editForm.network} onChange={e => setEditForm(f => ({ ...f, network: e.target.value }))} />
+                              <Input label="Wallet Address" required value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} />
+                              <Input label="Label" value={editForm.label} onChange={e => setEditForm(f => ({ ...f, label: e.target.value }))} />
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" checked={editForm.isActive} onChange={e => setEditForm(f => ({ ...f, isActive: e.target.checked }))} className="w-4 h-4" />
+                                <span className="text-foreground">Active</span>
+                              </label>
+                              <button type="submit" disabled={saving} className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60">{saving ? "Saving..." : "Save"}</button>
+                              <button type="button" onClick={() => setEditingId(null)} className="px-3 py-1.5 bg-muted border border-border rounded-lg text-xs font-medium text-foreground">Cancel</button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div className="flex items-start gap-4 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">{cfg.network}</span>
+                                {cfg.label && <span className="text-xs text-muted-foreground">{cfg.label}</span>}
+                                <span className={cn("text-xs px-1.5 py-0.5 rounded font-medium", cfg.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500")}>
+                                  {cfg.isActive ? "Active" : "Inactive"}
+                                </span>
+                              </div>
+                              <p className="text-xs font-mono text-foreground break-all">{cfg.address}</p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={() => handleToggleActive(cfg.id, cfg.isActive)}
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                title={cfg.isActive ? "Deactivate" : "Activate"}
+                              >
+                                {cfg.isActive ? "Deactivate" : "Activate"}
+                              </button>
+                              <span className="text-muted-foreground">·</span>
+                              <button
+                                onClick={() => { setEditingId(cfg.id); setEditForm({ address: cfg.address, network: cfg.network, label: cfg.label ?? "", isActive: cfg.isActive }); }}
+                                className="text-xs font-medium text-primary hover:underline"
+                              >
+                                Edit
+                              </button>
+                              <span className="text-muted-foreground">·</span>
+                              <button
+                                onClick={() => handleDelete(cfg.id)}
+                                className="text-xs font-medium text-red-600 hover:underline"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", path: "/", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
   { id: "clients", label: "Clients", path: "/clients", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
   { id: "requests", label: "Requests", path: "/requests", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
   { id: "activity", label: "Activity Log", path: "/activity", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
   { id: "users", label: "Users", path: "/users", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
+  { id: "wallets", label: "Wallets", path: "/wallets", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
 ];
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -664,6 +862,7 @@ function DashboardRouter() {
         <Route path="/requests" component={RequestsPage} />
         <Route path="/activity" component={ActivityPage} />
         <Route path="/users" component={UsersPage} />
+        <Route path="/wallets" component={WalletsPage} />
         <Route component={OverviewPage} />
       </Switch>
     </DashboardLayout>
