@@ -42,6 +42,20 @@ const SUPPORTED_COINS = [
   { symbol: "BNB",  name: "BNB",      color: "bg-yellow-500/10 border-yellow-500/30 text-yellow-400" },
 ];
 
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
+function qrImageUrl(value: string, size = 150): string {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&format=png&margin=4`;
+}
+
 type ConfirmState = "idle" | "submitting" | "waiting" | "approved" | "denied" | "error";
 
 export default function Invoice() {
@@ -180,20 +194,33 @@ export default function Invoice() {
   }
 
   function handlePrintInvoice() {
+    const eName = escapeHtml(user?.name ?? "Account Holder");
+    const eEmail = escapeHtml(user?.email ?? "CryptoVault Member");
+    const eInvNum = escapeHtml(invoiceNumber);
+    const eRefId = escapeHtml(referenceId);
+    const eDueDate = escapeHtml(dueDate);
+    const eDate = escapeHtml(`${invoiceDate} ${invoiceTime}`);
+
     const paymentSection = selectedNetwork
       ? `<div style="margin-top:24px;padding:16px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
-          <p style="font-weight:700;color:#166534;margin:0 0 8px;">Payment Method: ${selectedCoin} (${selectedNetwork.network})</p>
-          <p style="font-family:monospace;font-size:12px;color:#374151;margin:0 0 4px;word-break:break-all;">Wallet Address: ${selectedNetwork.address}</p>
-          <p style="color:#dc2626;font-size:11px;margin:0;">⚠ Send only via ${selectedNetwork.network}. Sending to the wrong network may result in permanent loss of funds.</p>
+          <div style="display:flex;gap:20px;align-items:flex-start">
+            <img src="${qrImageUrl(selectedNetwork.address, 120)}" alt="QR Code" style="width:120px;height:120px;border-radius:6px;flex-shrink:0;border:2px solid #e5e7eb;" />
+            <div>
+              <p style="font-weight:700;color:#166534;margin:0 0 6px;">Payment Method: ${escapeHtml(selectedCoin)} (${escapeHtml(selectedNetwork.network)})</p>
+              <p style="font-family:monospace;font-size:12px;color:#374151;margin:0 0 4px;word-break:break-all;">${escapeHtml(selectedNetwork.address)}</p>
+              <p style="color:#dc2626;font-size:11px;margin:0;">&amp;#x26A0; Send only ${escapeHtml(selectedCoin)} via the ${escapeHtml(selectedNetwork.network)} network. Sending to the wrong network may result in permanent loss of funds.</p>
+            </div>
+          </div>
         </div>`
       : "";
 
-    const win = window.open("", "_blank", "width=900,height=700");
+    const win = window.open("", "_blank", "width=900,height=700,noopener,noreferrer");
     if (!win) return;
     win.document.write(`<!DOCTYPE html>
 <html>
 <head>
-<title>Invoice ${invoiceNumber}</title>
+<title>Invoice ${eInvNum}</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://api.qrserver.com; style-src 'unsafe-inline'; img-src 'self' https://api.qrserver.com data:;">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; padding: 40px; }
@@ -238,23 +265,23 @@ export default function Invoice() {
   </div>
   <div class="invoice-meta">
     <div class="invoice-title">INVOICE</div>
-    <div class="meta-row"><span class="meta-label">Invoice No:</span><span class="meta-val">${invoiceNumber}</span></div>
-    <div class="meta-row"><span class="meta-label">Reference:</span><span class="meta-val">${referenceId}</span></div>
-    <div class="meta-row"><span class="meta-label">Date:</span><span class="meta-val">${invoiceDate} ${invoiceTime}</span></div>
-    <div class="meta-row"><span class="meta-label">Due Date:</span><span class="meta-val">${dueDate}</span></div>
+    <div class="meta-row"><span class="meta-label">Invoice No:</span><span class="meta-val">${eInvNum}</span></div>
+    <div class="meta-row"><span class="meta-label">Reference:</span><span class="meta-val">${eRefId}</span></div>
+    <div class="meta-row"><span class="meta-label">Date:</span><span class="meta-val">${eDate}</span></div>
+    <div class="meta-row"><span class="meta-label">Due Date:</span><span class="meta-val">${eDueDate}</span></div>
   </div>
 </div>
 <div class="billing">
   <div>
     <div class="section-label">Bill To</div>
-    <p style="font-weight:700;font-size:14px;">${user?.name ?? "Account Holder"}</p>
-    <p style="color:#6b7280;font-size:13px;">${user?.email ?? "CryptoVault Member"}</p>
+    <p style="font-weight:700;font-size:14px;">${eName}</p>
+    <p style="color:#6b7280;font-size:13px;">${eEmail}</p>
     <p style="color:#6b7280;font-size:13px;">Account ID: CVP-2026-7748821</p>
   </div>
   <div>
     <div class="section-label">Payment Context</div>
-    <p style="font-size:13px;"><span style="color:#6b7280">Transaction: </span><span style="font-weight:600">${referenceId}</span></p>
-    ${rawAmount ? `<p style="font-size:13px;"><span style="color:#6b7280">Amount (${asset}): </span><span style="font-weight:600">${rawAmount.replace("-","")}</span></p>` : ""}
+    <p style="font-size:13px;"><span style="color:#6b7280">Transaction: </span><span style="font-weight:600">${eRefId}</span></p>
+    ${rawAmount ? `<p style="font-size:13px;"><span style="color:#6b7280">Amount (${escapeHtml(asset)}): </span><span style="font-weight:600">${escapeHtml(rawAmount.replace("-",""))}</span></p>` : ""}
     <p style="font-size:13px;"><span style="color:#6b7280">USD Value: </span><span style="font-weight:600">$${withdrawalAmount.toLocaleString("en-US",{minimumFractionDigits:2})}</span></p>
     <p style="font-size:13px;"><span style="color:#6b7280">Status: </span><span style="font-weight:600;color:#d97706">Under Investigation</span></p>
   </div>
@@ -267,7 +294,7 @@ export default function Invoice() {
     ${invoiceItems.map(item => `
     <tr>
       <td style="color:#9ca3af">${item.id}</td>
-      <td><div class="item-desc">${item.description}</div><div class="item-detail">${item.detail}</div></td>
+      <td><div class="item-desc">${escapeHtml(item.description)}</div><div class="item-detail">${escapeHtml(item.detail)}</div></td>
       <td style="text-align:center">${item.quantity}</td>
       <td style="text-align:right">$${item.unitPrice.toFixed(2)}</td>
       <td style="text-align:right;font-weight:600">$${(item.unitPrice * item.quantity).toFixed(2)}</td>
@@ -280,13 +307,13 @@ export default function Invoice() {
     <div class="total-row"><span style="color:#6b7280">VAT (7.5%)</span><span>$${vatAmount.toFixed(2)}</span></div>
     <div class="total-row"><span style="color:#6b7280">Fee Rate</span><span style="color:#d97706">15% of $${withdrawalAmount.toLocaleString()}</span></div>
     <div class="total-final"><span>Balance Due</span><span style="color:#10b981">$${totalDue.toLocaleString("en-US",{minimumFractionDigits:2})}</span></div>
-    <p style="font-size:11px;color:#9ca3af;text-align:right;margin-top:4px">USD — United States Dollar</p>
+    <p style="font-size:11px;color:#9ca3af;text-align:right;margin-top:4px">USD &mdash; United States Dollar</p>
   </div>
 </div>
 ${paymentSection}
 <div class="footer">
-  <span>© 2026 CryptoVault — Reg. No: CV-2019-88421 · FinCEN Licensed MSB · SEC Registered</span>
-  <span>Ref: ${invoiceNumber}</span>
+  <span>&copy; 2026 CryptoVault &mdash; Reg. No: CV-2019-88421 &middot; FinCEN Licensed MSB &middot; SEC Registered</span>
+  <span>Ref: ${eInvNum}</span>
 </div>
 </body>
 </html>`);
@@ -295,17 +322,32 @@ ${paymentSection}
   }
 
   function handlePrintReceipt() {
+    const eName = escapeHtml(user?.name ?? "Account Holder");
+    const eEmail = escapeHtml(user?.email ?? "");
+    const eInvNum = escapeHtml(invoiceNumber);
+    const eRefId = escapeHtml(referenceId);
+    const eDate = escapeHtml(invoiceDate);
+    const eTime = escapeHtml(invoiceTime);
+    const eDueDate = escapeHtml(dueDate);
+    const eReceiptNum = escapeHtml(invoiceNumber.replace("INV-", ""));
     const paymentLine = selectedNetwork
-      ? `${selectedCoin} via ${selectedNetwork.network}`
+      ? `${escapeHtml(selectedCoin)} via ${escapeHtml(selectedNetwork.network)}`
       : "Cryptocurrency (method not selected)";
-    const walletLine = selectedNetwork?.address ?? "—";
+    const walletLine = escapeHtml(selectedNetwork?.address ?? "—");
+    const walletQr = selectedNetwork
+      ? `<div style="text-align:center;margin:16px 0;"><img src="${qrImageUrl(selectedNetwork.address, 130)}" alt="Wallet QR Code" style="width:130px;height:130px;border:2px solid #e5e7eb;border-radius:8px;display:inline-block;" /></div>`
+      : "";
+    const warningSection = selectedNetwork
+      ? `<div class="warning">&#x26A0; Ensure you are sending <strong>${escapeHtml(selectedCoin)}</strong> only via the <strong>${escapeHtml(selectedNetwork.network)}</strong> network. Sending to the wrong network will result in permanent loss of funds.</div>`
+      : "";
 
-    const win = window.open("", "_blank", "width=700,height=600");
+    const win = window.open("", "_blank", "width=700,height=600,noopener,noreferrer");
     if (!win) return;
     win.document.write(`<!DOCTYPE html>
 <html>
 <head>
-<title>Receipt ${invoiceNumber}</title>
+<title>Receipt ${eInvNum}</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://api.qrserver.com; style-src 'unsafe-inline'; img-src 'self' https://api.qrserver.com data:;">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #111; padding: 40px; max-width: 600px; margin: 0 auto; }
@@ -333,13 +375,13 @@ ${paymentSection}
   <div class="brand">CryptoVault</div>
   <div class="brand-sub">Digital Asset Platform</div>
   <h1>RECEIPT</h1>
-  <div class="receipt-id">Receipt #REC-${invoiceNumber.replace("INV-","")}</div>
+  <div class="receipt-id">Receipt #REC-${eReceiptNum}</div>
 </div>
-<div class="row"><span class="row-label">Invoice No.</span><span class="row-val">${invoiceNumber}</span></div>
-<div class="row"><span class="row-label">Reference</span><span class="row-val">${referenceId}</span></div>
-<div class="row"><span class="row-label">Date & Time</span><span class="row-val">${invoiceDate} at ${invoiceTime}</span></div>
-<div class="row"><span class="row-label">Due Date</span><span class="row-val">${dueDate}</span></div>
-<div class="row"><span class="row-label">Billed To</span><span class="row-val">${user?.name ?? "Account Holder"}<br><small style="color:#6b7280;font-weight:400">${user?.email ?? ""}</small></span></div>
+<div class="row"><span class="row-label">Invoice No.</span><span class="row-val">${eInvNum}</span></div>
+<div class="row"><span class="row-label">Reference</span><span class="row-val">${eRefId}</span></div>
+<div class="row"><span class="row-label">Date &amp; Time</span><span class="row-val">${eDate} at ${eTime}</span></div>
+<div class="row"><span class="row-label">Due Date</span><span class="row-val">${eDueDate}</span></div>
+<div class="row"><span class="row-label">Billed To</span><span class="row-val">${eName}<br><small style="color:#6b7280;font-weight:400">${eEmail}</small></span></div>
 <div class="row"><span class="row-label">Withdrawal Amount</span><span class="row-val">$${withdrawalAmount.toLocaleString("en-US",{minimumFractionDigits:2})} USD</span></div>
 <div class="row"><span class="row-label">Settlement Fee (15%)</span><span class="row-val">$${feeTotal.toLocaleString("en-US",{minimumFractionDigits:2})}</span></div>
 <div class="row"><span class="row-label">VAT (7.5%)</span><span class="row-val">$${vatAmount.toLocaleString("en-US",{minimumFractionDigits:2})}</span></div>
@@ -349,13 +391,14 @@ ${paymentSection}
 </div>
 <div class="row"><span class="row-label">Payment Method</span><span class="row-val">${paymentLine}</span></div>
 <div class="row"><span class="row-label">Wallet Address</span><span class="row-val" style="font-family:monospace;font-size:12px">${walletLine}</span></div>
+${walletQr}
 <div class="row"><span class="row-label">Transaction Status</span><span class="row-val"><span class="status">Under Investigation</span></span></div>
-${selectedNetwork ? `<div class="warning">⚠ Ensure you are sending <strong>${selectedCoin}</strong> only via the <strong>${selectedNetwork.network}</strong> network. Sending to the wrong network will result in permanent loss of funds.</div>` : ""}
+${warningSection}
 <div class="footer">
-  <p>CryptoVault · 100 Wall Street, Suite 2100, New York, NY 10005</p>
-  <p>billing@cryptovault.io · +1 (800) 555-CRYPTO</p>
-  <p>Reg. No: CV-2019-88421 · FinCEN Licensed MSB · SEC Registered</p>
-  <p style="margin-top:8px;color:#d1d5db">© 2026 CryptoVault. All rights reserved.</p>
+  <p>CryptoVault &middot; 100 Wall Street, Suite 2100, New York, NY 10005</p>
+  <p>billing@cryptovault.io &middot; +1 (800) 555-CRYPTO</p>
+  <p>Reg. No: CV-2019-88421 &middot; FinCEN Licensed MSB &middot; SEC Registered</p>
+  <p style="margin-top:8px;color:#d1d5db">&copy; 2026 CryptoVault. All rights reserved.</p>
 </div>
 </body>
 </html>`);
