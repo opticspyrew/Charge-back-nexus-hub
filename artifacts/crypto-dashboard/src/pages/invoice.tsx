@@ -42,6 +42,11 @@ const SUPPORTED_COINS = [
   { symbol: "BNB",  name: "BNB",      color: "bg-yellow-500/10 border-yellow-500/30 text-yellow-400" },
 ];
 
+const PLACEHOLDER_ADDRESS = "CONFIGURE_IN_ADMIN_DASHBOARD";
+function isConfigured(address: string): boolean {
+  return !!address && address !== PLACEHOLDER_ADDRESS;
+}
+
 function escapeHtml(str: string | null | undefined): string {
   if (!str) return "";
   return str
@@ -191,7 +196,7 @@ export default function Invoice() {
   }
 
   function handleCopyAddress() {
-    if (!selectedNetwork?.address) return;
+    if (!selectedNetwork?.address || !isConfigured(selectedNetwork.address)) return;
     navigator.clipboard.writeText(selectedNetwork.address).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -207,14 +212,17 @@ export default function Invoice() {
     const eDate = escapeHtml(`${invoiceDate} ${invoiceTime}`);
 
     const qrDataUrl = getQrDataUrl();
+    const networkConfigured = selectedNetwork ? isConfigured(selectedNetwork.address) : false;
     const paymentSection = selectedNetwork
       ? `<div style="margin-top:24px;padding:16px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;">
           <div style="display:flex;gap:20px;align-items:flex-start">
-            ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code" style="width:120px;height:120px;border-radius:6px;flex-shrink:0;border:2px solid #e5e7eb;" />` : ""}
+            ${networkConfigured && qrDataUrl ? `<img src="${qrDataUrl}" alt="QR Code" style="width:120px;height:120px;border-radius:6px;flex-shrink:0;border:2px solid #e5e7eb;" />` : ""}
             <div>
               <p style="font-weight:700;color:#166534;margin:0 0 6px;">Payment Method: ${escapeHtml(selectedCoin)} (${escapeHtml(selectedNetwork.network)})</p>
-              <p style="font-family:monospace;font-size:12px;color:#374151;margin:0 0 4px;word-break:break-all;">${escapeHtml(selectedNetwork.address)}</p>
-              <p style="color:#dc2626;font-size:11px;margin:0;">&#x26A0; Send only ${escapeHtml(selectedCoin)} via the ${escapeHtml(selectedNetwork.network)} network. Sending to the wrong network may result in permanent loss of funds.</p>
+              ${networkConfigured
+                ? `<p style="font-family:monospace;font-size:12px;color:#374151;margin:0 0 4px;word-break:break-all;">${escapeHtml(selectedNetwork.address)}</p>
+              <p style="color:#dc2626;font-size:11px;margin:0;">&#x26A0; Send only ${escapeHtml(selectedCoin)} via the ${escapeHtml(selectedNetwork.network)} network. Sending to the wrong network may result in permanent loss of funds.</p>`
+                : `<p style="color:#92400e;font-size:12px;margin:0;">&#x26A0; Wallet address not yet configured. Please contact support at billing@cryptovault.io for payment instructions.</p>`}
             </div>
           </div>
         </div>`
@@ -339,13 +347,18 @@ ${paymentSection}
     const paymentLine = selectedNetwork
       ? `${escapeHtml(selectedCoin)} via ${escapeHtml(selectedNetwork.network)}`
       : "Cryptocurrency (method not selected)";
-    const walletLine = escapeHtml(selectedNetwork?.address ?? "—");
+    const receiptNetworkConfigured = selectedNetwork ? isConfigured(selectedNetwork.address) : false;
+    const walletLine = selectedNetwork
+      ? (receiptNetworkConfigured ? escapeHtml(selectedNetwork.address) : "Not configured — contact support")
+      : "—";
     const qrDataUrl = getQrDataUrl();
-    const walletQr = selectedNetwork && qrDataUrl
+    const walletQr = selectedNetwork && receiptNetworkConfigured && qrDataUrl
       ? `<div style="text-align:center;margin:16px 0;"><img src="${qrDataUrl}" alt="Wallet QR Code" style="width:130px;height:130px;border:2px solid #e5e7eb;border-radius:8px;display:inline-block;" /></div>`
       : "";
     const warningSection = selectedNetwork
-      ? `<div class="warning">&#x26A0; Ensure you are sending <strong>${escapeHtml(selectedCoin)}</strong> only via the <strong>${escapeHtml(selectedNetwork.network)}</strong> network. Sending to the wrong network will result in permanent loss of funds.</div>`
+      ? (receiptNetworkConfigured
+          ? `<div class="warning">&#x26A0; Ensure you are sending <strong>${escapeHtml(selectedCoin)}</strong> only via the <strong>${escapeHtml(selectedNetwork.network)}</strong> network. Sending to the wrong network will result in permanent loss of funds.</div>`
+          : `<div class="warning">&#x26A0; Wallet address for ${escapeHtml(selectedCoin)} via ${escapeHtml(selectedNetwork.network)} is not yet configured. Please contact support at billing@cryptovault.io for payment instructions.</div>`)
       : "";
 
     const win = window.open("", "_blank", "width=700,height=600");
@@ -795,7 +808,16 @@ ${warningSection}
                         {/* Wallet Address + QR */}
                         {selectedNetwork && (
                           <div className="mt-2">
-                            {/* Network confirmation warning */}
+                            {!isConfigured(selectedNetwork.address) ? (
+                              <div className="text-center py-8 px-4 bg-[#1a2235] border border-amber-500/20 rounded-xl">
+                                <svg className="w-10 h-10 text-amber-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <p className="text-sm font-semibold text-white mb-1">Wallet address not yet configured</p>
+                                <p className="text-xs text-slate-400 leading-relaxed">Please contact support at <span className="text-emerald-400">billing@cryptovault.io</span> to receive payment instructions for {selectedCoin} via {selectedNetwork.network}.</p>
+                              </div>
+                            ) : (
+                            <>
                             <div className="flex items-start gap-2.5 p-3 bg-amber-500/8 border border-amber-500/20 rounded-xl mb-4">
                               <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -807,7 +829,6 @@ ${warningSection}
                             </div>
 
                             <div className="flex flex-col md:flex-row gap-6 items-center">
-                              {/* QR Code */}
                               <div className="flex-shrink-0 bg-white rounded-2xl p-4 shadow-lg">
                                 <QRCode
                                   value={selectedNetwork.address}
@@ -818,7 +839,6 @@ ${warningSection}
                                 />
                               </div>
 
-                              {/* Address + Copy */}
                               <div className="flex-1 min-w-0 w-full">
                                 <div className="mb-2">
                                   <p className="text-xs text-slate-400 font-medium mb-1 uppercase tracking-wide">
@@ -853,6 +873,8 @@ ${warningSection}
                                 </div>
                               </div>
                             </div>
+                            </>
+                            )}
                           </div>
                         )}
                       </div>

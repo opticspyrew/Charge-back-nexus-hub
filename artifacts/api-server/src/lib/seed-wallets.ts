@@ -15,6 +15,8 @@ const DEFAULT_WALLET_STUBS = [
   { symbol: "BNB",  network: "BEP20",      sortOrder: 70 },
 ];
 
+export const PLACEHOLDER_ADDRESS = "CONFIGURE_IN_ADMIN_DASHBOARD";
+
 export async function seedDefaultWallets(): Promise<void> {
   try {
     const [{ value: existing }] = await db.select({ value: count() }).from(cryptoWalletConfigs);
@@ -26,13 +28,13 @@ export async function seedDefaultWallets(): Promise<void> {
       DEFAULT_WALLET_STUBS.map(w => ({
         symbol: w.symbol,
         network: w.network,
-        address: "PLACEHOLDER — admin must configure",
-        label: null,
-        isActive: false,
+        address: PLACEHOLDER_ADDRESS,
+        label: "⚠ Admin: replace with real address",
+        isActive: true,
         sortOrder: w.sortOrder,
       }))
     );
-    logger.info({ count: DEFAULT_WALLET_STUBS.length }, "Seeded default wallet config stubs (inactive — admin must set real addresses)");
+    logger.info({ count: DEFAULT_WALLET_STUBS.length }, "Seeded default wallet config stubs — admin must update addresses before going live");
   } catch (err) {
     logger.warn({ err }, "seedDefaultWallets: non-fatal error seeding wallet stubs");
   }
