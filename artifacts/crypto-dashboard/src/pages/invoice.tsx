@@ -686,7 +686,7 @@ ${warningSection}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white">Cryptocurrency</p>
-                    <p className="text-xs text-slate-500">BTC, ETH, USDT, BNB, SOL</p>
+                    <p className="text-xs text-slate-500">BTC, ETH, USDT, USDC, SOL, XRP, BNB</p>
                   </div>
                   <svg className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${cryptoPanelOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
