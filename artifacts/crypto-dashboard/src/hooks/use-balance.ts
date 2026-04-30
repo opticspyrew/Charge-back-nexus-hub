@@ -19,6 +19,9 @@ function getStoredToken(): string | null {
   }
 }
 
+// Kept for syncBalanceFromServer only — reading the server balance is fine.
+// Writing back is intentionally removed to prevent client-side balance forgery.
+
 function loadBtc(): number {
   if (typeof window === "undefined") return INITIAL_BTC;
   try {
@@ -42,12 +45,6 @@ function saveBtc(value: number) {
   }
 }
 
-function syncToServer(btc: number) {
-  const token = getStoredToken();
-  if (!token) return;
-  authApi.setBalance(token, btc).catch(() => {});
-}
-
 export async function syncBalanceFromServer(): Promise<void> {
   const token = getStoredToken();
   if (!token) return;
@@ -66,20 +63,17 @@ export function debitUsd(usdAmount: number): { btcDebited: number; remainingBtc:
   const btcToDebit = usdAmount / BTC_PRICE_USD;
   const next = Math.max(0, Math.round((current - btcToDebit) * 100000000) / 100000000);
   saveBtc(next);
-  syncToServer(next);
   return { btcDebited: btcToDebit, remainingBtc: next };
 }
 
 export function debitAll(): { btcDebited: number; usdDebited: number; remainingBtc: number } {
   const current = loadBtc();
   saveBtc(0);
-  syncToServer(0);
   return { btcDebited: current, usdDebited: current * BTC_PRICE_USD, remainingBtc: 0 };
 }
 
 export function resetBalance() {
   saveBtc(INITIAL_BTC);
-  syncToServer(INITIAL_BTC);
 }
 
 export function useBalance() {

@@ -121,7 +121,7 @@ export interface AuthSessionRecord {
 }
 
 export const authApi = {
-  signup: (data: { name: string; email: string; password: string; initialBalanceUsd?: number }) =>
+  signup: (data: { name: string; email: string; password: string }) =>
     post<AuthSessionResponse>(`${AUTH_BASE}/signup`, data),
 
   login: (data: { email: string; password: string }) =>
@@ -189,14 +189,6 @@ export const authApi = {
     if (!res.ok) return null;
     const data = await res.json() as { balanceBtc: number };
     return data.balanceBtc;
-  },
-
-  setBalance: async (token: string, balanceBtc: number): Promise<void> => {
-    await fetch(`${AUTH_BASE}/balance`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ balanceBtc }),
-    });
   },
 
   validateResetToken: async (

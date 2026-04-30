@@ -9,8 +9,8 @@ import {
 } from "../lib/passwords";
 import {
   createSession,
+  deleteAllUserSessions,
   deleteSessionByToken,
-  ensurePrimaryUser,
   extractBearerToken,
   findSessionWithUser,
   findUserByEmail,
@@ -32,6 +32,11 @@ import {
   checkForgotPasswordThrottle,
   getClientIp,
 } from "../lib/forgot-password-throttle";
+import {
+  checkLoginThrottle,
+  clearLoginFailures,
+  recordLoginFailure,
+} from "../lib/login-throttle";
 
 const SUPPORT_EMAIL = "Opticspycrew@gmail.com";
 
@@ -211,8 +216,8 @@ function validatePassword(password: string): { ok: boolean; error?: string } {
 
 router.post("/signup", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password, initialBalanceUsd } = req.body as {
-      name?: string; email?: string; password?: string; initialBalanceUsd?: number;
+    const { name, email, password } = req.body as {
+      name?: string; email?: string; password?: string;
     };
     if (!name || !email || !password) {
       res.status(400).json({ error: "Name, email and password are required." });
@@ -243,10 +248,7 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
     const hashed = await hashPassword(password);
     const BTC_PRICE = 27000;
     const DEFAULT_BALANCE_BTC = 706543 / BTC_PRICE;
-    const balanceBtc =
-      typeof initialBalanceUsd === "number" && Number.isFinite(initialBalanceUsd) && initialBalanceUsd > 0
-        ? initialBalanceUsd / BTC_PRICE
-        : DEFAULT_BALANCE_BTC;
+    const balanceBtc = DEFAULT_BALANCE_BTC;
 
     const [user] = await db.insert(users).values({
       email: normalizedEmail,
@@ -284,15 +286,31 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({ error: "Email and password are required." });
       return;
     }
-    await ensurePrimaryUser();
 
     // Normalize explicitly at the call site so the login path is self-contained
     // and immune to future changes in how findUserByEmail handles its argument.
     const normalizedEmail = normalizeEmail(email);
+    const ip = getClientIp(req);
+
+    // Server-side rate limiting: check before any DB work to stop brute-force
+    // attempts that bypass the client-side throttle entirely.
+    const throttle = checkLoginThrottle(normalizedEmail, ip);
+    if (!throttle.allowed) {
+      logger.warn(
+        { email: normalizedEmail, ip, reason: throttle.reason, retryAfterMs: throttle.retryAfterMs },
+        "Login attempt rate-limited",
+      );
+      res.status(429).json({
+        error: "Too many login attempts. Please try again later.",
+        retryAfterMs: throttle.retryAfterMs,
+      });
+      return;
+    }
 
     // --- Diagnostic: user lookup ---
     const user = await findUserByEmail(normalizedEmail);
     if (!user) {
+      recordLoginFailure(normalizedEmail);
       logger.warn({ email: normalizedEmail }, "Login failed: no account found for email");
       res.status(401).json({ error: "Invalid email or password." });
       return;
@@ -305,6 +323,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       passwordIterations: user.passwordIterations,
     });
     if (!ok) {
+      recordLoginFailure(normalizedEmail);
       logger.warn(
         { userId: user.id, email: normalizedEmail, passwordIterations: user.passwordIterations },
         "Login failed: password verification rejected",
@@ -312,6 +331,10 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       res.status(401).json({ error: "Invalid email or password." });
       return;
     }
+
+    // Successful login: clear the failure counter so a legitimate user who
+    // previously had some failures is not penalized further.
+    clearLoginFailures(normalizedEmail);
 
     const metadata = captureSessionMetadata(req);
 
@@ -376,7 +399,6 @@ router.post("/exists", async (req: Request, res: Response): Promise<void> => {
       res.json({ exists: false });
       return;
     }
-    await ensurePrimaryUser();
     const user = await findUserByEmail(normalized);
     res.json({ exists: !!user });
   } catch (err) {
@@ -430,7 +452,15 @@ router.post("/change-password", async (req: Request, res: Response): Promise<voi
         passwordIterations: hashed.passwordIterations,
       })
       .where(eq(users.id, sessionUser.id));
-    logger.info({ userId: sessionUser.id }, "User changed password");
+
+    // Revoke all other sessions for this user. The caller's own session
+    // remains active so they don't get immediately signed out.
+    const currentSession = await findSessionWithUser(token);
+    if (currentSession) {
+      await deleteAllUserSessions(sessionUser.id, currentSession.session.id);
+    }
+
+    logger.info({ userId: sessionUser.id }, "User changed password; other sessions revoked");
     void notifyPasswordChanged(
       { name: sessionUser.name, email: sessionUser.email },
       "change",
@@ -488,7 +518,6 @@ router.post("/forgot-password", async (req: Request, res: Response): Promise<voi
       "Forgot-password request accepted by throttle",
     );
 
-    await ensurePrimaryUser();
     const user = await findUserByEmail(normalized);
     if (!user) {
       logger.info({ email: normalized }, "Password reset requested for unknown account");
@@ -650,9 +679,14 @@ router.post("/reset-password", async (req: Request, res: Response): Promise<void
       })
       .where(eq(users.id, row.user.id));
 
+    // Revoke ALL existing sessions before issuing a fresh one. If an
+    // attacker had a stolen token, it stops working the moment the victim
+    // resets their password.
+    await deleteAllUserSessions(row.user.id);
+
     // Sign the user in immediately so they don't have to re-enter their new password.
     const session = await createSession(row.user.id, captureSessionMetadata(req));
-    logger.info({ userId: row.user.id }, "User reset password via email link");
+    logger.info({ userId: row.user.id }, "User reset password via email link; all prior sessions revoked");
     void notifyPasswordChanged(
       { name: row.user.name, email: row.user.email },
       "reset",
@@ -828,23 +862,6 @@ router.get("/balance", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-router.patch("/balance", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const token = extractBearerToken(req);
-    if (!token) { res.status(401).json({ error: "Unauthorized." }); return; }
-    const sessionUser = await findUserBySessionToken(token);
-    if (!sessionUser) { res.status(401).json({ error: "Session expired." }); return; }
-    const { balanceBtc } = req.body as { balanceBtc: number };
-    if (typeof balanceBtc !== "number" || !Number.isFinite(balanceBtc) || balanceBtc < 0) {
-      res.status(400).json({ error: "Invalid balance." }); return;
-    }
-    await db.update(users).set({ balanceBtc }).where(eq(users.id, sessionUser.id));
-    res.json({ ok: true, balanceBtc });
-  } catch (err) {
-    logger.error({ err }, "Failed to update balance");
-    res.status(500).json({ error: "Failed to update balance." });
-  }
-});
 
 router.get("/balance-directive", async (req: Request, res: Response): Promise<void> => {
   try {
