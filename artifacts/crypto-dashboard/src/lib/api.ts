@@ -76,11 +76,11 @@ export const publicApi = {
     return res.json();
   },
 
-  getWalletConfigs: async (): Promise<WalletConfig[]> => {
+  getWalletConfigs: async (): Promise<{ configs: WalletConfig[]; coinOrder: string[] }> => {
     const res = await fetch(`${PUBLIC_BASE}/wallet-configs`);
-    if (!res.ok) return [];
-    const data = (await res.json()) as { configs: WalletConfig[] };
-    return data.configs;
+    if (!res.ok) return { configs: [], coinOrder: [] };
+    const data = (await res.json()) as { configs: WalletConfig[]; coinOrder?: string[] };
+    return { configs: data.configs, coinOrder: data.coinOrder ?? [] };
   },
 };
 

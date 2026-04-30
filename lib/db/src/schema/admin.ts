@@ -48,6 +48,16 @@ export const cryptoWalletConfigs = pgTable("crypto_wallet_configs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const coinSectionOrders = pgTable("coin_section_orders", {
+  id: serial("id").primaryKey(),
+  symbol: text("symbol").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  unique("coin_section_orders_symbol_key").on(t.symbol),
+]);
+
 export type AdminClient = typeof adminClients.$inferSelect;
 export type InsertAdminClient = typeof adminClients.$inferInsert;
 export type AdminServiceRequest = typeof adminServiceRequests.$inferSelect;
@@ -55,3 +65,5 @@ export type InsertAdminServiceRequest = typeof adminServiceRequests.$inferInsert
 export type AdminActivityLog = typeof adminActivityLog.$inferSelect;
 export type CryptoWalletConfig = typeof cryptoWalletConfigs.$inferSelect;
 export type InsertCryptoWalletConfig = typeof cryptoWalletConfigs.$inferInsert;
+export type CoinSectionOrder = typeof coinSectionOrders.$inferSelect;
+export type InsertCoinSectionOrder = typeof coinSectionOrders.$inferInsert;
