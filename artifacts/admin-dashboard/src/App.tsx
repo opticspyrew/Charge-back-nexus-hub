@@ -355,7 +355,11 @@ function RequestsPage() {
       .then(([r, c]) => { setRequests(r.requests); setClients(c.clients); })
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    const id = window.setInterval(load, 10_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setMsg("");
