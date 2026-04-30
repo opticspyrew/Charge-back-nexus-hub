@@ -3,6 +3,20 @@ import { logger } from "./logger";
 
 const ADMIN_EMAIL = "Opticspycrew@gmail.com";
 
+// Escape characters that have special meaning in HTML so attacker-controlled
+// fields (names, emails, free-form notes, etc.) submitted through public
+// endpoints cannot inject markup, fake links, or tracking pixels into the
+// admin notification emails we send.
+function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function createTransporter() {
   const user = process.env.SMTP_USER;
   const rawPass = process.env.SMTP_PASS;
@@ -253,7 +267,14 @@ export function newClientEmail(client: {
   company?: string | null;
   createdAt: Date;
 }): { subject: string; html: string } {
+  // The subject is plain text (header value), but the name still flows into
+  // the HTML body below, so we escape every attacker-controlled field there.
   const subject = `[Action Required] New Client Registration — ${client.name}`;
+  const safeName = escapeHtml(client.name);
+  const safeEmail = escapeHtml(client.email);
+  const safePhone = escapeHtml(client.phone);
+  const safeCompany = escapeHtml(client.company);
+  const safeCreatedAt = escapeHtml(client.createdAt.toUTCString());
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
       <div style="background: #1e3a5f; padding: 20px 24px; border-radius: 8px 8px 0 0;">
@@ -262,11 +283,11 @@ export function newClientEmail(client: {
       </div>
       <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
         <table style="width: 100%; border-collapse: collapse;">
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 130px;">Name</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${client.name}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${client.email}</td></tr>
-          ${client.phone ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Phone</td><td style="padding: 8px 0; color: #111827;">${client.phone}</td></tr>` : ""}
-          ${client.company ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Company</td><td style="padding: 8px 0; color: #111827;">${client.company}</td></tr>` : ""}
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Registered</td><td style="padding: 8px 0; color: #111827;">${client.createdAt.toUTCString()}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 130px;">Name</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${safeName}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${safeEmail}</td></tr>
+          ${client.phone ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Phone</td><td style="padding: 8px 0; color: #111827;">${safePhone}</td></tr>` : ""}
+          ${client.company ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Company</td><td style="padding: 8px 0; color: #111827;">${safeCompany}</td></tr>` : ""}
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Registered</td><td style="padding: 8px 0; color: #111827;">${safeCreatedAt}</td></tr>
         </table>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
         <p style="font-size: 14px; color: #374151; margin: 0 0 12px;">Review this new client registration in the admin dashboard and update their status to <strong>Approved</strong> or <strong>Denied</strong>.</p>
@@ -285,20 +306,30 @@ export function newServiceRequestEmail(params: {
   const typeLabel = request.type.charAt(0).toUpperCase() + request.type.slice(1);
   const subject = `[Action Required] ${typeLabel} Request — ${client.name}`;
   const amountStr = request.amount ? `${request.currency} ${Number(request.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "—";
+  // Every value below originates from a public, unauthenticated submission
+  // form, so escape before interpolating into the HTML body to prevent the
+  // attacker from injecting fake links, images, or markup into the trusted
+  // admin notification.
+  const safeTypeLabel = escapeHtml(typeLabel);
+  const safeClientName = escapeHtml(client.name);
+  const safeClientEmail = escapeHtml(client.email);
+  const safeAmount = escapeHtml(amountStr);
+  const safeNotes = escapeHtml(request.notes);
+  const safeCreatedAt = escapeHtml(request.createdAt.toUTCString());
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
       <div style="background: #92400e; padding: 20px 24px; border-radius: 8px 8px 0 0;">
-        <h1 style="color: white; margin: 0; font-size: 20px;">${typeLabel} Request</h1>
+        <h1 style="color: white; margin: 0; font-size: 20px;">${safeTypeLabel} Request</h1>
         <p style="color: #fcd34d; margin: 4px 0 0; font-size: 13px;">Approval required</p>
       </div>
       <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
         <table style="width: 100%; border-collapse: collapse;">
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 130px;">Client</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${client.name}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px 0; color: #111827;">${client.email}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Request Type</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${typeLabel}</td></tr>
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Amount</td><td style="padding: 8px 0; font-weight: 700; color: #111827; font-size: 16px;">${amountStr}</td></tr>
-          ${request.notes ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Notes</td><td style="padding: 8px 0; color: #111827;">${request.notes}</td></tr>` : ""}
-          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Submitted</td><td style="padding: 8px 0; color: #111827;">${request.createdAt.toUTCString()}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 130px;">Client</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${safeClientName}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Email</td><td style="padding: 8px 0; color: #111827;">${safeClientEmail}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Request Type</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${safeTypeLabel}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Amount</td><td style="padding: 8px 0; font-weight: 700; color: #111827; font-size: 16px;">${safeAmount}</td></tr>
+          ${request.notes ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Notes</td><td style="padding: 8px 0; color: #111827;">${safeNotes}</td></tr>` : ""}
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Submitted</td><td style="padding: 8px 0; color: #111827;">${safeCreatedAt}</td></tr>
         </table>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
         <p style="font-size: 14px; color: #374151; margin: 0 0 12px;">Log in to the admin dashboard to <strong>Approve</strong> or <strong>Deny</strong> this request.</p>

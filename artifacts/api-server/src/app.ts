@@ -13,6 +13,20 @@ const app: Express = express();
 // forgot-password throttle relies on to get a non-spoofable client IP.
 app.set("trust proxy", 1);
 
+// Paths whose final segment is a per-row capability token (presented in the
+// URL path) MUST NOT be logged verbatim, because every entry in the access
+// log would otherwise leak the token to anyone with log read access (proxy
+// logs, Replit deployment logs, log aggregators, etc.). The pino serializer
+// below replaces the token segment with `:token` before it ever hits the log.
+function redactCapabilityToken(rawUrl: string | undefined): string | undefined {
+  if (!rawUrl) return rawUrl;
+  const path = rawUrl.split("?")[0];
+  return path.replace(
+    /^(\/api\/public\/request-status)\/[^/]+/,
+    "$1/:token",
+  );
+}
+
 app.use(
   pinoHttp({
     logger,
@@ -27,7 +41,7 @@ app.use(
         return {
           id: req.id,
           method: req.method,
-          url: req.url?.split("?")[0],
+          url: redactCapabilityToken(req.url),
           ip: raw?.ip,
         };
       },

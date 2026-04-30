@@ -1,4 +1,5 @@
-import { pgTable, serial, text, numeric, integer, timestamp, jsonb, unique, boolean } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, serial, text, varchar, numeric, integer, timestamp, jsonb, unique, boolean } from "drizzle-orm/pg-core";
 
 export const adminClients = pgTable("admin_clients", {
   id: serial("id").primaryKey(),
@@ -23,9 +24,15 @@ export const adminServiceRequests = pgTable("admin_service_requests", {
   notes: text("notes"),
   txnId: text("txn_id"),
   status: text("status").notNull().default("pending"),
+  // Unguessable per-row token issued at submission time. Public status
+  // lookups must present this token instead of the predictable serial id,
+  // which prevents enumeration of other users' workflow state.
+  publicToken: varchar("public_token", { length: 64 }).notNull().default(sql`gen_random_uuid()`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  unique("admin_service_requests_public_token_key").on(t.publicToken),
+]);
 
 export const adminActivityLog = pgTable("admin_activity_log", {
   id: serial("id").primaryKey(),

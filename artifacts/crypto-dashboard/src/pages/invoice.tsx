@@ -152,7 +152,7 @@ export default function Invoice() {
         if (inFlight || handledRef.current) return;
         inFlight = true;
         try {
-          const status = await publicApi.getRequestStatus(request.id);
+          const status = await publicApi.getRequestStatus(request.publicToken);
           if (handledRef.current) return;
           if (status.status === "approved") {
             handledRef.current = true;

@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog, cryptoWalletConfigs, coinSectionOrders } from "@workspace/db";
 import { asc, eq, inArray } from "drizzle-orm";
@@ -6,6 +7,31 @@ import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/e
 import { logger } from "../lib/logger";
 
 const router = Router();
+
+// Per-IP rate limiter for the unauthenticated submission endpoints
+// (`/register`, `/request`, `/payment-confirmation`). Each of these routes
+// inserts rows and triggers an email to the hard-coded ADMIN_EMAIL inbox,
+// so without throttling a single attacker can flood the operational inbox,
+// exhaust SMTP quota, and bury legitimate requests in noise.
+//
+// The numbers below (10 successful writes per IP per minute) are deliberately
+// generous for real users — a person registers / submits a withdrawal a few
+// times an hour at most — while still capping abusive scripts at a tractable
+// rate. We also key by `req.ip` (which is correct because `app.ts` sets
+// `trust proxy: 1`), and we explicitly skip non-2xx responses so failed
+// attempts don't poison legitimate users' quota.
+const publicSubmissionLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 10,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skipFailedRequests: true,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+  handler: (req, res) => {
+    logger.warn({ ip: req.ip, path: req.path }, "Public submission rate limit exceeded");
+    res.status(429).json({ error: "Too many requests, please try again in a minute." });
+  },
+});
 
 const STATIC_RATES: Record<string, number> = { USD: 1, EUR: 0.92, GBP: 0.79, BTC: 1 / 27000 };
 const CACHE_TTL_MS = 60_000;
@@ -56,7 +82,7 @@ router.get("/exchange-rates", async (_req: Request, res: Response): Promise<void
   res.json({ rates, cached: false });
 });
 
-router.post("/register", async (req: Request, res: Response): Promise<void> => {
+router.post("/register", publicSubmissionLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email } = req.body as { name?: string; email?: string };
     if (!name || !email) {
@@ -65,9 +91,18 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const [existing] = await db.select().from(adminClients).where(eq(adminClients.email, normalizedEmail));
+    // Lookup only the id column. Previously this returned `db.select().from(adminClients)`
+    // and serialized the whole row to the unauthenticated caller, which leaked
+    // phone, company, status, internal admin notes, and timestamps for any
+    // existing customer email. The public endpoint never needs that data — the
+    // client only needs to know whether registration succeeded — so we limit
+    // the column projection and limit the response payload to a boolean flag.
+    const [existing] = await db
+      .select({ id: adminClients.id })
+      .from(adminClients)
+      .where(eq(adminClients.email, normalizedEmail));
     if (existing) {
-      res.json({ client: existing, alreadyExists: true, emailSent: false });
+      res.json({ alreadyExists: true, emailSent: false });
       return;
     }
 
@@ -88,7 +123,9 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
     const emailSent = await sendAdminEmail(subject, html);
 
     logger.info({ clientId: client.id, email: normalizedEmail, emailSent }, "New client registered via public endpoint");
-    res.status(201).json({ client, alreadyExists: false, emailSent });
+    // Only echo back the id of the newly-created row. Internal admin fields
+    // (status, notes, phone, company, timestamps) stay server-side.
+    res.status(201).json({ client: { id: client.id }, alreadyExists: false, emailSent });
   } catch (err) {
     logger.error({ err }, "Failed to register client via public endpoint");
     res.status(500).json({ error: "Failed to register client" });
@@ -122,7 +159,7 @@ router.get("/tx-approvals", async (req: Request, res: Response): Promise<void> =
   }
 });
 
-router.post("/request", async (req: Request, res: Response): Promise<void> => {
+router.post("/request", publicSubmissionLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, type, amount, currency, notes, txnId } = req.body as {
       name?: string; email?: string;
@@ -177,14 +214,16 @@ router.post("/request", async (req: Request, res: Response): Promise<void> => {
     const emailSent = await sendAdminEmail(subject, html);
 
     logger.info({ clientId: client.id, requestId: request.id, type, emailSent }, "Service request submitted via public endpoint");
-    res.status(201).json({ request, emailSent });
+    // Return the unguessable `publicToken` so the client can poll status
+    // without enabling enumeration of other users' requests by serial id.
+    res.status(201).json({ request: { id: request.id, publicToken: request.publicToken }, emailSent });
   } catch (err) {
     logger.error({ err }, "Failed to submit service request via public endpoint");
     res.status(500).json({ error: "Failed to submit request" });
   }
 });
 
-router.post("/payment-confirmation", async (req: Request, res: Response): Promise<void> => {
+router.post("/payment-confirmation", publicSubmissionLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, amount, currency, notes } = req.body as {
       name?: string; email?: string; amount?: string; currency?: string; notes?: string;
@@ -230,21 +269,38 @@ router.post("/payment-confirmation", async (req: Request, res: Response): Promis
     const emailSent = await sendAdminEmail(subject, html);
 
     logger.info({ clientId: client.id, requestId: request.id, emailSent }, "Payment confirmation submitted");
-    res.status(201).json({ request, emailSent });
+    // Return the unguessable `publicToken` so the invoice page can poll
+    // status without exposing the predictable serial id to attackers.
+    res.status(201).json({ request: { id: request.id, publicToken: request.publicToken }, emailSent });
   } catch (err) {
     logger.error({ err }, "Failed to submit payment confirmation");
     res.status(500).json({ error: "Failed to submit payment confirmation" });
   }
 });
 
-router.get("/request-status/:id", async (req: Request, res: Response): Promise<void> => {
+// Public status lookup is keyed by the unguessable `publicToken` issued at
+// submission time (see `/request` and `/payment-confirmation`). The previous
+// version of this route accepted the serial primary key and returned status
+// for any existing row, which let an unauthenticated attacker enumerate
+// pending/approved/denied state for every other user's request by sweeping
+// `1, 2, 3, ...`. Switching to a 36-char random token effectively requires
+// the caller to already know the token, which only the submitting client
+// receives in the response body of the matching POST.
+router.get("/request-status/:token", async (req: Request, res: Response): Promise<void> => {
   try {
-    const id = Number(String(req.params.id));
-    if (!Number.isFinite(id)) {
-      res.status(400).json({ error: "Invalid id" });
+    const token = String(req.params.token ?? "").trim();
+    // Defense-in-depth: require the path segment to look like the UUID format
+    // we issue (`gen_random_uuid()`), so callers cannot probe the endpoint
+    // with arbitrary short strings to learn anything beyond a generic 404.
+    const isValidToken = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(token);
+    if (!isValidToken) {
+      res.status(404).json({ error: "Request not found" });
       return;
     }
-    const [request] = await db.select().from(adminServiceRequests).where(eq(adminServiceRequests.id, id));
+    const [request] = await db
+      .select({ id: adminServiceRequests.id, status: adminServiceRequests.status, type: adminServiceRequests.type })
+      .from(adminServiceRequests)
+      .where(eq(adminServiceRequests.publicToken, token));
     if (!request) {
       res.status(404).json({ error: "Request not found" });
       return;
