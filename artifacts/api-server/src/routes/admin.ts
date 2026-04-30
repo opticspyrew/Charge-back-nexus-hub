@@ -432,6 +432,12 @@ router.put("/coin-section-orders", requireAdmin, async (req: Request, res: Respo
       .orderBy(asc(coinSectionOrders.sortOrder), asc(coinSectionOrders.symbol));
     res.json({ orders: refreshed });
   } catch (err) {
+    const code = (err as { code?: string } | null)?.code;
+    if (code === "42P01") {
+      logger.error({ err }, "coin_section_orders table missing — run db push to create it");
+      res.status(503).json({ error: "Coin section ordering is not yet available. Run database migration (pnpm --filter db push)." });
+      return;
+    }
     logger.error({ err }, "Failed to update coin section orders");
     res.status(500).json({ error: "Failed to update coin section orders" });
   }

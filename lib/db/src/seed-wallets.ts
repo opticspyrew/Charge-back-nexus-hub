@@ -1,5 +1,5 @@
 import { db, pool } from "./index";
-import { cryptoWalletConfigs } from "./schema";
+import { cryptoWalletConfigs, coinSectionOrders } from "./schema";
 import { count } from "drizzle-orm";
 
 const PLACEHOLDER_ADDRESS = "CONFIGURE_IN_ADMIN_DASHBOARD";
@@ -16,24 +16,35 @@ const DEFAULT_WALLET_STUBS = [
   { symbol: "BNB",  network: "BEP20",      sortOrder: 70 },
 ];
 
+const DEFAULT_COIN_SECTION_ORDER = ["BTC", "USDT", "USDC", "ETH", "SOL", "XRP", "BNB"];
+
 async function seedWallets() {
   const [{ value: existing }] = await db.select({ value: count() }).from(cryptoWalletConfigs);
   if (Number(existing) > 0) {
     console.log(`[seed-wallets] ${existing} rows already present — skipping insert.`);
-    return;
+  } else {
+    await db.insert(cryptoWalletConfigs).values(
+      DEFAULT_WALLET_STUBS.map(w => ({
+        symbol: w.symbol,
+        network: w.network,
+        address: PLACEHOLDER_ADDRESS,
+        label: "⚠ Admin: replace with real address",
+        isActive: true,
+        sortOrder: w.sortOrder,
+      }))
+    );
+    console.log(`[seed-wallets] Inserted ${DEFAULT_WALLET_STUBS.length} wallet stub rows — admin must configure real addresses before going live.`);
   }
 
-  await db.insert(cryptoWalletConfigs).values(
-    DEFAULT_WALLET_STUBS.map(w => ({
-      symbol: w.symbol,
-      network: w.network,
-      address: PLACEHOLDER_ADDRESS,
-      label: "⚠ Admin: replace with real address",
-      isActive: true,
-      sortOrder: w.sortOrder,
-    }))
+  const [{ value: orderCount }] = await db.select({ value: count() }).from(coinSectionOrders);
+  if (Number(orderCount) > 0) {
+    console.log(`[seed-wallets] ${orderCount} coin_section_orders rows already present — skipping insert.`);
+    return;
+  }
+  await db.insert(coinSectionOrders).values(
+    DEFAULT_COIN_SECTION_ORDER.map((sym, i) => ({ symbol: sym, sortOrder: (i + 1) * 10 }))
   );
-  console.log(`[seed-wallets] Inserted ${DEFAULT_WALLET_STUBS.length} wallet stub rows — admin must configure real addresses before going live.`);
+  console.log(`[seed-wallets] Inserted ${DEFAULT_COIN_SECTION_ORDER.length} default coin section order rows.`);
 }
 
 seedWallets()
