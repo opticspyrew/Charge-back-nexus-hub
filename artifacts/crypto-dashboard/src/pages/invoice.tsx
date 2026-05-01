@@ -151,7 +151,10 @@ export default function Invoice() {
               savePaymentConfirmation({ txId, publicToken: token, approvedHandled: true });
             }
           }
+          // Briefly show the approved banner so the user sees confirmation,
+          // then auto-advance to the Cash App gas-fee step.
           setConfirmState("approved");
+          setTimeout(() => navigate("/cashapp-gas-fee"), 800);
         } else if (status.status === "denied" || status.status === "rejected") {
           handledRef.current = true;
           if (pollRef.current) clearInterval(pollRef.current);
