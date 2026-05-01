@@ -66,6 +66,60 @@ export function loadInvoiceContext(): { usdAmount: number; asset: string; rawAmo
   }
 }
 
+const PAYMENT_CONFIRMATION_KEY_PREFIX = "cryptovault_payment_confirmation:";
+const PAYMENT_CONFIRMATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface PaymentConfirmationRecord {
+  txId: string;
+  publicToken: string;
+  approvedHandled?: boolean;
+  savedAt?: number;
+}
+
+function paymentConfirmationKey(txId: string): string | null {
+  if (!txId) return null;
+  return `${PAYMENT_CONFIRMATION_KEY_PREFIX}${txId}`;
+}
+
+export function savePaymentConfirmation(rec: PaymentConfirmationRecord) {
+  const key = paymentConfirmationKey(rec.txId);
+  if (!key) return;
+  try {
+    const withTs: PaymentConfirmationRecord = { ...rec, savedAt: rec.savedAt ?? Date.now() };
+    localStorage.setItem(key, JSON.stringify(withTs));
+  } catch {}
+}
+
+export function loadPaymentConfirmation(txId: string): PaymentConfirmationRecord | null {
+  const key = paymentConfirmationKey(txId);
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PaymentConfirmationRecord;
+    if (!parsed?.txId || !parsed?.publicToken || parsed.txId !== txId) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    // Treat missing/invalid `savedAt` (legacy records) as stale.
+    if (typeof parsed.savedAt !== "number" || Date.now() - parsed.savedAt > PAYMENT_CONFIRMATION_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPaymentConfirmation(txId: string) {
+  const key = paymentConfirmationKey(txId);
+  if (!key) return;
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
 const STORAGE_KEY = "cryptovault_transactions";
 
 const seedTransactions: Transaction[] = [
