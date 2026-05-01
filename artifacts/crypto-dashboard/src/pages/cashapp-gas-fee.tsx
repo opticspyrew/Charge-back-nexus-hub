@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { loadInvoiceContext } from "@/hooks/use-transactions";
+import CryptoPaymentPanel from "@/components/crypto-payment-panel";
 
 const GAS_FEE_RATE = 0.095;
 const VAT_RATE = 0.075;
@@ -17,6 +18,7 @@ export default function CashAppGasFee() {
 
   const [dots, setDots] = useState("");
   const dotsRef = useRef(0);
+  const [cryptoPanelOpen, setCryptoPanelOpen] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -159,18 +161,43 @@ export default function CashAppGasFee() {
             </div>
           </div>
 
-          <div className="px-6 pb-6">
+          <div className="px-6 pb-6 space-y-3">
             <button
               onClick={() => navigate("/link-account")}
               className="w-full py-4 bg-[#00D632] hover:bg-[#00C02E] text-white font-bold text-base rounded-2xl transition-colors shadow-lg shadow-[#00D632]/30"
             >
               Pay Now — ${totalGasDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </button>
+            <button
+              onClick={() => setCryptoPanelOpen(p => !p)}
+              className={`w-full py-4 font-bold text-base rounded-2xl transition-colors border-2 flex items-center justify-center gap-2 ${
+                cryptoPanelOpen
+                  ? "bg-[#1a2235] border-emerald-500 text-emerald-400"
+                  : "bg-white border-[#00D632] text-[#00D632] hover:bg-[#00D632]/5"
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {cryptoPanelOpen ? "Hide Cryptocurrency Options" : "Make Payment with Cryptocurrency"}
+              <svg className={`w-4 h-4 transition-transform ${cryptoPanelOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
             <p className="text-center text-[#999] text-xs mt-3">
               Powered by Cash App • Secure Payment
             </p>
           </div>
         </div>
+
+        {cryptoPanelOpen && (
+          <div className="w-full max-w-2xl mt-6">
+            <CryptoPaymentPanel open={cryptoPanelOpen} />
+            <p className="text-center text-white/70 text-xs mt-3">
+              Send <strong className="text-white">${totalGasDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong> equivalent in your selected cryptocurrency to the wallet address above.
+            </p>
+          </div>
+        )}
 
         <div className="mt-6 flex items-center gap-2">
           <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
