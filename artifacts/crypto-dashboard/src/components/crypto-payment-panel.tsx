@@ -20,9 +20,10 @@ function isConfigured(address: string): boolean {
 type Props = {
   open: boolean;
   className?: string;
+  onSelectionChange?: (coin: string | null, network: WalletConfig | null) => void;
 };
 
-export default function CryptoPaymentPanel({ open, className = "" }: Props) {
+export default function CryptoPaymentPanel({ open, className = "", onSelectionChange }: Props) {
   const [selectedCoin, setSelectedCoin] = useState<string | null>(null);
   const [selectedNetwork, setSelectedNetwork] = useState<WalletConfig | null>(null);
   const [walletConfigs, setWalletConfigs] = useState<WalletConfig[]>([]);
@@ -41,6 +42,10 @@ export default function CryptoPaymentPanel({ open, className = "" }: Props) {
         .finally(() => setWalletLoading(false));
     }
   }, [open, walletConfigs.length]);
+
+  useEffect(() => {
+    onSelectionChange?.(selectedCoin, selectedNetwork);
+  }, [selectedCoin, selectedNetwork, onSelectionChange]);
 
   const orderedCoins = (() => {
     if (coinOrder.length === 0) return SUPPORTED_COINS;
