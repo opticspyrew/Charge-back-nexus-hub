@@ -1,6 +1,13 @@
 import { Router, type Request, type Response } from "express";
-import { db, users, userSessions, passwordResetTokens } from "@workspace/db";
-import { and, eq, isNull, gt, desc, ne } from "drizzle-orm";
+import {
+  db,
+  users,
+  userSessions,
+  passwordResetTokens,
+  adminClients,
+  adminServiceRequests,
+} from "@workspace/db";
+import { and, eq, isNull, gt, desc, ne, sql } from "drizzle-orm";
 import {
   generateResetToken,
   hashPassword,
@@ -799,7 +806,27 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
       rows.map((row) => lookupLocation(row.ipAddress)),
     );
 
+    // Count this user's currently-open withdrawal requests so the client
+     // can warn before "Sign out all other devices". Requests are linked to
+     // the user by email (admin_clients.email == users.email). We treat
+     // status='pending' withdrawal requests as "in flight". The count is
+     // user-wide (per-session attribution isn't tracked), which is the
+     // correct granularity for the dialog warning.
+     const pendingRows = await db
+       .select({ n: sql<number>`count(*)::int` })
+       .from(adminServiceRequests)
+       .innerJoin(adminClients, eq(adminServiceRequests.clientId, adminClients.id))
+       .where(
+         and(
+           eq(adminClients.email, current.user.email),
+           eq(adminServiceRequests.type, "withdrawal"),
+           eq(adminServiceRequests.status, "pending"),
+         ),
+       );
+     const pendingWithdrawalCount = pendingRows[0]?.n ?? 0;
+
     res.json({
+      pendingWithdrawalCount,
       sessions: rows.map((row, i) => {
         const loc = locations[i] ?? null;
         return {

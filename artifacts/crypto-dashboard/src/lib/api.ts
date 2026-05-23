@@ -208,7 +208,9 @@ export const authApi = {
     return data.user;
   },
 
-  sessions: async (token: string): Promise<AuthSessionRecord[]> => {
+  sessions: async (
+    token: string,
+  ): Promise<{ sessions: AuthSessionRecord[]; pendingWithdrawalCount: number }> => {
     const res = await fetch(`${AUTH_BASE}/sessions`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -216,8 +218,14 @@ export const authApi = {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || "Failed to load recent activity");
     }
-    const data = (await res.json()) as { sessions: AuthSessionRecord[] };
-    return data.sessions;
+    const data = (await res.json()) as {
+      sessions: AuthSessionRecord[];
+      pendingWithdrawalCount?: number;
+    };
+    return {
+      sessions: data.sessions,
+      pendingWithdrawalCount: data.pendingWithdrawalCount ?? 0,
+    };
   },
 
   revokeAllOtherSessions: (token: string) =>
