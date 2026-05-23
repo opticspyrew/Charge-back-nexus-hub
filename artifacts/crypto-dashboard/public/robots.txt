@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+Disallow: /dashboard
+Disallow: /send
+Disallow: /withdraw
+Disallow: /convert
+Disallow: /trade
+Disallow: /invoice
+Disallow: /change-password
+Disallow: /reset-password
