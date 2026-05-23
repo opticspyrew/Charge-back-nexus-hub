@@ -14,7 +14,16 @@ import TotalAssetsBanner from "@/components/total-assets-banner";
 export default function SignIn() {
   const [, navigate] = useLocation();
   const { login } = useAuth();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState<{ email: string; password: string }>(() => {
+    let prefilledEmail = "";
+    try {
+      prefilledEmail = sessionStorage.getItem("prefill-signin-email") ?? "";
+      if (prefilledEmail) sessionStorage.removeItem("prefill-signin-email");
+    } catch {
+      // ignore storage errors
+    }
+    return { email: prefilledEmail, password: "" };
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showForgot, setShowForgot] = useState(false);

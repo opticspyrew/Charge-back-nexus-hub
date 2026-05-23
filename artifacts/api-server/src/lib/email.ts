@@ -430,6 +430,76 @@ export function kycRejectedEmail(params: {
   return { subject, html };
 }
 
+export function paymentConfirmationDecisionEmail(params: {
+  name: string;
+  email: string;
+  decision: "approved" | "rejected";
+  decidedAt: Date;
+  amount?: string | null;
+  currency?: string | null;
+  invoiceUrl: string | null;
+  supportEmail: string;
+}): { subject: string; html: string } {
+  const { name, email, decision, decidedAt, amount, currency, invoiceUrl, supportEmail } = params;
+  const approved = decision === "approved";
+  const subject = approved
+    ? "Your CryptoVault payment confirmation was approved"
+    : "Action needed: your CryptoVault payment confirmation was not approved";
+  const headerColor = approved ? "#15803d" : "#b91c1c";
+  const buttonLabel = approved ? "Continue on your invoice" : "Retry payment confirmation";
+  const decisionLabel = approved ? "Approved" : "Not approved";
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safeTime = escapeHtml(decidedAt.toUTCString());
+  const safeSupport = escapeHtml(supportEmail);
+  const amountStr = amount
+    ? `${currency ?? "USD"} ${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+    : null;
+  const amountRow = amountStr
+    ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Amount</td><td style="padding: 8px 0; color: #111827; font-size: 13px;">${escapeHtml(amountStr)}</td></tr>`
+    : "";
+  const intro = approved
+    ? `Good news — we've reviewed and <strong>approved</strong> the payment confirmation for your CryptoVault account (<strong>${safeEmail}</strong>). You can continue with your withdrawal from the invoice page.`
+    : `We've reviewed the payment confirmation for your CryptoVault account (<strong>${safeEmail}</strong>) and weren't able to approve it. You can retry the confirmation from the invoice page.`;
+  const ctaButton = invoiceUrl
+    ? `<p style="text-align: center; margin: 24px 0;">
+         <a href="${escapeHtml(invoiceUrl)}" style="display: inline-block; background: ${headerColor}; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+           ${buttonLabel}
+         </a>
+       </p>`
+    : "";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: ${headerColor}; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Payment confirmation ${approved ? "approved" : "not approved"}</h1>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${safeName || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">${intro}</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 130px;">Decision</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${decisionLabel}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">When</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${safeTime}</td>
+          </tr>
+          ${amountRow}
+        </table>
+        ${ctaButton}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          Questions? Contact us at
+          <a href="mailto:${safeSupport}" style="color: ${headerColor}; font-weight: 600;">${safeSupport}</a>.
+          This is an automated notification from CryptoVault.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
 export function newClientEmail(client: {
   name: string;
   email: string;

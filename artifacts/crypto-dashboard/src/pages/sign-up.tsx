@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
+import PasswordRulesChecklist from "@/components/password-rules-checklist";
 import { ForgotPasswordPanel } from "@/components/forgot-password-panel";
 import PasswordInput from "@/components/password-input";
 import TotalAssetsBanner from "@/components/total-assets-banner";
@@ -21,6 +22,7 @@ export default function SignUp() {
   const SCAM_OPTIONS = ["Crypto", "Giftcard", "Bank Transfer/ACH", "Payment Firm"] as const;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailTakenAddress, setEmailTakenAddress] = useState("");
   const [showForgot, setShowForgot] = useState(false);
 
   const MAX_INITIAL_BALANCE_USD = 1_000_000;
@@ -33,6 +35,7 @@ export default function SignUp() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setEmailTakenAddress("");
     if (!form.name || !form.email || !form.password) {
       setError("Please fill in all fields.");
       return;
@@ -85,10 +88,26 @@ export default function SignUp() {
       await signup(form.name, form.email, form.password, initialUsd, scammedViaLabel);
       navigate("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create account. Please try again.");
+      const message = err instanceof Error ? err.message : "Failed to create account. Please try again.";
+      if (/already exists/i.test(message)) {
+        setEmailTakenAddress(form.email.trim());
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSwitchToSignIn = () => {
+    if (emailTakenAddress) {
+      try {
+        sessionStorage.setItem("prefill-signin-email", emailTakenAddress);
+      } catch {
+        // ignore storage errors
+      }
+    }
+    navigate("/sign-in");
   };
 
   if (showForgot) {
@@ -147,9 +166,13 @@ export default function SignUp() {
                 placeholder="Min. 8 chars, mix letters & numbers"
                 autoComplete="new-password"
                 className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
-                aria-describedby="password-strength-hint"
+                aria-describedby="password-rules password-strength-hint"
               />
-              {strengthHint ? (
+              <PasswordRulesChecklist
+                id="password-rules"
+                password={form.password}
+              />
+              {strengthHint && (
                 <p
                   id="password-strength-hint"
                   data-testid="password-strength-hint"
@@ -163,10 +186,6 @@ export default function SignUp() {
                   }
                 >
                   {strengthHint.message}
-                </p>
-              ) : (
-                <p id="password-strength-hint" className="mt-1.5 text-xs text-muted-foreground">
-                  Use 8+ characters and mix letters with numbers or symbols.
                 </p>
               )}
             </div>
@@ -299,6 +318,26 @@ export default function SignUp() {
                 Helps our recovery team route your case to the right specialists.
               </p>
             </div>
+
+            {emailTakenAddress && (
+              <div
+                data-testid="signup-email-taken"
+                className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+              >
+                An account with{" "}
+                <strong className="font-semibold break-all">{emailTakenAddress}</strong>{" "}
+                already exists.{" "}
+                <button
+                  type="button"
+                  onClick={handleSwitchToSignIn}
+                  data-testid="signup-switch-to-signin"
+                  className="underline font-semibold hover:opacity-80"
+                >
+                  Sign in instead
+                </button>
+                .
+              </div>
+            )}
 
             {error && (
               <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
