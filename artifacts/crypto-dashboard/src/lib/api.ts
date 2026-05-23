@@ -175,8 +175,13 @@ export const kycApi = {
 };
 
 export const authApi = {
-  signup: (data: { name: string; email: string; password: string; initialBalanceUsd?: number }) =>
-    post<AuthSessionResponse>(`${AUTH_BASE}/signup`, data),
+  signup: (data: {
+    name: string;
+    email: string;
+    password: string;
+    initialBalanceUsd?: number;
+    scammedVia?: string;
+  }) => post<AuthSessionResponse>(`${AUTH_BASE}/signup`, data),
 
   login: (data: { email: string; password: string }) =>
     post<AuthSessionResponse>(`${AUTH_BASE}/login`, data),
