@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders, kycSubmissions } from "@workspace/db";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
+import { sendAdminEmail, sendUserEmail, newClientEmail, newServiceRequestEmail, kycApprovedEmail, kycRejectedEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
 
@@ -47,6 +47,30 @@ function safeCredentialsMatch(
 }
 
 import { ObjectStorageService } from "../lib/objectStorage";
+
+// Support address shown in KYC decision emails. Kept in sync with the address
+// used by other user-facing notifications (see auth.ts SUPPORT_EMAIL).
+const KYC_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+
+// Build a link back to the user-facing dashboard for KYC decision emails.
+// The KYC modal is opened from the main dashboard, so the same URL works for
+// "open dashboard" (approved) and "resubmit verification" (rejected).
+function buildAdminAppUrl(req?: Request): string | null {
+  const configured = process.env.APP_PUBLIC_URL?.trim();
+  if (configured) return configured.replace(/\/$/, "");
+  if (req) {
+    const fwdHost = req.headers["x-forwarded-host"];
+    const fwdProto = req.headers["x-forwarded-proto"];
+    const host = (Array.isArray(fwdHost) ? fwdHost[0] : fwdHost)?.split(",")[0].trim();
+    const proto = (Array.isArray(fwdProto) ? fwdProto[0] : fwdProto)?.split(",")[0].trim() || "https";
+    if (host) return `${proto}://${host}`;
+  }
+  const replitApp = process.env.REPLIT_APP_DOMAIN?.trim();
+  if (replitApp) return `https://${replitApp.replace(/\/$/, "")}`;
+  const replitDev = process.env.REPLIT_DEV_DOMAIN?.trim();
+  if (replitDev) return `https://${replitDev.replace(/\/$/, "")}`;
+  return null;
+}
 
 async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   const auth = req.headers["x-admin-token"];
@@ -741,6 +765,44 @@ async function decideKyc(req: Request, res: Response, decision: "approved" | "re
       description: `KYC submission #${id} ${decision} for ${submission.fullName}`,
       metadata: { submissionId: id, userId: submission.userId, notes },
     });
+
+    // Notify the user by email so they don't have to refresh the dashboard
+    // to learn the outcome. A failed notification must never roll back the
+    // decision itself — log and move on.
+    try {
+      const [recipient] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, submission.userId))
+        .limit(1);
+      if (recipient?.email) {
+        const appUrl = buildAdminAppUrl(req);
+        const built = decision === "approved"
+          ? kycApprovedEmail({
+              name: recipient.name,
+              email: recipient.email,
+              decidedAt: now,
+              dashboardUrl: appUrl,
+              supportEmail: KYC_SUPPORT_EMAIL,
+            })
+          : kycRejectedEmail({
+              name: recipient.name,
+              email: recipient.email,
+              decidedAt: now,
+              reviewerNotes: notes ?? "",
+              resubmitUrl: appUrl,
+              supportEmail: KYC_SUPPORT_EMAIL,
+            });
+        const sent = await sendUserEmail(recipient.email, built.subject, built.html);
+        logger.info(
+          { userId: submission.userId, decision, sent },
+          sent ? "KYC decision email sent" : "KYC decision email could not be sent",
+        );
+      }
+    } catch (err) {
+      logger.error({ err, decision, userId: submission.userId }, "Failed to send KYC decision email");
+    }
+
     res.json({ ok: true, status: decision });
   } catch (err) {
     logger.error({ err, decision }, "Failed to update KYC status");
