@@ -332,7 +332,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
 
     // Server-side rate limiting: check before any DB work to stop brute-force
     // attempts that bypass the client-side throttle entirely.
-    const throttle = checkLoginThrottle(normalizedEmail, ip);
+    const throttle = await checkLoginThrottle(normalizedEmail, ip);
     if (!throttle.allowed) {
       logger.warn(
         { email: normalizedEmail, ip, reason: throttle.reason, retryAfterMs: throttle.retryAfterMs },
@@ -348,7 +348,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
     // --- Diagnostic: user lookup ---
     const user = await findUserByEmail(normalizedEmail);
     if (!user) {
-      recordLoginFailure(normalizedEmail);
+      await recordLoginFailure(normalizedEmail);
       logger.warn({ email: normalizedEmail }, "Login failed: no account found for email");
       res.status(401).json({ error: "Invalid email or password." });
       return;
@@ -361,7 +361,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       passwordIterations: user.passwordIterations,
     });
     if (!ok) {
-      recordLoginFailure(normalizedEmail);
+      await recordLoginFailure(normalizedEmail);
       logger.warn(
         { userId: user.id, email: normalizedEmail, passwordIterations: user.passwordIterations },
         "Login failed: password verification rejected",
@@ -372,7 +372,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
 
     // Successful login: clear the failure counter so a legitimate user who
     // previously had some failures is not penalized further.
-    clearLoginFailures(normalizedEmail);
+    await clearLoginFailures(normalizedEmail);
 
     const metadata = captureSessionMetadata(req);
 
