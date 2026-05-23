@@ -34,7 +34,17 @@ function createTransporter() {
   });
 }
 
-export async function sendAdminEmail(subject: string, html: string): Promise<boolean> {
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
+export async function sendAdminEmail(
+  subject: string,
+  html: string,
+  attachments?: EmailAttachment[],
+): Promise<boolean> {
   const transporter = createTransporter();
 
   if (!transporter) {
@@ -48,13 +58,58 @@ export async function sendAdminEmail(subject: string, html: string): Promise<boo
       to: ADMIN_EMAIL,
       subject,
       html,
+      attachments,
     });
-    logger.info({ to: ADMIN_EMAIL, subject }, "Admin email sent");
+    logger.info({ to: ADMIN_EMAIL, subject, attachments: attachments?.length ?? 0 }, "Admin email sent");
     return true;
   } catch (err) {
     logger.error({ err }, "Failed to send admin email");
     return false;
   }
+}
+
+export function newKycSubmissionEmail(params: {
+  user: { id: number; name: string; email: string };
+  submission: {
+    id: number;
+    fullName: string;
+    dateOfBirth: string;
+    address: string;
+    city: string;
+    country: string;
+    idType: string;
+    idNumber: string;
+    createdAt: Date;
+  };
+}): { subject: string; html: string } {
+  const { user, submission } = params;
+  const subject = `[Action Required] KYC Verification — ${submission.fullName}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #4338ca; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">New KYC Verification Submission</h1>
+        <p style="color: #c7d2fe; margin: 4px 0 0; font-size: 13px;">Approval required before user can Send or Withdraw</p>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 150px;">Account</td><td style="padding: 8px 0; color: #111827;">${escapeHtml(user.name)} &lt;${escapeHtml(user.email)}&gt;</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Submission ID</td><td style="padding: 8px 0; color: #111827; font-family: monospace;">#${submission.id}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Legal Name</td><td style="padding: 8px 0; font-weight: 600; color: #111827;">${escapeHtml(submission.fullName)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Date of Birth</td><td style="padding: 8px 0; color: #111827;">${escapeHtml(submission.dateOfBirth)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Address</td><td style="padding: 8px 0; color: #111827;">${escapeHtml(submission.address)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">City</td><td style="padding: 8px 0; color: #111827;">${escapeHtml(submission.city)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Country</td><td style="padding: 8px 0; color: #111827;">${escapeHtml(submission.country)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">ID Type</td><td style="padding: 8px 0; color: #111827;">${escapeHtml(submission.idType)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">ID Number</td><td style="padding: 8px 0; color: #111827; font-family: monospace;">${escapeHtml(submission.idNumber)}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Submitted</td><td style="padding: 8px 0; color: #111827;">${escapeHtml(submission.createdAt.toUTCString())}</td></tr>
+        </table>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 14px; color: #374151; margin: 0 0 12px;">The user's government-issued ID photo is attached to this email. Review it and approve or reject the submission in the admin dashboard's KYC page.</p>
+        <p style="font-size: 12px; color: #9ca3af; margin: 0;">This is an automated notification from your Firm Admin System.</p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
 }
 
 export async function sendUserEmail(

@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { CurrencyProvider } from "@/lib/currency-context";
+import { KycProvider } from "@/hooks/use-kyc";
 import NotFound from "@/pages/not-found";
 import SignIn from "@/pages/sign-in";
 import SignUp from "@/pages/sign-up";
@@ -56,12 +57,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <CurrencyProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </CurrencyProvider>
+          <KycProvider>
+            <CurrencyProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </CurrencyProvider>
+          </KycProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

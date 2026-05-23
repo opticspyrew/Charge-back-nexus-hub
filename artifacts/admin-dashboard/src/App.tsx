@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { api, getToken, setToken, clearToken, type Client, type ServiceRequest, type Activity, type User, type WalletConfig, type CoinSectionOrder } from "@/lib/api";
+import { api, getToken, setToken, clearToken, fetchKycPhotoUrl, type Client, type ServiceRequest, type Activity, type User, type WalletConfig, type CoinSectionOrder, type KycSubmission } from "@/lib/api";
 import ReceiptModal from "@/components/receipt-modal";
 
 interface AuthCtx { token: string | null; login: (t: string) => void; logout: () => void; }
@@ -1081,10 +1081,188 @@ const NAV_ITEMS = [
   { id: "overview", label: "Overview", path: "/", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg> },
   { id: "clients", label: "Clients", path: "/clients", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
   { id: "requests", label: "Requests", path: "/requests", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg> },
+  { id: "kyc", label: "KYC", path: "/kyc", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> },
   { id: "activity", label: "Activity Log", path: "/activity", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
   { id: "users", label: "Users", path: "/users", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> },
   { id: "wallets", label: "Wallets", path: "/wallets", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
 ];
+
+function KycPage() {
+  const [filter, setFilter] = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [submissions, setSubmissions] = useState<KycSubmission[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const [notes, setNotes] = useState<Record<number, string>>({});
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { submissions } = await api.getKycSubmissions(filter);
+      setSubmissions(submissions);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load submissions");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filter]);
+
+  const decide = async (id: number, decision: "approve" | "reject") => {
+    setBusyId(id);
+    try {
+      const note = notes[id] ?? "";
+      if (decision === "approve") await api.approveKyc(id, note || undefined);
+      else await api.rejectKyc(id, note || undefined);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : `Failed to ${decision}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">KYC Verification</h1>
+        <p className="text-sm text-slate-500 mt-1">Review identity verification submissions. Approving a user enables Send and Withdraw on their account.</p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {(["pending", "approved", "rejected", "all"] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={cn(
+              "px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors capitalize",
+              filter === f ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            )}>
+            {f}
+          </button>
+        ))}
+        <button onClick={() => void load()} className="ml-auto px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900">Refresh</button>
+      </div>
+
+      {error && <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
+      {loading ? (
+        <div className="text-sm text-slate-500">Loading…</div>
+      ) : submissions.length === 0 ? (
+        <div className="p-8 rounded-2xl bg-white border border-slate-200 text-center text-sm text-slate-500">
+          No {filter === "all" ? "" : filter} submissions.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {submissions.map(s => (
+            <div key={s.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex flex-wrap items-start gap-4">
+                <button
+                  type="button"
+                  onClick={() => setPreviewId(s.id)}
+                  className="flex-shrink-0 w-28 h-28 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden hover:ring-2 hover:ring-indigo-400 transition"
+                  title="Click to enlarge"
+                >
+                  <KycPhoto id={s.id} alt={`ID for ${s.fullName}`} className="w-full h-full object-cover" />
+                </button>
+                <div className="flex-1 min-w-[260px]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-slate-900">{s.fullName}</h3>
+                    <span className={cn(
+                      "px-2 py-0.5 text-xs font-semibold rounded-full",
+                      s.status === "pending" && "bg-amber-100 text-amber-700",
+                      s.status === "approved" && "bg-emerald-100 text-emerald-700",
+                      s.status === "rejected" && "bg-rose-100 text-rose-700",
+                    )}>
+                      {s.status}
+                    </span>
+                    <span className="text-xs text-slate-400 font-mono">#{s.id}</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">Account: {s.userName} &lt;{s.userEmail}&gt;</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-xs mt-3">
+                    <Info label="Date of birth" value={s.dateOfBirth} />
+                    <Info label="ID type" value={s.idType} />
+                    <Info label="ID number" value={s.idNumber} mono />
+                    <Info label="Address" value={s.address} />
+                    <Info label="City" value={s.city} />
+                    <Info label="Country" value={s.country} />
+                    <Info label="Submitted" value={new Date(s.createdAt).toLocaleString()} />
+                    {s.reviewedAt && <Info label="Reviewed" value={new Date(s.reviewedAt).toLocaleString()} />}
+                  </div>
+                  {s.reviewerNotes && (
+                    <p className="mt-3 text-xs text-slate-600 italic">Notes: {s.reviewerNotes}</p>
+                  )}
+                </div>
+              </div>
+
+              {s.status === "pending" && (
+                <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">
+                  <input
+                    type="text"
+                    placeholder="Optional notes (visible to user on rejection)"
+                    value={notes[s.id] ?? ""}
+                    onChange={e => setNotes(n => ({ ...n, [s.id]: e.target.value }))}
+                    className="flex-1 min-w-[200px] px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-indigo-400"
+                  />
+                  <button
+                    onClick={() => void decide(s.id, "approve")}
+                    disabled={busyId === s.id}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {busyId === s.id ? "…" : "Approve"}
+                  </button>
+                  <button
+                    onClick={() => void decide(s.id, "reject")}
+                    disabled={busyId === s.id}
+                    className="px-4 py-2 rounded-lg bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 disabled:opacity-60"
+                  >
+                    {busyId === s.id ? "…" : "Reject"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {previewId !== null && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6" onClick={() => setPreviewId(null)}>
+          <KycPhoto id={previewId} alt="ID full view" className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KycPhoto({ id, alt, className }: { id: number; alt: string; className?: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let revoked = false;
+    let current: string | null = null;
+    void fetchKycPhotoUrl(id).then(u => {
+      if (revoked) {
+        if (u) URL.revokeObjectURL(u);
+        return;
+      }
+      current = u;
+      setUrl(u);
+    });
+    return () => {
+      revoked = true;
+      if (current) URL.revokeObjectURL(current);
+    };
+  }, [id]);
+  if (!url) return <div className={cn("bg-slate-100 animate-pulse", className)} />;
+  return <img src={url} alt={alt} className={className} />;
+}
+
+function Info({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{label}</p>
+      <p className={cn("text-slate-800", mono && "font-mono")}>{value}</p>
+    </div>
+  );
+}
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
@@ -1172,6 +1350,7 @@ function DashboardRouter() {
         <Route path="/activity" component={ActivityPage} />
         <Route path="/users" component={UsersPage} />
         <Route path="/wallets" component={WalletsPage} />
+        <Route path="/kyc" component={KycPage} />
         <Route component={OverviewPage} />
       </Switch>
     </DashboardLayout>

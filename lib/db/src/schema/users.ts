@@ -11,9 +11,32 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   debitAllAt: timestamp("debit_all_at", { withTimezone: true }),
   balanceBtc: real("balance_btc").notNull().default(26.1683),
+  kycStatus: text("kyc_status").notNull().default("none"),
 }, (t) => [
   unique("users_email_key").on(t.email),
 ]);
+
+export const kycSubmissions = pgTable("kyc_submissions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  fullName: text("full_name").notNull(),
+  dateOfBirth: text("date_of_birth").notNull(),
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  country: text("country").notNull(),
+  idType: text("id_type").notNull(),
+  idNumber: text("id_number").notNull(),
+  photoData: text("photo_data").notNull(),
+  photoMimeType: text("photo_mime_type").notNull(),
+  status: text("status").notNull().default("pending"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewerNotes: text("reviewer_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type KycSubmission = typeof kycSubmissions.$inferSelect;
+export type InsertKycSubmission = typeof kycSubmissions.$inferInsert;
 
 export const userSessions = pgTable("user_sessions", {
   id: serial("id").primaryKey(),

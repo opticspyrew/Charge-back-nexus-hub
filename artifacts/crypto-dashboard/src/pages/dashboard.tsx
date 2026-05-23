@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
 import WalletModal from "@/components/wallet-modal";
+import KycModal from "@/components/kyc-modal";
+import { useKyc } from "@/hooks/use-kyc";
 import RecentActivityPanel from "@/components/recent-activity-panel";
 import TransactionReceiptModal from "@/components/transaction-receipt";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
@@ -23,6 +25,21 @@ type ModalType = "receive" | "deposit" | null;
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
+  const [kycModal, setKycModal] = useState<{ open: boolean; reason?: string }>({ open: false });
+  const { status: kycStatus } = useKyc();
+
+  const requireKyc = (action: "Send" | "Withdraw", run: () => void) => {
+    if (kycStatus === "approved") {
+      run();
+    } else {
+      const reason = kycStatus === "pending"
+        ? `Your identity verification is still under review. ${action} will be enabled once approved.`
+        : kycStatus === "rejected"
+          ? `Your last verification was rejected. Please re-submit to ${action.toLowerCase()}.`
+          : `Identity verification is required before you can ${action.toLowerCase()}.`;
+      setKycModal({ open: true, reason });
+    }
+  };
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
   const { transactions, cancelTransaction, setTransactions } = useTransactions();
@@ -75,7 +92,7 @@ export default function Dashboard() {
   const actionButtons = [
     {
       label: "Send",
-      onClick: () => navigate("/send"),
+      onClick: () => requireKyc("Send", () => navigate("/send")),
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -93,7 +110,7 @@ export default function Dashboard() {
     },
     {
       label: "Withdraw",
-      onClick: () => navigate("/withdraw"),
+      onClick: () => requireKyc("Withdraw", () => navigate("/withdraw")),
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -113,6 +130,11 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout activeTab="dashboard">
+      <KycModal
+        open={kycModal.open}
+        reason={kycModal.reason}
+        onClose={() => setKycModal({ open: false })}
+      />
       {modal && (
         <WalletModal
           type={modal}

@@ -4,6 +4,7 @@ import DashboardLayout from "@/components/dashboard-layout";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useBalance } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
+import { useKyc } from "@/hooks/use-kyc";
 import { publicApi } from "@/lib/api";
 import { useCurrency } from "@/lib/currency-context";
 
@@ -52,7 +53,8 @@ type Step = "form" | "review" | "success";
 export default function Withdraw() {
   const [, navigate] = useLocation();
   const { addTransaction } = useTransactions();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const { status: kycStatus } = useKyc();
   const { btcFormatted } = useBalance();
   const { fmt } = useCurrency();
   const cryptos = [
@@ -96,6 +98,10 @@ export default function Withdraw() {
   };
 
   const handleConfirm = async () => {
+    if (kycStatus !== "approved") {
+      navigate("/dashboard");
+      return;
+    }
     setLoading(true);
     await new Promise(r => setTimeout(r, 1400));
     const txnId = addTransaction({
@@ -108,15 +114,18 @@ export default function Withdraw() {
       statusType: "pending",
     });
     if (user) {
-      publicApi.submitRequest({
-        name: user.name,
-        email: user.email,
-        type: "withdrawal",
-        amount: usdAmount.toFixed(2),
-        currency: "USD",
-        notes: `Withdraw ${amount} ${selectedCrypto} via ${networkLabel}${destination ? ` to ${destination.slice(0, 12)}...` : ""}`,
-        txnId,
-      }).catch(() => {});
+      publicApi.submitRequest(
+        {
+          name: user.name,
+          email: user.email,
+          type: "withdrawal",
+          amount: usdAmount.toFixed(2),
+          currency: "USD",
+          notes: `Withdraw ${amount} ${selectedCrypto} via ${networkLabel}${destination ? ` to ${destination.slice(0, 12)}...` : ""}`,
+          txnId,
+        },
+        token ?? undefined,
+      ).catch(() => {});
     }
     setLoading(false);
     setStep("success");
