@@ -82,6 +82,11 @@ function flagEmojiFromCountryCode(code: string | null): string | null {
 export default function RecentActivityPanel() {
   const { token } = useAuth();
   const [sessions, setSessions] = useState<AuthSessionRecord[] | null>(null);
+  // User-level count of currently-pending withdrawal requests. Surfaced in
+  // the "Sign out all other devices" confirmation so a power user who has a
+  // withdrawal flow open on another device (e.g. hardware-wallet
+  // confirmation) gets a heads-up before revoking that session.
+  const [pendingWithdrawalCount, setPendingWithdrawalCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   // Tracks which session is currently being revoked. The active row shows
@@ -103,9 +108,11 @@ export default function RecentActivityPanel() {
       setLoading(true);
       setError(null);
       try {
-        const rows = await authApi.sessions(token);
+        const { sessions: rows, pendingWithdrawalCount: count } =
+          await authApi.sessions(token);
         if (!signal?.cancelled) {
           setSessions(rows);
+          setPendingWithdrawalCount(count);
         }
       } catch (err: unknown) {
         if (!signal?.cancelled) {
@@ -359,6 +366,28 @@ export default function RecentActivityPanel() {
               This will sign you out of every device except this one.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {pendingWithdrawalCount > 0 && (
+            <div
+              className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+              role="alert"
+              data-testid="recent-activity-revoke-all-pending-warning"
+            >
+              <p className="text-sm font-semibold text-destructive">
+                Heads up:{" "}
+                <span data-testid="recent-activity-revoke-all-pending-count">
+                  {pendingWithdrawalCount === 1
+                    ? "1 withdrawal request"
+                    : `${pendingWithdrawalCount} withdrawal requests`}
+                </span>{" "}
+                still pending.
+              </p>
+              <p className="text-xs text-destructive/90 mt-1">
+                Signing out other devices may interrupt a withdrawal flow in
+                progress (for example, a hardware-wallet confirmation). You can
+                still proceed if you want to.
+              </p>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={revokingAll}>Cancel</AlertDialogCancel>
             <AlertDialogAction
