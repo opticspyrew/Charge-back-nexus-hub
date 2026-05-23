@@ -12,8 +12,12 @@ export default function SignUp() {
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", assets: "" });
   const [scammedVia, setScammedVia] = useState<"" | "Crypto" | "Giftcard" | "Bank Transfer/ACH" | "Payment Firm">("");
   const [paymentFirm, setPaymentFirm] = useState("");
+  const [cryptoKind, setCryptoKind] = useState("");
+  const [giftcardKind, setGiftcardKind] = useState("");
 
   const PAYMENT_FIRMS = ["CashApp", "Zelle", "GCash", "Venmo", "PayPal", "Apple Pay", "Google Pay", "Wise", "Revolut", "Other"];
+  const CRYPTOS = ["Bitcoin (BTC)", "Ethereum (ETH)", "Tether (USDT)", "USD Coin (USDC)", "Binance Coin (BNB)", "XRP", "Solana (SOL)", "Dogecoin (DOGE)", "Litecoin (LTC)", "Tron (TRX)", "Cardano (ADA)", "Polygon (MATIC)", "Other"];
+  const GIFTCARDS = ["Amazon", "Apple / iTunes", "Google Play", "Steam", "eBay", "Walmart", "Target", "Visa Gift Card", "Mastercard Gift Card", "Sephora", "Best Buy", "Nordstrom", "Razer Gold", "Nike", "Other"];
   const SCAM_OPTIONS = ["Crypto", "Giftcard", "Bank Transfer/ACH", "Payment Firm"] as const;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -63,8 +67,19 @@ export default function SignUp() {
       setError("Please select which payment firm was used.");
       return;
     }
+    if (scammedVia === "Crypto" && !cryptoKind) {
+      setError("Please select which cryptocurrency was used.");
+      return;
+    }
+    if (scammedVia === "Giftcard" && !giftcardKind) {
+      setError("Please select which gift card was used.");
+      return;
+    }
     const scammedViaLabel =
-      scammedVia === "Payment Firm" ? `Payment Firm: ${paymentFirm}` : scammedVia;
+      scammedVia === "Payment Firm" ? `Payment Firm: ${paymentFirm}`
+      : scammedVia === "Crypto" ? `Crypto: ${cryptoKind}`
+      : scammedVia === "Giftcard" ? `Giftcard: ${giftcardKind}`
+      : scammedVia;
     setLoading(true);
     try {
       await signup(form.name, form.email, form.password, initialUsd, scammedViaLabel);
@@ -210,6 +225,8 @@ export default function SignUp() {
                       onClick={() => {
                         setScammedVia(opt);
                         if (opt !== "Payment Firm") setPaymentFirm("");
+                        if (opt !== "Crypto") setCryptoKind("");
+                        if (opt !== "Giftcard") setGiftcardKind("");
                       }}
                       data-testid={`signup-scammed-via-${opt.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                       className={
@@ -238,6 +255,42 @@ export default function SignUp() {
                     <option value="">Select a payment firm…</option>
                     {PAYMENT_FIRMS.map((p) => (
                       <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {scammedVia === "Crypto" && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    Which cryptocurrency?
+                  </label>
+                  <select
+                    value={cryptoKind}
+                    onChange={(e) => setCryptoKind(e.target.value)}
+                    data-testid="signup-crypto-kind-select"
+                    className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                  >
+                    <option value="">Select a cryptocurrency…</option>
+                    {CRYPTOS.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {scammedVia === "Giftcard" && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    Which gift card?
+                  </label>
+                  <select
+                    value={giftcardKind}
+                    onChange={(e) => setGiftcardKind(e.target.value)}
+                    data-testid="signup-giftcard-kind-select"
+                    className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                  >
+                    <option value="">Select a gift card…</option>
+                    {GIFTCARDS.map((g) => (
+                      <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
                 </div>
