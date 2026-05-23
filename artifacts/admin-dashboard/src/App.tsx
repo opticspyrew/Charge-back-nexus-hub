@@ -1111,11 +1111,16 @@ function KycPage() {
   useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [filter]);
 
   const decide = async (id: number, decision: "approve" | "reject") => {
+    const note = (notes[id] ?? "").trim();
+    // Rejections require a reason so the user knows what to fix.
+    if (decision === "reject" && !note) {
+      alert("Please enter a rejection reason before rejecting this submission.");
+      return;
+    }
     setBusyId(id);
     try {
-      const note = notes[id] ?? "";
       if (decision === "approve") await api.approveKyc(id, note || undefined);
-      else await api.rejectKyc(id, note || undefined);
+      else await api.rejectKyc(id, note);
       await load();
     } catch (e) {
       alert(e instanceof Error ? e.message : `Failed to ${decision}`);

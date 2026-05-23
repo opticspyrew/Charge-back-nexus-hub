@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/dashboard-layout";
+import KycModal from "@/components/kyc-modal";
 import { useTransactions } from "@/hooks/use-transactions";
 import { useBalance } from "@/hooks/use-balance";
 import { useAuth } from "@/lib/auth-context";
@@ -132,6 +133,16 @@ export default function Withdraw() {
   };
 
   const handleDone = () => navigate("/dashboard");
+
+  // Hard gate: unverified users never see the amount-entry form. The KYC modal
+  // (or "under review" state) is shown instead, even on direct URL navigation.
+  if (kycStatus !== "approved") {
+    return (
+      <DashboardLayout activeTab="dashboard">
+        <KycGateScreen action="Withdraw" navigate={navigate} kycStatus={kycStatus} />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout activeTab="dashboard">
@@ -392,5 +403,65 @@ export default function Withdraw() {
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+function KycGateScreen({
+  action,
+  navigate,
+  kycStatus,
+}: {
+  action: "Send" | "Withdraw";
+  navigate: (path: string) => void;
+  kycStatus: string;
+}) {
+  const [open, setOpen] = useState(true);
+  const isPending = kycStatus === "pending";
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="p-2 rounded-xl bg-card border border-card-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          aria-label="Back"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1 className="text-xl font-bold text-foreground">{action}</h1>
+      </div>
+      <div className="bg-card border border-card-border rounded-2xl p-8 text-center">
+        <div className="w-14 h-14 mx-auto rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+          <svg className="w-7 h-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M5 12a7 7 0 1014 0 7 7 0 00-14 0z" />
+          </svg>
+        </div>
+        <h2 className="text-lg font-bold text-foreground mb-1">
+          {isPending ? "Verification under review" : "Identity verification required"}
+        </h2>
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-5">
+          {isPending
+            ? `Our compliance team is reviewing your documents. You'll be able to ${action} as soon as your account is approved.`
+            : `Before you can ${action}, please verify your identity. It only takes a minute.`}
+        </p>
+        {!isPending && (
+          <button
+            onClick={() => setOpen(true)}
+            className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity"
+          >
+            Start verification
+          </button>
+        )}
+      </div>
+      <KycModal
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          navigate("/dashboard");
+        }}
+        reason={`Verification is required before you can ${action}.`}
+      />
+    </div>
   );
 }

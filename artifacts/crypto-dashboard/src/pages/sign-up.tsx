@@ -72,7 +72,7 @@ export default function SignUp() {
           <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-lg">C</span>
           </div>
-          <span className="text-xl font-bold text-foreground">CryptoVault</span>
+          <span className="text-foreground text-justify font-black text-[16px]">CHARGE BACK NEXUS HUB</span>
         </div>
 
         <TotalAssetsBanner />

@@ -26,8 +26,11 @@ export const kycSubmissions = pgTable("kyc_submissions", {
   country: text("country").notNull(),
   idType: text("id_type").notNull(),
   idNumber: text("id_number").notNull(),
-  photoData: text("photo_data").notNull(),
-  photoMimeType: text("photo_mime_type").notNull(),
+  // Path to the ID photo stored in object storage (e.g. "/objects/uploads/<uuid>").
+  // Streaming the photo is done through the admin-only /api/admin/kyc/:id/photo
+  // route, which fetches the underlying GCS object.
+  photoObjectPath: text("photo_object_path").notNull(),
+  photoMimeType: text("photo_mime_type"),
   status: text("status").notNull().default("pending"),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   reviewerNotes: text("reviewer_notes"),

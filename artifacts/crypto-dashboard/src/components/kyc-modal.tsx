@@ -13,7 +13,7 @@ const ID_TYPES = ["Passport", "National ID Card", "Driver's License", "Residence
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
 
-type FormState = Omit<KycSubmitInput, "photoBase64" | "photoMimeType">;
+type FormState = Omit<KycSubmitInput, "photoUploadURL" | "photoMimeType">;
 
 const EMPTY_FORM: FormState = {
   fullName: "",
@@ -25,29 +25,11 @@ const EMPTY_FORM: FormState = {
   idNumber: "",
 };
 
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read the selected file."));
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string") {
-        reject(new Error("Could not read the selected file."));
-        return;
-      }
-      // result is a data URL: data:<mime>;base64,<data>
-      const idx = result.indexOf("base64,");
-      resolve(idx >= 0 ? result.slice(idx + 7) : result);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function KycModal({ open, onClose, reason }: Props) {
   const { token } = useAuth();
   const { status, submission, refresh, setStatus } = useKyc();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [photo, setPhoto] = useState<{ file: File; preview: string; base64: string; mime: string } | null>(null);
+  const [photo, setPhoto] = useState<{ file: File; preview: string; mime: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -76,13 +58,8 @@ export default function KycModal({ open, onClose, reason }: Props) {
       return;
     }
     setError(null);
-    try {
-      const base64 = await readFileAsBase64(file);
-      const preview = URL.createObjectURL(file);
-      setPhoto({ file, preview, base64, mime: file.type });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not read the selected file.");
-    }
+    const preview = URL.createObjectURL(file);
+    setPhoto({ file, preview, mime: file.type });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -104,9 +81,22 @@ export default function KycModal({ open, onClose, reason }: Props) {
     setSubmitting(true);
     setError(null);
     try {
+      // 1) Ask the API for a presigned upload URL.
+      const { uploadURL } = await kycApi.requestUploadUrl(token);
+      // 2) Upload the photo bytes directly to object storage.
+      const uploadRes = await fetch(uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": photo.mime },
+        body: photo.file,
+      });
+      if (!uploadRes.ok) {
+        throw new Error("Could not upload your ID photo. Please try again.");
+      }
+      // 3) Tell the API where the photo lives so it can attach to the email
+      //    and record the object path against the submission.
       await kycApi.submit(token, {
         ...form,
-        photoBase64: photo.base64,
+        photoUploadURL: uploadURL,
         photoMimeType: photo.mime,
       });
       setStatus("pending");
