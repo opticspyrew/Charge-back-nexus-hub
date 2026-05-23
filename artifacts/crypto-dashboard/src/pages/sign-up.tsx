@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth-context";
 import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
+import PasswordRulesChecklist from "@/components/password-rules-checklist";
 import { ForgotPasswordPanel } from "@/components/forgot-password-panel";
 import PasswordInput from "@/components/password-input";
 import TotalAssetsBanner from "@/components/total-assets-banner";
@@ -165,9 +166,13 @@ export default function SignUp() {
                 placeholder="Min. 8 chars, mix letters & numbers"
                 autoComplete="new-password"
                 className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
-                aria-describedby="password-strength-hint"
+                aria-describedby="password-rules password-strength-hint"
               />
-              {strengthHint ? (
+              <PasswordRulesChecklist
+                id="password-rules"
+                password={form.password}
+              />
+              {strengthHint && (
                 <p
                   id="password-strength-hint"
                   data-testid="password-strength-hint"
@@ -181,10 +186,6 @@ export default function SignUp() {
                   }
                 >
                   {strengthHint.message}
-                </p>
-              ) : (
-                <p id="password-strength-hint" className="mt-1.5 text-xs text-muted-foreground">
-                  Use 8+ characters and mix letters with numbers or symbols.
                 </p>
               )}
             </div>
