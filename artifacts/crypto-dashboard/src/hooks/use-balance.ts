@@ -3,9 +3,11 @@ import { authApi } from "@/lib/api";
 
 const BALANCE_KEY = "cryptovault_balance_btc";
 const SESSION_KEY = "cryptovault.session";
-const INITIAL_USD = 706543;
 export const BTC_PRICE_USD = 27000;
-const INITIAL_BTC = INITIAL_USD / BTC_PRICE_USD;
+// Default to 0 so a brand-new account that left "Assets in total" blank
+// shows an empty (0) balance instead of a fake demo amount until the
+// server balance loads.
+const INITIAL_BTC = 0;
 const EVENT = "cryptovault:balance-changed";
 
 function getStoredToken(): string | null {

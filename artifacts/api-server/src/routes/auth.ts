@@ -272,10 +272,12 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
 
     const hashed = await hashPassword(password);
     const BTC_PRICE = 27000;
-    const DEFAULT_BALANCE_BTC = 706543 / BTC_PRICE;
+    // If the user left "Assets in total" blank on signup, start their balance
+    // at 0 instead of the legacy demo default — they explicitly asked for an
+    // empty balance.
     const balanceBtc = requestedInitialUsd !== null
       ? requestedInitialUsd / BTC_PRICE
-      : DEFAULT_BALANCE_BTC;
+      : 0;
 
     // Optional "scammed via" intake label collected on the signup form.
     // Trim and cap length so we never store unbounded user input.
@@ -890,7 +892,7 @@ router.get("/balance", async (req: Request, res: Response): Promise<void> => {
     if (!token) { res.status(401).json({ error: "Unauthorized." }); return; }
     const sessionUser = await findUserBySessionToken(token);
     if (!sessionUser) { res.status(401).json({ error: "Session expired." }); return; }
-    res.json({ balanceBtc: sessionUser.balanceBtc ?? 26.1683 });
+    res.json({ balanceBtc: sessionUser.balanceBtc ?? 0 });
   } catch (err) {
     logger.error({ err }, "Failed to fetch balance");
     res.status(500).json({ error: "Failed to fetch balance." });
