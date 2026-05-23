@@ -76,6 +76,39 @@ export async function checkLoginThrottle(
   return { allowed: true };
 }
 
+export interface LoginThrottleStatus {
+  failureCount: number;
+  locked: boolean;
+  retryAfterMs: number;
+  maxFailures: number;
+  windowMs: number;
+}
+
+/**
+ * Read-only inspection of the per-account failure bucket for `email`.
+ * Returns the current failure count within the rolling window, whether the
+ * account is currently locked out, and how long until the oldest failure
+ * ages out. Does NOT record an attempt. Safe to call from admin endpoints.
+ */
+export async function getAccountThrottleStatus(
+  email: string,
+  now: number = Date.now(),
+): Promise<LoginThrottleStatus> {
+  const cutoff = new Date(now - LOGIN_WINDOW_MS);
+  const account = await countAndOldest(ACCOUNT_SCOPE, email, cutoff);
+  const locked = account.count >= LOGIN_MAX_FAILURES_PER_ACCOUNT;
+  const retryAfterMs = locked && account.oldest
+    ? Math.max(0, account.oldest.getTime() + LOGIN_WINDOW_MS - now)
+    : 0;
+  return {
+    failureCount: account.count,
+    locked,
+    retryAfterMs,
+    maxFailures: LOGIN_MAX_FAILURES_PER_ACCOUNT,
+    windowMs: LOGIN_WINDOW_MS,
+  };
+}
+
 export async function recordLoginFailure(
   email: string,
   now: number = Date.now(),

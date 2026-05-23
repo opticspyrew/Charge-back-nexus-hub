@@ -199,6 +199,13 @@ export interface ServiceRequest {
   clientEmail?: string | null;
 }
 
+export interface LoginThrottleInfo {
+  failureCount: number;
+  locked: boolean;
+  retryAfterMs: number;
+  maxFailures: number;
+}
+
 export interface User {
   id: number;
   name: string;
@@ -206,6 +213,7 @@ export interface User {
   balanceBtc: number;
   createdAt: string;
   updatedAt: string;
+  loginThrottle?: LoginThrottleInfo;
 }
 
 export interface Activity {

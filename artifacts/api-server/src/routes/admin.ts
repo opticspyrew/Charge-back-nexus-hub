@@ -6,7 +6,7 @@ import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { sendAdminEmail, sendUserEmail, newClientEmail, newServiceRequestEmail, kycApprovedEmail, kycRejectedEmail, paymentConfirmationDecisionEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
-import { clearLoginFailures } from "../lib/login-throttle";
+import { clearLoginFailures, getAccountThrottleStatus } from "../lib/login-throttle";
 
 const router = Router();
 
@@ -390,7 +390,28 @@ router.get("/users", requireAdmin, async (req: Request, res: Response): Promise<
       })
       .from(users)
       .orderBy(desc(users.createdAt));
-    res.json({ users: allUsers });
+
+    // Augment each user with their current sign-in throttle status so the
+    // Users page can show "Locked — Xm left" without a second round-trip.
+    // Throttle keys are normalized (trim + lowercase) to match the bucket
+    // written by the login route.
+    const now = Date.now();
+    const withLockout = await Promise.all(
+      allUsers.map(async (u) => {
+        const key = u.email.trim().toLowerCase();
+        const status = await getAccountThrottleStatus(key, now);
+        return {
+          ...u,
+          loginThrottle: {
+            failureCount: status.failureCount,
+            locked: status.locked,
+            retryAfterMs: status.retryAfterMs,
+            maxFailures: status.maxFailures,
+          },
+        };
+      }),
+    );
+    res.json({ users: withLockout });
   } catch (err) {
     logger.error({ err }, "Failed to load users");
     res.status(500).json({ error: "Failed to load users" });
