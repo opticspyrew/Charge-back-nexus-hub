@@ -411,7 +411,23 @@ router.get("/users", requireAdmin, async (req: Request, res: Response): Promise<
         };
       }),
     );
-    res.json({ users: withLockout });
+
+    // Surface locked accounts at the top of the list so support can
+    // triage them at a glance. Within each group (locked / not locked)
+    // the original "newest registration first" order is preserved.
+    const sorted = [...withLockout].sort((a, b) => {
+      const aLocked = a.loginThrottle.locked ? 1 : 0;
+      const bLocked = b.loginThrottle.locked ? 1 : 0;
+      if (aLocked !== bLocked) return bLocked - aLocked;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
+    const lockedCount = sorted.reduce(
+      (n, u) => n + (u.loginThrottle.locked ? 1 : 0),
+      0,
+    );
+
+    res.json({ users: sorted, lockedCount });
   } catch (err) {
     logger.error({ err }, "Failed to load users");
     res.status(500).json({ error: "Failed to load users" });

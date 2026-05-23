@@ -529,6 +529,7 @@ function formatLockoutRemaining(ms: number): string {
 
 function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [lockedCount, setLockedCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -557,7 +558,7 @@ function UsersPage() {
 
   const load = () => {
     api.getUsers()
-      .then(r => setUsers(r.users))
+      .then(r => { setUsers(r.users); setLockedCount(r.lockedCount ?? 0); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -598,8 +599,23 @@ function UsersPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-xl font-bold text-foreground">Registered Users</h2>
-        <p className="text-sm text-muted-foreground">All CryptoVault accounts. Password material is never sent to the browser.</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="text-xl font-bold text-foreground">Registered Users</h2>
+          {lockedCount > 0 && (
+            <span
+              title={`${lockedCount} account${lockedCount === 1 ? " is" : "s are"} currently locked from too many failed sign-in attempts. They appear at the top of the list.`}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-full bg-rose-100 text-rose-800 border border-rose-200"
+              data-testid="users-locked-count"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              {lockedCount} locked
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          All CryptoVault accounts. Password material is never sent to the browser.
+          {lockedCount > 0 && " Locked accounts are listed first."}
+        </p>
       </div>
       {unlockMsg && (
         <div className={cn("p-3 rounded-lg text-sm border flex items-start gap-2", unlockMsg.startsWith("Error") ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200")}>

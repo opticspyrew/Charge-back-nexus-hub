@@ -54,7 +54,7 @@ export const api = {
 
   getActivity: () => req<{ activity: Activity[] }>("GET", "/activity"),
 
-  getUsers: () => req<{ users: User[] }>("GET", "/users"),
+  getUsers: () => req<{ users: User[]; lockedCount: number }>("GET", "/users"),
   setUserBalance: (id: number, data: { amountUsd?: number; balanceBtc?: number }) =>
     req<{ user: User }>("PATCH", `/users/${id}/balance`, data),
   unlockUserLogin: (id: number) =>
