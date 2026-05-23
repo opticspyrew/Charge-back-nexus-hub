@@ -21,6 +21,7 @@ export default function SignUp() {
   const SCAM_OPTIONS = ["Crypto", "Giftcard", "Bank Transfer/ACH", "Payment Firm"] as const;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailTakenAddress, setEmailTakenAddress] = useState("");
   const [showForgot, setShowForgot] = useState(false);
 
   const MAX_INITIAL_BALANCE_USD = 1_000_000;
@@ -33,6 +34,7 @@ export default function SignUp() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setEmailTakenAddress("");
     if (!form.name || !form.email || !form.password) {
       setError("Please fill in all fields.");
       return;
@@ -85,10 +87,26 @@ export default function SignUp() {
       await signup(form.name, form.email, form.password, initialUsd, scammedViaLabel);
       navigate("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create account. Please try again.");
+      const message = err instanceof Error ? err.message : "Failed to create account. Please try again.";
+      if (/already exists/i.test(message)) {
+        setEmailTakenAddress(form.email.trim());
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSwitchToSignIn = () => {
+    if (emailTakenAddress) {
+      try {
+        sessionStorage.setItem("prefill-signin-email", emailTakenAddress);
+      } catch {
+        // ignore storage errors
+      }
+    }
+    navigate("/sign-in");
   };
 
   if (showForgot) {
@@ -299,6 +317,26 @@ export default function SignUp() {
                 Helps our recovery team route your case to the right specialists.
               </p>
             </div>
+
+            {emailTakenAddress && (
+              <div
+                data-testid="signup-email-taken"
+                className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+              >
+                An account with{" "}
+                <strong className="font-semibold break-all">{emailTakenAddress}</strong>{" "}
+                already exists.{" "}
+                <button
+                  type="button"
+                  onClick={handleSwitchToSignIn}
+                  data-testid="signup-switch-to-signin"
+                  className="underline font-semibold hover:opacity-80"
+                >
+                  Sign in instead
+                </button>
+                .
+              </div>
+            )}
 
             {error && (
               <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm">
