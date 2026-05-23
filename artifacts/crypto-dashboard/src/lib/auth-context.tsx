@@ -89,8 +89,35 @@ function clearLegacyAccounts() {
   }
 }
 
+function readReplitHandoffToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash;
+  if (!hash || !hash.includes("replit_token=")) return null;
+  try {
+    const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    const token = params.get("replit_token");
+    if (token) {
+      // Strip the token from the URL so it doesn't sit in browser history.
+      const url = `${window.location.pathname}${window.location.search}`;
+      window.history.replaceState(null, "", url);
+      return token;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const initial = loadStoredSession();
+  const handoffToken = readReplitHandoffToken();
+  const stored = loadStoredSession();
+  // When the user just came back from the Replit OIDC callback we don't yet
+  // know their email/name (those come from /auth/me below). Seed the session
+  // with a placeholder so isAuthenticated flips to true immediately and the
+  // ProtectedRoute lands them on the dashboard instead of bouncing to /sign-in.
+  const initial: StoredSession | null = handoffToken
+    ? { token: handoffToken, user: stored?.user ?? { email: "", name: "" } }
+    : stored;
   const [session, setSessionState] = useState<StoredSession | null>(initial);
   const tokenRef = useRef<string | null>(initial?.token ?? null);
 

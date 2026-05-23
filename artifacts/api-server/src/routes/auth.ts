@@ -30,9 +30,12 @@ import {
 import { logger } from "../lib/logger";
 import { lookupLocation } from "../lib/geoip";
 import {
+  accountLockedAdminEmail,
+  accountLockedUserEmail,
   newSignInEmail,
   passwordChangedEmail,
   passwordResetEmail,
+  sendAdminEmail,
   sendUserEmail,
 } from "../lib/email";
 import {
@@ -42,6 +45,7 @@ import {
 import {
   checkLoginThrottle,
   clearLoginFailures,
+  getAccountThrottleStatus,
   recordLoginFailure,
 } from "../lib/login-throttle";
 
@@ -123,6 +127,71 @@ async function notifyNewSignIn(
     logger.error(
       { err, email: user.email },
       "Failed to send new sign-in notification email",
+    );
+  }
+}
+
+async function notifyAdminAccountLocked(
+  user: { id: number; name: string; email: string },
+  failureCount: number,
+  maxFailures: number,
+  req: Request,
+): Promise<void> {
+  try {
+    const { subject, html } = accountLockedAdminEmail({
+      user,
+      failureCount,
+      maxFailures,
+      lockedAt: new Date(),
+      // The Users page lives at /users inside the admin dashboard, which is
+      // mounted at /admin on the public origin.
+      usersPageUrl: buildAppUrl("/admin/users", req),
+    });
+    const sent = await sendAdminEmail(subject, html);
+    logger.info(
+      { userId: user.id, email: user.email, failureCount, sent },
+      sent
+        ? "Admin account-locked notification email sent"
+        : "Admin account-locked notification email could not be sent",
+    );
+  } catch (err) {
+    // Never let a failed notification break the underlying login flow.
+    logger.error(
+      { err, userId: user.id, email: user.email },
+      "Failed to send admin account-locked notification email",
+    );
+  }
+}
+
+async function notifyUserAccountLocked(
+  user: { id: number; name: string; email: string },
+  retryAfterMs: number,
+  req: Request,
+): Promise<void> {
+  try {
+    // Round up to the nearest whole minute, with a minimum of 1, so the
+    // copy never says "auto-unlocks in 0 minutes".
+    const unlocksInMinutes = Math.max(1, Math.ceil(retryAfterMs / 60_000));
+    const { subject, html } = accountLockedUserEmail({
+      name: user.name,
+      email: user.email,
+      lockedAt: new Date(),
+      unlocksInMinutes,
+      resetPasswordUrl: buildAppUrl("/forgot-password", req),
+      supportEmail: SUPPORT_EMAIL,
+    });
+    const sent = await sendUserEmail(user.email, subject, html);
+    logger.info(
+      { userId: user.id, email: user.email, unlocksInMinutes, sent },
+      sent
+        ? "User account-locked notification email sent"
+        : "User account-locked notification email could not be sent",
+    );
+  } catch (err) {
+    // Never let a failed notification break the underlying login flow.
+    logger.error(
+      { err, userId: user.id, email: user.email },
+      "Failed to send user account-locked notification email",
     );
   }
 }
@@ -355,6 +424,9 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
     // --- Diagnostic: user lookup ---
     const user = await findUserByEmail(normalizedEmail);
     if (!user) {
+      // No user means there's nobody to name in an admin alert, so we
+      // intentionally don't fire one here even if the unknown-email bucket
+      // happens to cross the threshold.
       await recordLoginFailure(normalizedEmail);
       logger.warn({ email: normalizedEmail }, "Login failed: no account found for email");
       res.status(401).json({ error: "Invalid email or password." });
@@ -368,11 +440,38 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       passwordIterations: user.passwordIterations,
     });
     if (!ok) {
-      await recordLoginFailure(normalizedEmail);
+      const failure = await recordLoginFailure(normalizedEmail);
       logger.warn(
-        { userId: user.id, email: normalizedEmail, passwordIterations: user.passwordIterations },
+        {
+          userId: user.id,
+          email: normalizedEmail,
+          passwordIterations: user.passwordIterations,
+          failureCount: failure.failureCount,
+          justLocked: failure.justLocked,
+        },
         "Login failed: password verification rejected",
       );
+      // Alert admins exactly once per lockout window: justLocked is true only
+      // on the attempt that crosses the threshold, and subsequent attempts
+      // within the same window are short-circuited by checkLoginThrottle
+      // before ever reaching recordLoginFailure.
+      if (failure.justLocked) {
+        void notifyAdminAccountLocked(
+          { id: user.id, name: user.name, email: user.email },
+          failure.failureCount,
+          failure.maxFailures,
+          req,
+        );
+        // Also let the customer know — same justLocked guard means we send
+        // at most one user-facing email per lockout window, mirroring the
+        // admin-alert dedup behaviour.
+        const status = await getAccountThrottleStatus(normalizedEmail);
+        void notifyUserAccountLocked(
+          { id: user.id, name: user.name, email: user.email },
+          status.retryAfterMs,
+          req,
+        );
+      }
       res.status(401).json({ error: "Invalid email or password." });
       return;
     }
