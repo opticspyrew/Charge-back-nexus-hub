@@ -143,6 +143,51 @@ export async function sendUserEmail(
   }
 }
 
+export function accountLockedAdminEmail(params: {
+  user: { id: number; name: string; email: string };
+  failureCount: number;
+  maxFailures: number;
+  lockedAt: Date;
+  usersPageUrl: string | null;
+}): { subject: string; html: string } {
+  const { user, failureCount, maxFailures, lockedAt, usersPageUrl } = params;
+  const subject = `[Account Locked] ${user.name} (${user.email}) hit the sign-in lockout threshold`;
+  const safeName = escapeHtml(user.name);
+  const safeEmail = escapeHtml(user.email);
+  const safeTime = escapeHtml(lockedAt.toUTCString());
+  const ctaButton = usersPageUrl
+    ? `<p style="text-align: center; margin: 24px 0;">
+         <a href="${escapeHtml(usersPageUrl)}" style="display: inline-block; background: #b91c1c; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+           Open Users page
+         </a>
+       </p>`
+    : "";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #b91c1c; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Customer account locked</h1>
+        <p style="color: #fecaca; margin: 4px 0 0; font-size: 13px;">A user just hit the sign-in failure threshold and is temporarily locked out</p>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px; width: 160px;">User</td><td style="padding: 8px 0; color: #111827;">${safeName} &lt;${safeEmail}&gt;</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">User ID</td><td style="padding: 8px 0; color: #111827; font-family: monospace;">#${user.id}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Failed attempts</td><td style="padding: 8px 0; color: #111827;">${failureCount} of ${maxFailures}</td></tr>
+          <tr><td style="padding: 8px 0; color: #6b7280; font-size: 14px;">Locked at</td><td style="padding: 8px 0; color: #111827;">${safeTime}</td></tr>
+        </table>
+        <p style="font-size: 14px; color: #374151; margin: 16px 0 0;">
+          The customer can't sign in until the lockout window expires. Consider reaching out
+          to confirm it's really them, or unlock the account from the Users page if appropriate.
+        </p>
+        ${ctaButton}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #9ca3af; margin: 0;">This is an automated notification from your Firm Admin System. You'll only get one email per lockout window per account.</p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
 export function passwordResetEmail(params: {
   name: string;
   resetUrl: string;

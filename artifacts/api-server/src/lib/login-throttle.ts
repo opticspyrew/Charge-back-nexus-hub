@@ -109,15 +109,35 @@ export async function getAccountThrottleStatus(
   };
 }
 
+export interface RecordLoginFailureResult {
+  failureCount: number;
+  maxFailures: number;
+  /**
+   * True iff this particular failed attempt crossed the lockout threshold for
+   * the first time in the current rolling window. Once an account is locked,
+   * subsequent attempts are rejected by `checkLoginThrottle` before they ever
+   * reach `recordLoginFailure`, so this transition fires exactly once per
+   * lockout window — making it a safe trigger for one-shot admin alerts.
+   */
+  justLocked: boolean;
+}
+
 export async function recordLoginFailure(
   email: string,
   now: number = Date.now(),
-): Promise<void> {
+): Promise<RecordLoginFailureResult> {
   await db.insert(loginThrottleAttempts).values({
     scope: ACCOUNT_SCOPE,
     key: email,
     occurredAt: new Date(now),
   });
+  const cutoff = new Date(now - LOGIN_WINDOW_MS);
+  const { count } = await countAndOldest(ACCOUNT_SCOPE, email, cutoff);
+  return {
+    failureCount: count,
+    maxFailures: LOGIN_MAX_FAILURES_PER_ACCOUNT,
+    justLocked: count === LOGIN_MAX_FAILURES_PER_ACCOUNT,
+  };
 }
 
 export async function clearLoginFailures(email: string): Promise<void> {
