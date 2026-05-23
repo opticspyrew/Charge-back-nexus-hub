@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders, kycSubmissions } from "@workspace/db";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { sendAdminEmail, sendUserEmail, newClientEmail, newServiceRequestEmail, kycApprovedEmail, kycRejectedEmail } from "../lib/email";
+import { sendAdminEmail, sendUserEmail, newClientEmail, newServiceRequestEmail, kycApprovedEmail, kycRejectedEmail, paymentConfirmationDecisionEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
 
@@ -51,6 +51,9 @@ import { ObjectStorageService } from "../lib/objectStorage";
 // Support address shown in KYC decision emails. Kept in sync with the address
 // used by other user-facing notifications (see auth.ts SUPPORT_EMAIL).
 const KYC_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+// Same address is reused for payment-confirmation decision emails so users
+// have a consistent contact across notification types.
+const PAYMENT_SUPPORT_EMAIL = KYC_SUPPORT_EMAIL;
 
 // Build a link back to the user-facing dashboard for KYC decision emails.
 // The KYC modal is opened from the main dashboard, so the same URL works for
@@ -326,6 +329,42 @@ router.patch("/requests/:id", requireAdmin, async (req: Request, res: Response):
       description: `${request.type} request from ${client?.name ?? "unknown"} ${status}`,
       metadata: { status, requestId: id },
     });
+
+    // Notify the customer by email when a payment confirmation request is
+    // decided so they don't have to keep the invoice page open. Email failures
+    // are logged but never block the admin action.
+    if (
+      request.type === "payment_confirmation" &&
+      (status === "approved" || status === "rejected") &&
+      client?.email
+    ) {
+      try {
+        const appUrl = buildAdminAppUrl(req);
+        const invoiceUrl = appUrl ? `${appUrl}/invoice` : null;
+        const { subject, html } = paymentConfirmationDecisionEmail({
+          name: client.name,
+          email: client.email,
+          decision: status,
+          decidedAt: new Date(),
+          amount: request.amount,
+          currency: request.currency,
+          invoiceUrl,
+          supportEmail: PAYMENT_SUPPORT_EMAIL,
+        });
+        const sent = await sendUserEmail(client.email, subject, html);
+        logger.info(
+          { clientId: client.id, requestId: id, status, sent },
+          sent
+            ? "Payment confirmation decision email sent"
+            : "Payment confirmation decision email could not be sent",
+        );
+      } catch (err) {
+        logger.error(
+          { err, clientId: client.id, requestId: id, status },
+          "Failed to send payment confirmation decision email",
+        );
+      }
+    }
 
     res.json({ request });
   } catch (err) {
