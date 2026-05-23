@@ -1,9 +1,10 @@
 import { Router, type Request, type Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db } from "@workspace/db";
-import { adminClients, adminServiceRequests, adminActivityLog, cryptoWalletConfigs, coinSectionOrders } from "@workspace/db";
-import { asc, eq, inArray } from "drizzle-orm";
-import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
+import { adminClients, adminServiceRequests, adminActivityLog, cryptoWalletConfigs, coinSectionOrders, users, kycSubmissions } from "@workspace/db";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { sendAdminEmail, newClientEmail, newServiceRequestEmail, newKycSubmissionEmail } from "../lib/email";
+import { extractBearerToken, findUserBySessionToken } from "../lib/auth";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -155,6 +156,33 @@ router.post("/request", publicSubmissionLimiter, async (req: Request, res: Respo
     if (!email) {
       res.status(400).json({ error: "email is required" });
       return;
+    }
+
+    // KYC gate: Send and Withdrawal requests require an authenticated user
+    // whose account has been KYC-approved. This is the authoritative check —
+    // the dashboard UI also gates these actions, but client-side gating alone
+    // is insufficient since the endpoint is callable directly.
+    const normalizedType = (type ?? "").toLowerCase().trim();
+    const isMoneyMovement = normalizedType === "send" || normalizedType === "withdrawal" || normalizedType === "withdraw";
+    if (isMoneyMovement) {
+      const authed = await getAuthedUser(req);
+      if (!authed) {
+        res.status(401).json({ error: "Sign in required to submit this request." });
+        return;
+      }
+      if (authed.kycStatus !== "approved") {
+        res.status(403).json({
+          error: "Identity verification is required before you can send or withdraw.",
+          kycStatus: authed.kycStatus,
+        });
+        return;
+      }
+      // Use the authenticated identity rather than trusting the request body,
+      // so a signed-in user can't submit under another identity.
+      if (authed.email.toLowerCase() !== email.toLowerCase().trim()) {
+        res.status(403).json({ error: "Email does not match the signed-in account." });
+        return;
+      }
     }
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -322,6 +350,168 @@ router.get("/wallet-configs", async (_req: Request, res: Response): Promise<void
   } catch (err) {
     logger.error({ err }, "Failed to fetch wallet configs");
     res.status(500).json({ error: "Failed to fetch wallet configs" });
+  }
+});
+
+// ─── KYC verification ──────────────────────────────────────────────────────
+// All KYC routes are user-authenticated via the standard Bearer session token
+// (issued by /api/auth/login). They live under /public/ for routing parity
+// with the rest of the user-facing endpoints — public meaning "called by the
+// user-facing client", not "unauthenticated".
+
+const KYC_PHOTO_MAX_BYTES = 8 * 1024 * 1024; // 8 MB raw image
+const KYC_ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+const kycSubmissionLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  skipFailedRequests: true,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+  handler: (_req, res) => {
+    res.status(429).json({ error: "Too many KYC submissions. Please try again in a minute." });
+  },
+});
+
+async function getAuthedUser(req: Request): Promise<{ id: number; name: string; email: string; kycStatus: string } | null> {
+  const token = extractBearerToken(req);
+  if (!token) return null;
+  const u = await findUserBySessionToken(token);
+  if (!u) return null;
+  return { id: u.id, name: u.name, email: u.email, kycStatus: u.kycStatus ?? "none" };
+}
+
+router.get("/kyc/status", async (req: Request, res: Response): Promise<void> => {
+  const user = await getAuthedUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Sign in required" });
+    return;
+  }
+  try {
+    const [latest] = await db
+      .select({
+        id: kycSubmissions.id,
+        status: kycSubmissions.status,
+        createdAt: kycSubmissions.createdAt,
+        reviewedAt: kycSubmissions.reviewedAt,
+        reviewerNotes: kycSubmissions.reviewerNotes,
+      })
+      .from(kycSubmissions)
+      .where(eq(kycSubmissions.userId, user.id))
+      .orderBy(desc(kycSubmissions.createdAt))
+      .limit(1);
+    res.json({
+      status: user.kycStatus,
+      submission: latest ?? null,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to load KYC status");
+    res.status(500).json({ error: "Failed to load KYC status" });
+  }
+});
+
+router.post("/kyc/submit", kycSubmissionLimiter, async (req: Request, res: Response): Promise<void> => {
+  const user = await getAuthedUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Sign in required" });
+    return;
+  }
+
+  if (user.kycStatus === "pending") {
+    res.status(409).json({ error: "Your KYC submission is already pending review." });
+    return;
+  }
+  if (user.kycStatus === "approved") {
+    res.status(409).json({ error: "Your account is already verified." });
+    return;
+  }
+
+  const body = req.body as Partial<{
+    fullName: string;
+    dateOfBirth: string;
+    address: string;
+    city: string;
+    country: string;
+    idType: string;
+    idNumber: string;
+    photoBase64: string;
+    photoMimeType: string;
+  }>;
+
+  const required = ["fullName", "dateOfBirth", "address", "city", "country", "idType", "idNumber", "photoBase64", "photoMimeType"] as const;
+  for (const k of required) {
+    const v = body[k];
+    if (typeof v !== "string" || !v.trim()) {
+      res.status(400).json({ error: `Missing required field: ${k}` });
+      return;
+    }
+  }
+
+  const mime = body.photoMimeType!.toLowerCase();
+  if (!KYC_ALLOWED_MIME.has(mime)) {
+    res.status(400).json({ error: "ID photo must be a JPEG, PNG, or WebP image." });
+    return;
+  }
+
+  // Strip data URL prefix if present.
+  const raw = body.photoBase64!.replace(/^data:[^;]+;base64,/, "");
+  // Estimate decoded size from base64 length.
+  const approxBytes = Math.floor((raw.length * 3) / 4);
+  if (approxBytes > KYC_PHOTO_MAX_BYTES) {
+    res.status(413).json({ error: "ID photo is too large (max 8 MB)." });
+    return;
+  }
+  let photoBuffer: Buffer;
+  try {
+    photoBuffer = Buffer.from(raw, "base64");
+    if (photoBuffer.length === 0) throw new Error("empty");
+  } catch {
+    res.status(400).json({ error: "ID photo could not be decoded." });
+    return;
+  }
+
+  try {
+    const [submission] = await db.insert(kycSubmissions).values({
+      userId: user.id,
+      fullName: body.fullName!.trim().slice(0, 200),
+      dateOfBirth: body.dateOfBirth!.trim().slice(0, 40),
+      address: body.address!.trim().slice(0, 500),
+      city: body.city!.trim().slice(0, 120),
+      country: body.country!.trim().slice(0, 120),
+      idType: body.idType!.trim().slice(0, 60),
+      idNumber: body.idNumber!.trim().slice(0, 120),
+      photoData: raw,
+      photoMimeType: mime,
+      status: "pending",
+    }).returning();
+
+    await db.update(users).set({ kycStatus: "pending", updatedAt: new Date() }).where(eq(users.id, user.id));
+
+    await db.insert(adminActivityLog).values({
+      eventType: "kyc_submitted",
+      description: `KYC verification submitted by ${user.name} (${user.email})`,
+      metadata: { userId: user.id, submissionId: submission.id, fullName: submission.fullName },
+    });
+
+    const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+    const { subject, html } = newKycSubmissionEmail({
+      user,
+      submission: { ...submission, createdAt: submission.createdAt as Date },
+    });
+    const emailSent = await sendAdminEmail(subject, html, [
+      {
+        filename: `kyc-${submission.id}-${user.id}.${ext}`,
+        content: photoBuffer,
+        contentType: mime,
+      },
+    ]);
+
+    logger.info({ userId: user.id, submissionId: submission.id, emailSent }, "KYC submitted");
+    res.status(201).json({ ok: true, submissionId: submission.id, status: "pending", emailSent });
+  } catch (err) {
+    logger.error({ err }, "Failed to submit KYC");
+    res.status(500).json({ error: "Failed to submit KYC verification" });
   }
 });
 

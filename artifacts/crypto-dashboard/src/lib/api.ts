@@ -42,17 +42,21 @@ export const publicApi = {
       data,
     ),
 
-  submitRequest: (data: {
-    name: string;
-    email: string;
-    type: string;
-    amount: string;
-    currency: string;
-    notes?: string;
-    txnId?: string;
-  }) => post<{ request: { id: number; publicToken: string }; emailSent: boolean }>(
+  submitRequest: (
+    data: {
+      name: string;
+      email: string;
+      type: string;
+      amount: string;
+      currency: string;
+      notes?: string;
+      txnId?: string;
+    },
+    authToken?: string,
+  ) => post<{ request: { id: number; publicToken: string }; emailSent: boolean }>(
     `${PUBLIC_BASE}/request`,
     data,
+    authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
   ),
 
   checkTxApprovals: async (txnIds: string[]): Promise<{ approvals: { txnId: string; status: string }[] }> => {
@@ -119,6 +123,50 @@ export interface AuthSessionRecord {
   countryCode: string | null;
   current: boolean;
 }
+
+export type KycStatus = "none" | "pending" | "approved" | "rejected";
+
+export interface KycStatusResponse {
+  status: KycStatus;
+  submission: {
+    id: number;
+    status: KycStatus;
+    createdAt: string;
+    reviewedAt: string | null;
+    reviewerNotes: string | null;
+  } | null;
+}
+
+export interface KycSubmitInput {
+  fullName: string;
+  dateOfBirth: string;
+  address: string;
+  city: string;
+  country: string;
+  idType: string;
+  idNumber: string;
+  photoBase64: string;
+  photoMimeType: string;
+}
+
+export const kycApi = {
+  status: async (token: string): Promise<KycStatusResponse> => {
+    const res = await fetch(`${PUBLIC_BASE}/kyc/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || "Failed to load verification status");
+    }
+    return res.json();
+  },
+  submit: (token: string, data: KycSubmitInput) =>
+    post<{ ok: boolean; submissionId: number; status: KycStatus; emailSent: boolean }>(
+      `${PUBLIC_BASE}/kyc/submit`,
+      data,
+      { Authorization: `Bearer ${token}` },
+    ),
+};
 
 export const authApi = {
   signup: (data: { name: string; email: string; password: string; initialBalanceUsd?: number }) =>

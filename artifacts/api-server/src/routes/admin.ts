@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
-import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders } from "@workspace/db";
+import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders, kycSubmissions } from "@workspace/db";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
@@ -589,5 +589,107 @@ router.delete("/wallet-configs/:id", requireAdmin, async (req: Request, res: Res
     res.status(500).json({ error: "Failed to delete wallet config" });
   }
 });
+
+// ─── KYC review ────────────────────────────────────────────────────────────
+
+router.get("/kyc", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  const statusFilter = typeof req.query.status === "string" ? req.query.status : "pending";
+  try {
+    const rows = await db
+      .select({
+        id: kycSubmissions.id,
+        userId: kycSubmissions.userId,
+        fullName: kycSubmissions.fullName,
+        dateOfBirth: kycSubmissions.dateOfBirth,
+        address: kycSubmissions.address,
+        city: kycSubmissions.city,
+        country: kycSubmissions.country,
+        idType: kycSubmissions.idType,
+        idNumber: kycSubmissions.idNumber,
+        photoMimeType: kycSubmissions.photoMimeType,
+        status: kycSubmissions.status,
+        reviewedAt: kycSubmissions.reviewedAt,
+        reviewerNotes: kycSubmissions.reviewerNotes,
+        createdAt: kycSubmissions.createdAt,
+        userEmail: users.email,
+        userName: users.name,
+      })
+      .from(kycSubmissions)
+      .innerJoin(users, eq(users.id, kycSubmissions.userId))
+      .where(statusFilter === "all" ? sql`true` : eq(kycSubmissions.status, statusFilter))
+      .orderBy(desc(kycSubmissions.createdAt))
+      .limit(200);
+    res.json({ submissions: rows });
+  } catch (err) {
+    logger.error({ err }, "Failed to list KYC submissions");
+    res.status(500).json({ error: "Failed to list KYC submissions" });
+  }
+});
+
+router.get("/kyc/:id/photo", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  const id = Number.parseInt(String(req.params.id ?? ""), 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid submission id" });
+    return;
+  }
+  try {
+    const [row] = await db
+      .select({ photoData: kycSubmissions.photoData, photoMimeType: kycSubmissions.photoMimeType })
+      .from(kycSubmissions)
+      .where(eq(kycSubmissions.id, id))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "Submission not found" });
+      return;
+    }
+    const buf = Buffer.from(row.photoData, "base64");
+    res.setHeader("Content-Type", row.photoMimeType);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.send(buf);
+  } catch (err) {
+    logger.error({ err }, "Failed to load KYC photo");
+    res.status(500).json({ error: "Failed to load photo" });
+  }
+});
+
+async function decideKyc(req: Request, res: Response, decision: "approved" | "rejected"): Promise<void> {
+  const id = Number.parseInt(String(req.params.id ?? ""), 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid submission id" });
+    return;
+  }
+  const notes = typeof req.body?.notes === "string" ? req.body.notes.slice(0, 500) : null;
+  try {
+    const [submission] = await db.select().from(kycSubmissions).where(eq(kycSubmissions.id, id)).limit(1);
+    if (!submission) {
+      res.status(404).json({ error: "Submission not found" });
+      return;
+    }
+    if (submission.status !== "pending") {
+      res.status(409).json({ error: `Submission has already been ${submission.status}.` });
+      return;
+    }
+    const now = new Date();
+    await db.update(kycSubmissions).set({
+      status: decision,
+      reviewerNotes: notes,
+      reviewedAt: now,
+      updatedAt: now,
+    }).where(eq(kycSubmissions.id, id));
+    await db.update(users).set({ kycStatus: decision, updatedAt: now }).where(eq(users.id, submission.userId));
+    await db.insert(adminActivityLog).values({
+      eventType: decision === "approved" ? "kyc_approved" : "kyc_rejected",
+      description: `KYC submission #${id} ${decision} for ${submission.fullName}`,
+      metadata: { submissionId: id, userId: submission.userId, notes },
+    });
+    res.json({ ok: true, status: decision });
+  } catch (err) {
+    logger.error({ err, decision }, "Failed to update KYC status");
+    res.status(500).json({ error: "Failed to update KYC status" });
+  }
+}
+
+router.post("/kyc/:id/approve", requireAdmin, (req, res) => decideKyc(req, res, "approved"));
+router.post("/kyc/:id/reject", requireAdmin, (req, res) => decideKyc(req, res, "rejected"));
 
 export default router;

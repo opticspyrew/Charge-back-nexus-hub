@@ -70,7 +70,53 @@ export const api = {
     req<{ orders: CoinSectionOrder[] }>("GET", "/coin-section-orders"),
   setCoinSectionOrders: (orders: Array<{ symbol: string; sortOrder: number }>) =>
     req<{ orders: CoinSectionOrder[] }>("PUT", "/coin-section-orders", { orders }),
+
+  getKycSubmissions: (status: "pending" | "approved" | "rejected" | "all" = "pending") =>
+    req<{ submissions: KycSubmission[] }>("GET", `/kyc?status=${status}`),
+  approveKyc: (id: number, notes?: string) =>
+    req<{ ok: boolean; status: "approved" }>("POST", `/kyc/${id}/approve`, { notes }),
+  rejectKyc: (id: number, notes?: string) =>
+    req<{ ok: boolean; status: "rejected" }>("POST", `/kyc/${id}/reject`, { notes }),
 };
+
+/**
+ * Fetch a KYC photo as a blob URL using header-based admin auth.
+ * Caller is responsible for revoking the returned URL via URL.revokeObjectURL.
+ * Returns null if the request fails or no admin token is set.
+ */
+export async function fetchKycPhotoUrl(id: number): Promise<string | null> {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${API_BASE}/admin/kyc/${id}/photo`, {
+      headers: { "x-admin-token": token },
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+}
+
+export interface KycSubmission {
+  id: number;
+  userId: number;
+  fullName: string;
+  dateOfBirth: string;
+  address: string;
+  city: string;
+  country: string;
+  idType: string;
+  idNumber: string;
+  photoMimeType: string;
+  status: "pending" | "approved" | "rejected";
+  reviewedAt: string | null;
+  reviewerNotes: string | null;
+  createdAt: string;
+  userEmail: string;
+  userName: string;
+}
 
 export interface CoinSectionOrder {
   id: number;
