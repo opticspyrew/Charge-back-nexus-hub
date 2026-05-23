@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, users, userSessions, passwordResetTokens } from "@workspace/db";
-import { and, eq, isNull, gt, desc } from "drizzle-orm";
+import { and, eq, isNull, gt, desc, ne } from "drizzle-orm";
 import {
   generateResetToken,
   hashPassword,
@@ -817,6 +817,40 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     logger.error({ err }, "Failed to load recent sessions");
     res.status(500).json({ error: "Failed to load recent activity." });
+  }
+});
+
+router.post("/sessions/revoke-all-others", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    const current = await findSessionWithUser(token);
+    if (!current) {
+      res.status(401).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+
+    const deleted = await db
+      .delete(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, current.user.id),
+          ne(userSessions.id, current.session.id),
+        ),
+      )
+      .returning({ id: userSessions.id });
+
+    logger.info(
+      { userId: current.user.id, revoked: deleted.length },
+      "User revoked all other sessions",
+    );
+    res.json({ revoked: deleted.length });
+  } catch (err) {
+    logger.error({ err }, "Failed to revoke all other sessions");
+    res.status(500).json({ error: "Failed to sign out other devices." });
   }
 });
 
