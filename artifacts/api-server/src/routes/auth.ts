@@ -38,7 +38,8 @@ import {
   recordLoginFailure,
 } from "../lib/login-throttle";
 
-const SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+const DEFAULT_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
 
 const MAX_USER_AGENT_LENGTH = 500;
 

@@ -1,7 +1,8 @@
 import nodemailer from "nodemailer";
 import { logger } from "./logger";
 
-const ADMIN_EMAIL = "Opticspycrew@gmail.com";
+const DEFAULT_ADMIN_EMAIL = "Opticspycrew@gmail.com";
+const ADMIN_EMAIL = process.env.SUPPORT_EMAIL?.trim() || DEFAULT_ADMIN_EMAIL;
 
 // Escape user-supplied fields before interpolating into the HTML email body.
 function escapeHtml(value: unknown): string {

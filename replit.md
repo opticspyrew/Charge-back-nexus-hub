@@ -36,6 +36,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
   - Auth: `X-Admin-Token: <username>:<password>` header (env vars: `ADMIN_USERNAME`, `ADMIN_PASSWORD`)
   - User auth routes: `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/me` (Bearer token in `Authorization` header)
   - Passwords are hashed server-side with PBKDF2 (sha256, 210k iterations) and stored in the `users` table; sessions live in `user_sessions` and last 30 days
+  - Optional `SUPPORT_EMAIL` env var overrides the default support/admin contact address (`Opticspycrew@gmail.com`) shown in the password-changed user email and used as the recipient of admin notification emails
   - Primary user `pgeitz@hotmail.com` / `Centuryhacks` is seeded into the `users` table on startup if missing
 
 ## Database Tables
