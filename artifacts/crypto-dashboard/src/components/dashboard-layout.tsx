@@ -189,7 +189,7 @@ export default function DashboardLayout({ children, activeTab }: LayoutProps) {
             {/* Live BTC price */}
             <div
               data-testid="header-btc-price"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-muted border border-card-border rounded-full"
+              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-muted border border-card-border rounded-full"
               title="Live BTC price (USD)"
             >
               <span className="w-5 h-5 rounded-full bg-amber-400 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
