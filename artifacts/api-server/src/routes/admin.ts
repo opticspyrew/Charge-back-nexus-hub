@@ -496,7 +496,7 @@ router.post("/users/:id/unlock-login", requireAdmin, async (req: Request, res: R
     // at sign-in time (lowercased). Match that here so the clear actually
     // hits the same bucket.
     const key = user.email.trim().toLowerCase();
-    clearLoginFailures(key);
+    await clearLoginFailures(key);
 
     await db.insert(adminActivityLog).values({
       eventType: "user_login_unlocked",

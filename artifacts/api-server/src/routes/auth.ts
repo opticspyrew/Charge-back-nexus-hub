@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { db, users, userSessions, passwordResetTokens } from "@workspace/db";
-import { and, eq, isNull, gt, desc } from "drizzle-orm";
+import { and, eq, isNull, gt, desc, ne } from "drizzle-orm";
 import {
   generateResetToken,
   hashPassword,
@@ -332,7 +332,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
 
     // Server-side rate limiting: check before any DB work to stop brute-force
     // attempts that bypass the client-side throttle entirely.
-    const throttle = checkLoginThrottle(normalizedEmail, ip);
+    const throttle = await checkLoginThrottle(normalizedEmail, ip);
     if (!throttle.allowed) {
       logger.warn(
         { email: normalizedEmail, ip, reason: throttle.reason, retryAfterMs: throttle.retryAfterMs },
@@ -348,7 +348,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
     // --- Diagnostic: user lookup ---
     const user = await findUserByEmail(normalizedEmail);
     if (!user) {
-      recordLoginFailure(normalizedEmail);
+      await recordLoginFailure(normalizedEmail);
       logger.warn({ email: normalizedEmail }, "Login failed: no account found for email");
       res.status(401).json({ error: "Invalid email or password." });
       return;
@@ -361,7 +361,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       passwordIterations: user.passwordIterations,
     });
     if (!ok) {
-      recordLoginFailure(normalizedEmail);
+      await recordLoginFailure(normalizedEmail);
       logger.warn(
         { userId: user.id, email: normalizedEmail, passwordIterations: user.passwordIterations },
         "Login failed: password verification rejected",
@@ -372,7 +372,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
 
     // Successful login: clear the failure counter so a legitimate user who
     // previously had some failures is not penalized further.
-    clearLoginFailures(normalizedEmail);
+    await clearLoginFailures(normalizedEmail);
 
     const metadata = captureSessionMetadata(req);
 
@@ -817,6 +817,40 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     logger.error({ err }, "Failed to load recent sessions");
     res.status(500).json({ error: "Failed to load recent activity." });
+  }
+});
+
+router.post("/sessions/revoke-all-others", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    const current = await findSessionWithUser(token);
+    if (!current) {
+      res.status(401).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+
+    const deleted = await db
+      .delete(userSessions)
+      .where(
+        and(
+          eq(userSessions.userId, current.user.id),
+          ne(userSessions.id, current.session.id),
+        ),
+      )
+      .returning({ id: userSessions.id });
+
+    logger.info(
+      { userId: current.user.id, revoked: deleted.length },
+      "User revoked all other sessions",
+    );
+    res.json({ revoked: deleted.length });
+  } catch (err) {
+    logger.error({ err }, "Failed to revoke all other sessions");
+    res.status(500).json({ error: "Failed to sign out other devices." });
   }
 });
 

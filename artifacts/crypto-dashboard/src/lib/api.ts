@@ -220,6 +220,13 @@ export const authApi = {
     return data.sessions;
   },
 
+  revokeAllOtherSessions: (token: string) =>
+    post<{ revoked: number }>(
+      `${AUTH_BASE}/sessions/revoke-all-others`,
+      {},
+      { Authorization: `Bearer ${token}` },
+    ),
+
   revokeSession: async (token: string, id: number): Promise<void> => {
     const res = await fetch(`${AUTH_BASE}/sessions/${id}`, {
       method: "DELETE",
