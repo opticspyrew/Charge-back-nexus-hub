@@ -397,14 +397,35 @@ router.get("/kyc/status", async (req: Request, res: Response): Promise<void> => 
         createdAt: kycSubmissions.createdAt,
         reviewedAt: kycSubmissions.reviewedAt,
         reviewerNotes: kycSubmissions.reviewerNotes,
+        fullName: kycSubmissions.fullName,
+        dateOfBirth: kycSubmissions.dateOfBirth,
+        address: kycSubmissions.address,
+        city: kycSubmissions.city,
+        country: kycSubmissions.country,
+        idType: kycSubmissions.idType,
+        idNumber: kycSubmissions.idNumber,
       })
       .from(kycSubmissions)
       .where(eq(kycSubmissions.userId, user.id))
       .orderBy(desc(kycSubmissions.createdAt))
       .limit(1);
+    // Only expose previous form values when the latest submission was rejected,
+    // so the user can correct and resubmit without re-typing everything. For
+    // pending/approved submissions we keep the response minimal.
+    const submission = latest
+      ? (latest.status === "rejected"
+          ? latest
+          : {
+              id: latest.id,
+              status: latest.status,
+              createdAt: latest.createdAt,
+              reviewedAt: latest.reviewedAt,
+              reviewerNotes: latest.reviewerNotes,
+            })
+      : null;
     res.json({
       status: user.kycStatus,
-      submission: latest ?? null,
+      submission,
     });
   } catch (err) {
     logger.error({ err }, "Failed to load KYC status");

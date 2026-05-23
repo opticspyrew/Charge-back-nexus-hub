@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { api, getToken, setToken, clearToken, fetchKycPhotoUrl, type Client, type ServiceRequest, type Activity, type User, type WalletConfig, type CoinSectionOrder, type KycSubmission } from "@/lib/api";
+import { api, getToken, setToken, clearToken, fetchKycPhotoUrl, downloadKycPhoto, type Client, type ServiceRequest, type Activity, type User, type WalletConfig, type CoinSectionOrder, type KycSubmission } from "@/lib/api";
 import ReceiptModal from "@/components/receipt-modal";
 
 interface AuthCtx { token: string | null; login: (t: string) => void; logout: () => void; }
@@ -1161,14 +1161,23 @@ function KycPage() {
           {submissions.map(s => (
             <div key={s.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
               <div className="flex flex-wrap items-start gap-4">
-                <button
-                  type="button"
-                  onClick={() => setPreviewId(s.id)}
-                  className="flex-shrink-0 w-28 h-28 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden hover:ring-2 hover:ring-indigo-400 transition"
-                  title="Click to enlarge"
-                >
-                  <KycPhoto id={s.id} alt={`ID for ${s.fullName}`} className="w-full h-full object-cover" />
-                </button>
+                <div className="flex-shrink-0 flex flex-col items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewId(s.id)}
+                    className="w-28 h-28 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden hover:ring-2 hover:ring-indigo-400 transition"
+                    title="Click to enlarge"
+                  >
+                    <KycPhoto id={s.id} alt={`ID for ${s.fullName}`} className="w-full h-full object-cover" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void downloadKycPhoto(s.id)}
+                    className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700"
+                  >
+                    Download
+                  </button>
+                </div>
                 <div className="flex-1 min-w-[260px]">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-slate-900">{s.fullName}</h3>
@@ -1181,6 +1190,11 @@ function KycPage() {
                       {s.status}
                     </span>
                     <span className="text-xs text-slate-400 font-mono">#{s.id}</span>
+                    {s.totalAttempts > 1 && (
+                      <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        Attempt {s.attemptNumber} of {s.totalAttempts}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">Account: {s.userName} &lt;{s.userEmail}&gt;</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-xs mt-3">
@@ -1195,6 +1209,62 @@ function KycPage() {
                   </div>
                   {s.reviewerNotes && (
                     <p className="mt-3 text-xs text-slate-600 italic">Notes: {s.reviewerNotes}</p>
+                  )}
+                  {s.attempts.length > 1 && (
+                    <details className="mt-3 group">
+                      <summary className="text-xs font-semibold text-indigo-600 cursor-pointer hover:text-indigo-700 select-none">
+                        Show prior attempts ({s.attempts.length - 1})
+                      </summary>
+                      <ul className="mt-2 space-y-1.5">
+                        {s.attempts
+                          .filter(a => a.id !== s.id)
+                          .map(a => (
+                            <li key={a.id} className="text-xs text-slate-600 p-2 rounded-lg bg-slate-50 border border-slate-100">
+                              <div className="flex items-start gap-3">
+                                <div className="shrink-0 flex flex-col items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewId(a.id)}
+                                    className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200 bg-slate-100 hover:ring-2 hover:ring-indigo-400 transition"
+                                    title="Open full photo"
+                                    aria-label={`Open ID photo for attempt ${a.id}`}
+                                  >
+                                    <KycPhoto id={a.id} alt={`ID for attempt ${a.id}`} className="w-full h-full object-cover" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void downloadKycPhoto(a.id)}
+                                    className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700"
+                                    aria-label={`Download ID photo for attempt ${a.id}`}
+                                  >
+                                    Download
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-mono text-slate-400">#{a.id}</span>
+                                    <span className={cn(
+                                      "px-2 py-0.5 text-[10px] font-semibold rounded-full capitalize",
+                                      a.status === "pending" && "bg-amber-100 text-amber-700",
+                                      a.status === "approved" && "bg-emerald-100 text-emerald-700",
+                                      a.status === "rejected" && "bg-rose-100 text-rose-700",
+                                    )}>
+                                      {a.status}
+                                    </span>
+                                    <span className="text-slate-500">Submitted {new Date(a.createdAt).toLocaleString()}</span>
+                                    {a.reviewedAt && (
+                                      <span className="text-slate-400">· Reviewed {new Date(a.reviewedAt).toLocaleString()}</span>
+                                    )}
+                                  </div>
+                                  {a.reviewerNotes && (
+                                    <p className="mt-1 italic text-slate-500">Notes: {a.reviewerNotes}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </li>
+                          ))}
+                      </ul>
+                    </details>
                   )}
                 </div>
               </div>
@@ -1231,7 +1301,16 @@ function KycPage() {
 
       {previewId !== null && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6" onClick={() => setPreviewId(null)}>
-          <KycPhoto id={previewId} alt="ID full view" className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl" />
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <KycPhoto id={previewId} alt="ID full view" className="max-h-[90vh] max-w-[90vw] rounded-xl shadow-2xl" />
+            <button
+              type="button"
+              onClick={() => void downloadKycPhoto(previewId)}
+              className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-white/95 text-slate-800 text-xs font-semibold shadow hover:bg-white"
+            >
+              Download
+            </button>
+          </div>
         </div>
       )}
     </div>

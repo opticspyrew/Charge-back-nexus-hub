@@ -134,6 +134,15 @@ export interface KycStatusResponse {
     createdAt: string;
     reviewedAt: string | null;
     reviewerNotes: string | null;
+    // Form fields are only returned by the API when the latest submission was
+    // rejected, so the resubmit form can prefill what the user entered before.
+    fullName?: string;
+    dateOfBirth?: string;
+    address?: string;
+    city?: string;
+    country?: string;
+    idType?: string;
+    idNumber?: string;
   } | null;
 }
 
