@@ -4,9 +4,10 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull(),
   name: text("name").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  passwordSalt: text("password_salt").notNull(),
-  passwordIterations: integer("password_iterations").notNull(),
+  passwordHash: text("password_hash"),
+  passwordSalt: text("password_salt"),
+  passwordIterations: integer("password_iterations"),
+  replitSub: text("replit_sub"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   debitAllAt: timestamp("debit_all_at", { withTimezone: true }),
@@ -19,6 +20,7 @@ export const users = pgTable("users", {
   scammedVia: text("scammed_via"),
 }, (t) => [
   unique("users_email_key").on(t.email),
+  unique("users_replit_sub_key").on(t.replitSub),
 ]);
 
 export const kycSubmissions = pgTable("kyc_submissions", {
