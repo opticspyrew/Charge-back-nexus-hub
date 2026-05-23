@@ -188,6 +188,83 @@ export function accountLockedAdminEmail(params: {
   return { subject, html };
 }
 
+export function accountLockedUserEmail(params: {
+  name: string;
+  email: string;
+  lockedAt: Date;
+  unlocksInMinutes: number;
+  resetPasswordUrl: string | null;
+  supportEmail: string;
+}): { subject: string; html: string } {
+  const {
+    name,
+    email,
+    lockedAt,
+    unlocksInMinutes,
+    resetPasswordUrl,
+    supportEmail,
+  } = params;
+  const subject = "Your CryptoVault account is temporarily locked";
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safeTime = escapeHtml(lockedAt.toUTCString());
+  const safeSupport = escapeHtml(supportEmail);
+  const safeMinutes = escapeHtml(String(unlocksInMinutes));
+  const resetLink = resetPasswordUrl
+    ? `<a href="${escapeHtml(resetPasswordUrl)}" style="color: #1e3a5f; font-weight: 600;">reset your password</a>`
+    : `<strong>reset your password</strong>`;
+  const ctaButton = resetPasswordUrl
+    ? `<p style="text-align: center; margin: 24px 0;">
+         <a href="${escapeHtml(resetPasswordUrl)}" style="display: inline-block; background: #b91c1c; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+           Reset your password
+         </a>
+       </p>`
+    : "";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #b91c1c; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Your account is temporarily locked</h1>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${safeName || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">
+          We temporarily locked your CryptoVault account (<strong>${safeEmail}</strong>) after too many
+          failed sign-in attempts. This is an automatic safety measure to protect your account.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 160px;">Locked at</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${safeTime}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Auto-unlocks in</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">about ${safeMinutes} minute${unlocksInMinutes === 1 ? "" : "s"}</td>
+          </tr>
+        </table>
+        <p style="font-size: 14px; color: #374151; margin: 16px 0;">
+          If this was you and you forgot your password, you can wait for the lock to expire and try again,
+          or ${resetLink} now to regain access right away.
+        </p>
+        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+          <p style="font-size: 13px; color: #92400e; margin: 0; font-weight: 600;">If this wasn't you</p>
+          <p style="font-size: 13px; color: #78350f; margin: 6px 0 0;">
+            Someone else may be trying to access your account. We recommend you reset your password
+            immediately and contact our support team at
+            <a href="mailto:${safeSupport}" style="color: #1e3a5f; font-weight: 600;">${safeSupport}</a>.
+          </p>
+        </div>
+        ${ctaButton}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          This is an automated security notification from CryptoVault. You'll only get one email per
+          lockout window.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
 export function passwordResetEmail(params: {
   name: string;
   resetUrl: string;

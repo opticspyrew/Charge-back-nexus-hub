@@ -31,6 +31,7 @@ import { logger } from "../lib/logger";
 import { lookupLocation } from "../lib/geoip";
 import {
   accountLockedAdminEmail,
+  accountLockedUserEmail,
   newSignInEmail,
   passwordChangedEmail,
   passwordResetEmail,
@@ -44,6 +45,7 @@ import {
 import {
   checkLoginThrottle,
   clearLoginFailures,
+  getAccountThrottleStatus,
   recordLoginFailure,
 } from "../lib/login-throttle";
 
@@ -157,6 +159,39 @@ async function notifyAdminAccountLocked(
     logger.error(
       { err, userId: user.id, email: user.email },
       "Failed to send admin account-locked notification email",
+    );
+  }
+}
+
+async function notifyUserAccountLocked(
+  user: { id: number; name: string; email: string },
+  retryAfterMs: number,
+  req: Request,
+): Promise<void> {
+  try {
+    // Round up to the nearest whole minute, with a minimum of 1, so the
+    // copy never says "auto-unlocks in 0 minutes".
+    const unlocksInMinutes = Math.max(1, Math.ceil(retryAfterMs / 60_000));
+    const { subject, html } = accountLockedUserEmail({
+      name: user.name,
+      email: user.email,
+      lockedAt: new Date(),
+      unlocksInMinutes,
+      resetPasswordUrl: buildAppUrl("/forgot-password", req),
+      supportEmail: SUPPORT_EMAIL,
+    });
+    const sent = await sendUserEmail(user.email, subject, html);
+    logger.info(
+      { userId: user.id, email: user.email, unlocksInMinutes, sent },
+      sent
+        ? "User account-locked notification email sent"
+        : "User account-locked notification email could not be sent",
+    );
+  } catch (err) {
+    // Never let a failed notification break the underlying login flow.
+    logger.error(
+      { err, userId: user.id, email: user.email },
+      "Failed to send user account-locked notification email",
     );
   }
 }
@@ -425,6 +460,15 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
           { id: user.id, name: user.name, email: user.email },
           failure.failureCount,
           failure.maxFailures,
+          req,
+        );
+        // Also let the customer know — same justLocked guard means we send
+        // at most one user-facing email per lockout window, mirroring the
+        // admin-alert dedup behaviour.
+        const status = await getAccountThrottleStatus(normalizedEmail);
+        void notifyUserAccountLocked(
+          { id: user.id, name: user.name, email: user.email },
+          status.retryAfterMs,
           req,
         );
       }
