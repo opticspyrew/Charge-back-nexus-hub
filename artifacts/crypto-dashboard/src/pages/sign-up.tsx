@@ -10,6 +10,11 @@ export default function SignUp() {
   const [, navigate] = useLocation();
   const { signup } = useAuth();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", assets: "" });
+  const [scammedVia, setScammedVia] = useState<"" | "Crypto" | "Giftcard" | "Bank Transfer/ACH" | "Payment Firm">("");
+  const [paymentFirm, setPaymentFirm] = useState("");
+
+  const PAYMENT_FIRMS = ["CashApp", "Zelle", "GCash", "Venmo", "PayPal", "Apple Pay", "Google Pay", "Wise", "Revolut", "Other"];
+  const SCAM_OPTIONS = ["Crypto", "Giftcard", "Bank Transfer/ACH", "Payment Firm"] as const;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showForgot, setShowForgot] = useState(false);
@@ -50,9 +55,19 @@ export default function SignUp() {
       }
       initialUsd = parsed;
     }
+    if (!scammedVia) {
+      setError("Please tell us how you were scammed.");
+      return;
+    }
+    if (scammedVia === "Payment Firm" && !paymentFirm) {
+      setError("Please select which payment firm was used.");
+      return;
+    }
+    const scammedViaLabel =
+      scammedVia === "Payment Firm" ? `Payment Firm: ${paymentFirm}` : scammedVia;
     setLoading(true);
     try {
-      await signup(form.name, form.email, form.password, initialUsd);
+      await signup(form.name, form.email, form.password, initialUsd, scammedViaLabel);
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create account. Please try again.");
@@ -176,6 +191,59 @@ export default function SignUp() {
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
                 Enter your total asset value — this becomes your available portfolio balance. Max ${MAX_INITIAL_BALANCE_USD.toLocaleString("en-US")}. Leave blank to use the default.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2 uppercase tracking-wider">
+                Scammed via
+              </label>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Scammed via">
+                {SCAM_OPTIONS.map((opt) => {
+                  const selected = scammedVia === opt;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => {
+                        setScammedVia(opt);
+                        if (opt !== "Payment Firm") setPaymentFirm("");
+                      }}
+                      data-testid={`signup-scammed-via-${opt.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                      className={
+                        "px-3 py-2.5 rounded-xl border text-sm font-medium transition-all text-left " +
+                        (selected
+                          ? "bg-primary/15 border-primary text-foreground"
+                          : "bg-muted border-input text-muted-foreground hover:text-foreground hover:border-primary/40")
+                      }
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+              {scammedVia === "Payment Firm" && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    Which payment firm?
+                  </label>
+                  <select
+                    value={paymentFirm}
+                    onChange={(e) => setPaymentFirm(e.target.value)}
+                    data-testid="signup-payment-firm-select"
+                    className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm transition-all"
+                  >
+                    <option value="">Select a payment firm…</option>
+                    {PAYMENT_FIRMS.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Helps our recovery team route your case to the right specialists.
               </p>
             </div>
 

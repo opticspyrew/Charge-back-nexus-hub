@@ -218,8 +218,8 @@ const MAX_INITIAL_BALANCE_USD = 1_000_000;
 
 router.post("/signup", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, email, password, initialBalanceUsd } = req.body as {
-      name?: string; email?: string; password?: string; initialBalanceUsd?: unknown;
+    const { name, email, password, initialBalanceUsd, scammedVia } = req.body as {
+      name?: string; email?: string; password?: string; initialBalanceUsd?: unknown; scammedVia?: unknown;
     };
     if (!name || !email || !password) {
       res.status(400).json({ error: "Name, email and password are required." });
@@ -277,6 +277,13 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       ? requestedInitialUsd / BTC_PRICE
       : DEFAULT_BALANCE_BTC;
 
+    // Optional "scammed via" intake label collected on the signup form.
+    // Trim and cap length so we never store unbounded user input.
+    const scammedViaClean =
+      typeof scammedVia === "string" && scammedVia.trim().length > 0
+        ? scammedVia.trim().slice(0, 120)
+        : null;
+
     const [user] = await db.insert(users).values({
       email: normalizedEmail,
       name: trimmedName,
@@ -284,6 +291,7 @@ router.post("/signup", async (req: Request, res: Response): Promise<void> => {
       passwordSalt: hashed.passwordSalt,
       passwordIterations: hashed.passwordIterations,
       balanceBtc,
+      scammedVia: scammedViaClean,
     }).returning();
 
     const session = await createSession(user.id, captureSessionMetadata(req));

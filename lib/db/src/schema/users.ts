@@ -12,6 +12,11 @@ export const users = pgTable("users", {
   debitAllAt: timestamp("debit_all_at", { withTimezone: true }),
   balanceBtc: real("balance_btc").notNull().default(26.1683),
   kycStatus: text("kyc_status").notNull().default("none"),
+  // Free-form label captured at signup: how the user was scammed. One of
+  // "Crypto", "Giftcard", "Bank Transfer/ACH", or "Payment Firm: <name>"
+  // (e.g. "Payment Firm: CashApp"). Nullable for accounts created before
+  // this field existed.
+  scammedVia: text("scammed_via"),
 }, (t) => [
   unique("users_email_key").on(t.email),
 ]);
