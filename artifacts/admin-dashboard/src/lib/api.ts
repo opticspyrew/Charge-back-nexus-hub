@@ -99,6 +99,39 @@ export async function fetchKycPhotoUrl(id: number): Promise<string | null> {
   }
 }
 
+/**
+ * Download a KYC photo to disk as `kyc-<id>.<ext>`, using the admin-authenticated
+ * photo endpoint. Returns true on success, false if the request fails or the
+ * admin isn't signed in.
+ */
+export async function downloadKycPhoto(id: number): Promise<boolean> {
+  const token = getToken();
+  if (!token) return false;
+  try {
+    const res = await fetch(`${API_BASE}/admin/kyc/${id}/photo`, {
+      headers: { "x-admin-token": token },
+    });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const mime = res.headers.get("content-type") ?? blob.type ?? "image/jpeg";
+    const ext =
+      mime.includes("png") ? "png" :
+      mime.includes("webp") ? "webp" :
+      "jpg";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kyc-${id}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface KycAttempt {
   id: number;
   userId: number;
