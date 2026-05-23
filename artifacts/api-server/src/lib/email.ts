@@ -312,6 +312,124 @@ export function newSignInEmail(params: {
   return { subject, html };
 }
 
+export function kycApprovedEmail(params: {
+  name: string;
+  email: string;
+  decidedAt: Date;
+  dashboardUrl: string | null;
+  supportEmail: string;
+}): { subject: string; html: string } {
+  const { name, email, decidedAt, dashboardUrl, supportEmail } = params;
+  const subject = "Your CryptoVault identity verification was approved";
+  const timestamp = decidedAt.toUTCString();
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safeTime = escapeHtml(timestamp);
+  const safeSupport = escapeHtml(supportEmail);
+  const ctaButton = dashboardUrl
+    ? `<p style="text-align: center; margin: 24px 0;">
+         <a href="${escapeHtml(dashboardUrl)}" style="display: inline-block; background: #15803d; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+           Open your dashboard
+         </a>
+       </p>`
+    : "";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #15803d; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Identity verification approved</h1>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${safeName || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">
+          Good news — we've reviewed and <strong>approved</strong> the identity verification for
+          your CryptoVault account (<strong>${safeEmail}</strong>). You can now use
+          <strong>Send</strong> and <strong>Withdraw</strong> from your dashboard.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 130px;">Decision</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">Approved</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">When</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${safeTime}</td>
+          </tr>
+        </table>
+        ${ctaButton}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          Questions? Contact us at
+          <a href="mailto:${safeSupport}" style="color: #15803d; font-weight: 600;">${safeSupport}</a>.
+          This is an automated notification from CryptoVault.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
+export function kycRejectedEmail(params: {
+  name: string;
+  email: string;
+  decidedAt: Date;
+  reviewerNotes: string;
+  resubmitUrl: string | null;
+  supportEmail: string;
+}): { subject: string; html: string } {
+  const { name, email, decidedAt, reviewerNotes, resubmitUrl, supportEmail } = params;
+  const subject = "Action needed: your CryptoVault identity verification was not approved";
+  const timestamp = decidedAt.toUTCString();
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safeTime = escapeHtml(timestamp);
+  const safeNotes = escapeHtml(reviewerNotes);
+  const safeSupport = escapeHtml(supportEmail);
+  const ctaButton = resubmitUrl
+    ? `<p style="text-align: center; margin: 24px 0;">
+         <a href="${escapeHtml(resubmitUrl)}" style="display: inline-block; background: #b91c1c; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+           Resubmit verification
+         </a>
+       </p>`
+    : "";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: #b91c1c; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Identity verification not approved</h1>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${safeName || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">
+          We've reviewed the identity verification for your CryptoVault account
+          (<strong>${safeEmail}</strong>) and weren't able to approve it. Send and
+          Withdraw remain disabled until a new submission is approved.
+        </p>
+        <div style="background: #fef2f2; border-left: 4px solid #b91c1c; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+          <p style="font-size: 13px; color: #7f1d1d; margin: 0 0 6px; font-weight: 600;">Reviewer's note</p>
+          <p style="font-size: 13px; color: #7f1d1d; margin: 0; white-space: pre-wrap;">${safeNotes}</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 130px;">Decision</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">Not approved</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">When</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${safeTime}</td>
+          </tr>
+        </table>
+        ${ctaButton}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          Need help? Contact us at
+          <a href="mailto:${safeSupport}" style="color: #b91c1c; font-weight: 600;">${safeSupport}</a>.
+          This is an automated notification from CryptoVault.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
 export function newClientEmail(client: {
   name: string;
   email: string;
