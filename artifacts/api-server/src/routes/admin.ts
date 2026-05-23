@@ -46,6 +46,8 @@ function safeCredentialsMatch(
   return sameLength && equal;
 }
 
+import { ObjectStorageService } from "../lib/objectStorage";
+
 async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   const auth = req.headers["x-admin-token"];
   const token = typeof auth === "string" ? auth : "";
@@ -634,21 +636,38 @@ router.get("/kyc/:id/photo", requireAdmin, async (req: Request, res: Response): 
   }
   try {
     const [row] = await db
-      .select({ photoData: kycSubmissions.photoData, photoMimeType: kycSubmissions.photoMimeType })
+      .select({
+        photoObjectPath: kycSubmissions.photoObjectPath,
+        photoMimeType: kycSubmissions.photoMimeType,
+      })
       .from(kycSubmissions)
       .where(eq(kycSubmissions.id, id))
       .limit(1);
-    if (!row) {
+    if (!row || !row.photoObjectPath) {
       res.status(404).json({ error: "Submission not found" });
       return;
     }
-    const buf = Buffer.from(row.photoData, "base64");
-    res.setHeader("Content-Type", row.photoMimeType);
+    const svc = new ObjectStorageService();
+    const file = await svc.getObjectEntityFile(row.photoObjectPath);
+    const [metadata] = await file.getMetadata();
+    res.setHeader(
+      "Content-Type",
+      (metadata.contentType as string) || row.photoMimeType || "application/octet-stream",
+    );
     res.setHeader("Cache-Control", "private, max-age=300");
-    res.send(buf);
+    if (metadata.size) res.setHeader("Content-Length", String(metadata.size));
+    const stream = file.createReadStream();
+    stream.on("error", (e) => {
+      logger.error({ err: e }, "Stream error reading KYC photo");
+      if (!res.headersSent) res.status(500).end();
+      else res.end();
+    });
+    stream.pipe(res);
   } catch (err) {
     logger.error({ err }, "Failed to load KYC photo");
-    res.status(500).json({ error: "Failed to load photo" });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to load photo" });
+    }
   }
 });
 
@@ -658,7 +677,14 @@ async function decideKyc(req: Request, res: Response, decision: "approved" | "re
     res.status(400).json({ error: "Invalid submission id" });
     return;
   }
-  const notes = typeof req.body?.notes === "string" ? req.body.notes.slice(0, 500) : null;
+  const rawNotes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
+  // Rejections must include a reason — the user sees it in their KYC modal
+  // and needs to know what to fix. Notes are optional on approval.
+  if (decision === "rejected" && rawNotes.length === 0) {
+    res.status(400).json({ error: "A rejection reason is required so the user knows what to fix." });
+    return;
+  }
+  const notes = rawNotes.length > 0 ? rawNotes.slice(0, 500) : null;
   try {
     const [submission] = await db.select().from(kycSubmissions).where(eq(kycSubmissions.id, id)).limit(1);
     if (!submission) {

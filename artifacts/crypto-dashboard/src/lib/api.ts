@@ -145,7 +145,7 @@ export interface KycSubmitInput {
   country: string;
   idType: string;
   idNumber: string;
-  photoBase64: string;
+  photoUploadURL: string;
   photoMimeType: string;
 }
 
@@ -164,6 +164,12 @@ export const kycApi = {
     post<{ ok: boolean; submissionId: number; status: KycStatus; emailSent: boolean }>(
       `${PUBLIC_BASE}/kyc/submit`,
       data,
+      { Authorization: `Bearer ${token}` },
+    ),
+  requestUploadUrl: (token: string) =>
+    post<{ uploadURL: string }>(
+      `${PUBLIC_BASE}/kyc/upload-url`,
+      {},
       { Authorization: `Bearer ${token}` },
     ),
 };

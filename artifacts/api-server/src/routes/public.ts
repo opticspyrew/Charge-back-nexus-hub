@@ -6,6 +6,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail, newKycSubmissionEmail } from "../lib/email";
 import { extractBearerToken, findUserBySessionToken } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router = Router();
 
@@ -411,6 +412,29 @@ router.get("/kyc/status", async (req: Request, res: Response): Promise<void> => 
   }
 });
 
+// Issue a short-lived presigned URL the client uses to upload the ID photo
+// directly to object storage. The submit endpoint then receives only the
+// returned object path — we never round-trip the photo bytes through our server.
+router.post("/kyc/upload-url", kycSubmissionLimiter, async (req: Request, res: Response): Promise<void> => {
+  const user = await getAuthedUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Sign in required" });
+    return;
+  }
+  if (user.kycStatus === "pending" || user.kycStatus === "approved") {
+    res.status(409).json({ error: "KYC already submitted." });
+    return;
+  }
+  try {
+    const svc = new ObjectStorageService();
+    const uploadURL = await svc.getObjectEntityUploadURL();
+    res.json({ uploadURL });
+  } catch (err) {
+    logger.error({ err }, "Failed to issue KYC upload URL");
+    res.status(500).json({ error: "Failed to issue upload URL" });
+  }
+});
+
 router.post("/kyc/submit", kycSubmissionLimiter, async (req: Request, res: Response): Promise<void> => {
   const user = await getAuthedUser(req);
   if (!user) {
@@ -435,11 +459,11 @@ router.post("/kyc/submit", kycSubmissionLimiter, async (req: Request, res: Respo
     country: string;
     idType: string;
     idNumber: string;
-    photoBase64: string;
+    photoUploadURL: string;
     photoMimeType: string;
   }>;
 
-  const required = ["fullName", "dateOfBirth", "address", "city", "country", "idType", "idNumber", "photoBase64", "photoMimeType"] as const;
+  const required = ["fullName", "dateOfBirth", "address", "city", "country", "idType", "idNumber", "photoUploadURL", "photoMimeType"] as const;
   for (const k of required) {
     const v = body[k];
     if (typeof v !== "string" || !v.trim()) {
@@ -454,20 +478,32 @@ router.post("/kyc/submit", kycSubmissionLimiter, async (req: Request, res: Respo
     return;
   }
 
-  // Strip data URL prefix if present.
-  const raw = body.photoBase64!.replace(/^data:[^;]+;base64,/, "");
-  // Estimate decoded size from base64 length.
-  const approxBytes = Math.floor((raw.length * 3) / 4);
-  if (approxBytes > KYC_PHOTO_MAX_BYTES) {
-    res.status(413).json({ error: "ID photo is too large (max 8 MB)." });
-    return;
-  }
+  // Normalize the GCS upload URL the client received from /kyc/upload-url into
+  // our internal /objects/<id> path. We verify it actually exists in storage
+  // (i.e. the client really uploaded) and that it's within our 8 MB cap.
+  const svc = new ObjectStorageService();
+  let objectPath: string;
   let photoBuffer: Buffer;
   try {
-    photoBuffer = Buffer.from(raw, "base64");
-    if (photoBuffer.length === 0) throw new Error("empty");
-  } catch {
-    res.status(400).json({ error: "ID photo could not be decoded." });
+    objectPath = svc.normalizeObjectEntityPath(body.photoUploadURL!);
+    if (!objectPath.startsWith("/objects/")) {
+      res.status(400).json({ error: "Invalid upload URL." });
+      return;
+    }
+    const file = await svc.getObjectEntityFile(objectPath);
+    const [buf] = await file.download();
+    photoBuffer = buf;
+    if (photoBuffer.length === 0) {
+      res.status(400).json({ error: "Uploaded file is empty." });
+      return;
+    }
+    if (photoBuffer.length > KYC_PHOTO_MAX_BYTES) {
+      res.status(413).json({ error: "ID photo is too large (max 8 MB)." });
+      return;
+    }
+  } catch (err) {
+    logger.warn({ err }, "KYC submit failed to resolve uploaded photo");
+    res.status(400).json({ error: "Uploaded photo could not be verified. Please try again." });
     return;
   }
 
@@ -481,7 +517,7 @@ router.post("/kyc/submit", kycSubmissionLimiter, async (req: Request, res: Respo
       country: body.country!.trim().slice(0, 120),
       idType: body.idType!.trim().slice(0, 60),
       idNumber: body.idNumber!.trim().slice(0, 120),
-      photoData: raw,
+      photoObjectPath: objectPath,
       photoMimeType: mime,
       status: "pending",
     }).returning();
