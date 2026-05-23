@@ -33,6 +33,27 @@ export default function KycModal({ open, onClose, reason }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const prefilledForSubmissionId = useRef<number | null>(null);
+
+  // When the modal opens for a rejected user, prefill the form with the values
+  // from their previous submission so they only need to fix what the reviewer
+  // flagged. We don't prefill the photo — they must upload fresh evidence.
+  useEffect(() => {
+    if (!open) return;
+    if (status !== "rejected" || !submission) return;
+    if (prefilledForSubmissionId.current === submission.id) return;
+    if (submission.fullName == null) return;
+    setForm({
+      fullName: submission.fullName ?? "",
+      dateOfBirth: submission.dateOfBirth ?? "",
+      address: submission.address ?? "",
+      city: submission.city ?? "",
+      country: submission.country ?? "",
+      idType: submission.idType ?? ID_TYPES[0]!,
+      idNumber: submission.idNumber ?? "",
+    });
+    prefilledForSubmissionId.current = submission.id;
+  }, [open, status, submission]);
 
   useEffect(() => {
     if (!open) {
@@ -172,9 +193,16 @@ export default function KycModal({ open, onClose, reason }: Props) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">
-              {isRejected && submission?.reviewerNotes && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
-                  <span className="font-semibold">Previous submission was rejected:</span> {submission.reviewerNotes}
+              {isRejected && (
+                <div className="space-y-2">
+                  {submission?.reviewerNotes && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+                      <span className="font-semibold">Previous submission was rejected:</span> {submission.reviewerNotes}
+                    </div>
+                  )}
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200">
+                    We've prefilled your previous details below. Update what was flagged and upload a fresh ID photo, then resubmit for review.
+                  </div>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3">
@@ -249,7 +277,9 @@ export default function KycModal({ open, onClose, reason }: Props) {
                 disabled={submitting}
                 className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
               >
-                {submitting ? "Submitting…" : "Submit for verification"}
+                {submitting
+                  ? (isRejected ? "Resubmitting…" : "Submitting…")
+                  : (isRejected ? "Resubmit verification" : "Submit for verification")}
               </button>
               <p className="text-[11px] text-muted-foreground text-center">
                 Your information is encrypted and sent only to our compliance team.

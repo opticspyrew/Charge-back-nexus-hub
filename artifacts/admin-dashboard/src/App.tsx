@@ -1181,6 +1181,11 @@ function KycPage() {
                       {s.status}
                     </span>
                     <span className="text-xs text-slate-400 font-mono">#{s.id}</span>
+                    {s.totalAttempts > 1 && (
+                      <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        Attempt {s.attemptNumber} of {s.totalAttempts}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">Account: {s.userName} &lt;{s.userEmail}&gt;</p>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 text-xs mt-3">
@@ -1195,6 +1200,39 @@ function KycPage() {
                   </div>
                   {s.reviewerNotes && (
                     <p className="mt-3 text-xs text-slate-600 italic">Notes: {s.reviewerNotes}</p>
+                  )}
+                  {s.attempts.length > 1 && (
+                    <details className="mt-3 group">
+                      <summary className="text-xs font-semibold text-indigo-600 cursor-pointer hover:text-indigo-700 select-none">
+                        Show prior attempts ({s.attempts.length - 1})
+                      </summary>
+                      <ul className="mt-2 space-y-1.5">
+                        {s.attempts
+                          .filter(a => a.id !== s.id)
+                          .map(a => (
+                            <li key={a.id} className="text-xs text-slate-600 p-2 rounded-lg bg-slate-50 border border-slate-100">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono text-slate-400">#{a.id}</span>
+                                <span className={cn(
+                                  "px-2 py-0.5 text-[10px] font-semibold rounded-full capitalize",
+                                  a.status === "pending" && "bg-amber-100 text-amber-700",
+                                  a.status === "approved" && "bg-emerald-100 text-emerald-700",
+                                  a.status === "rejected" && "bg-rose-100 text-rose-700",
+                                )}>
+                                  {a.status}
+                                </span>
+                                <span className="text-slate-500">Submitted {new Date(a.createdAt).toLocaleString()}</span>
+                                {a.reviewedAt && (
+                                  <span className="text-slate-400">· Reviewed {new Date(a.reviewedAt).toLocaleString()}</span>
+                                )}
+                              </div>
+                              {a.reviewerNotes && (
+                                <p className="mt-1 italic text-slate-500">Notes: {a.reviewerNotes}</p>
+                              )}
+                            </li>
+                          ))}
+                      </ul>
+                    </details>
                   )}
                 </div>
               </div>

@@ -2,7 +2,7 @@ import { Router, type Request, type Response, type NextFunction } from "express"
 import { timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders, kycSubmissions } from "@workspace/db";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { sendAdminEmail, newClientEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
@@ -621,7 +621,40 @@ router.get("/kyc", requireAdmin, async (req: Request, res: Response): Promise<vo
       .where(statusFilter === "all" ? sql`true` : eq(kycSubmissions.status, statusFilter))
       .orderBy(desc(kycSubmissions.createdAt))
       .limit(200);
-    res.json({ submissions: rows });
+
+    // Attach the full attempt history for each user so the admin can see prior
+    // submissions (e.g. earlier rejections) without leaving the page. Done in a
+    // single query keyed on the userIds present in `rows` to avoid N+1.
+    const userIds = Array.from(new Set(rows.map(r => r.userId)));
+    const history = userIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: kycSubmissions.id,
+            userId: kycSubmissions.userId,
+            status: kycSubmissions.status,
+            createdAt: kycSubmissions.createdAt,
+            reviewedAt: kycSubmissions.reviewedAt,
+            reviewerNotes: kycSubmissions.reviewerNotes,
+          })
+          .from(kycSubmissions)
+          .where(inArray(kycSubmissions.userId, userIds))
+          .orderBy(desc(kycSubmissions.createdAt));
+    const attemptsByUser = new Map<number, typeof history>();
+    for (const h of history) {
+      const list = attemptsByUser.get(h.userId);
+      if (list) list.push(h);
+      else attemptsByUser.set(h.userId, [h]);
+    }
+    const submissions = rows.map(r => {
+      const attempts = attemptsByUser.get(r.userId) ?? [];
+      // Attempts are sorted newest-first; attemptNumber counts from oldest = 1.
+      const idx = attempts.findIndex(a => a.id === r.id);
+      const total = attempts.length;
+      const attemptNumber = idx === -1 ? total : total - idx;
+      return { ...r, attemptNumber, totalAttempts: total, attempts };
+    });
+    res.json({ submissions });
   } catch (err) {
     logger.error({ err }, "Failed to list KYC submissions");
     res.status(500).json({ error: "Failed to list KYC submissions" });

@@ -99,6 +99,15 @@ export async function fetchKycPhotoUrl(id: number): Promise<string | null> {
   }
 }
 
+export interface KycAttempt {
+  id: number;
+  userId: number;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewerNotes: string | null;
+}
+
 export interface KycSubmission {
   id: number;
   userId: number;
@@ -116,6 +125,9 @@ export interface KycSubmission {
   createdAt: string;
   userEmail: string;
   userName: string;
+  attemptNumber: number;
+  totalAttempts: number;
+  attempts: KycAttempt[];
 }
 
 export interface CoinSectionOrder {
