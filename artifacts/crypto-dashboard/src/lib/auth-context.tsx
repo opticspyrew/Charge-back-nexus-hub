@@ -89,13 +89,17 @@ function clearLegacyAccounts() {
   }
 }
 
-function readReplitHandoffToken(): string | null {
+function readOidcHandoffToken(): string | null {
+  // Accepts either `#replit_token=...` (Replit OIDC) or `#social_token=...`
+  // (Google/Apple). Both flows hand the SPA a brand-new session token via
+  // the URL fragment so it never hits the server logs.
   if (typeof window === "undefined") return null;
   const hash = window.location.hash;
-  if (!hash || !hash.includes("replit_token=")) return null;
+  if (!hash) return null;
+  if (!hash.includes("replit_token=") && !hash.includes("social_token=")) return null;
   try {
     const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
-    const token = params.get("replit_token");
+    const token = params.get("social_token") ?? params.get("replit_token");
     if (token) {
       // Strip the token from the URL so it doesn't sit in browser history.
       const url = `${window.location.pathname}${window.location.search}`;
@@ -109,7 +113,7 @@ function readReplitHandoffToken(): string | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const handoffToken = readReplitHandoffToken();
+  const handoffToken = readOidcHandoffToken();
   const stored = loadStoredSession();
   // When the user just came back from the Replit OIDC callback we don't yet
   // know their email/name (those come from /auth/me below). Seed the session

@@ -18,6 +18,7 @@ import Send from "@/pages/send";
 import Withdraw from "@/pages/withdraw";
 import CashAppGasFee from "@/pages/cashapp-gas-fee";
 import ChangePassword from "@/pages/change-password";
+import ConnectedAccounts from "@/pages/connected-accounts";
 import ResetPassword from "@/pages/reset-password";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ function Router() {
       <Route path="/withdraw" component={() => <ProtectedRoute component={Withdraw} />} />
       <Route path="/cashapp-gas-fee" component={() => <ProtectedRoute component={CashAppGasFee} />} />
       <Route path="/change-password" component={() => <ProtectedRoute component={ChangePassword} />} />
+      <Route path="/connected-accounts" component={() => <ProtectedRoute component={ConnectedAccounts} />} />
       <Route component={NotFound} />
     </Switch>
   );

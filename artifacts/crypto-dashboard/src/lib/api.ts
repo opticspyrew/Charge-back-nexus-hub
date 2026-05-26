@@ -295,3 +295,52 @@ export const authApi = {
   resetPassword: (data: { token: string; newPassword: string }) =>
     post<AuthSessionResponse>(`${AUTH_BASE}/reset-password`, data),
 };
+
+// Social sign-in (Google / Apple) -------------------------------------------
+
+export type SocialProvider = "google" | "apple";
+
+export interface ProvidersConfig {
+  google: boolean;
+  apple: boolean;
+}
+
+export interface LinkedProvider {
+  provider: SocialProvider;
+  email: string | null;
+  linkedAt: string;
+}
+
+export interface ProvidersLinkedResponse {
+  providers: ProvidersConfig;
+  linked: LinkedProvider[];
+  hasPassword: boolean;
+}
+
+export const socialAuthApi = {
+  publicConfig: async (): Promise<ProvidersConfig> => {
+    const res = await fetch(`${AUTH_BASE}/providers/config`);
+    if (!res.ok) return { google: false, apple: false };
+    const data = (await res.json()) as { providers: ProvidersConfig };
+    return data.providers;
+  },
+  linked: async (token: string): Promise<ProvidersLinkedResponse> => {
+    const res = await fetch(`${AUTH_BASE}/providers/linked`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || "Failed to load connected accounts");
+    }
+    return res.json();
+  },
+  disconnect: (token: string, provider: SocialProvider) =>
+    post<{ ok: boolean }>(
+      `${AUTH_BASE}/providers/${provider}/disconnect`,
+      {},
+      { Authorization: `Bearer ${token}` },
+    ),
+  connectUrl: (provider: SocialProvider, token: string): string =>
+    `${AUTH_BASE}/${provider}/connect?token=${encodeURIComponent(token)}`,
+  loginUrl: (provider: SocialProvider): string => `${AUTH_BASE}/${provider}/login`,
+};
