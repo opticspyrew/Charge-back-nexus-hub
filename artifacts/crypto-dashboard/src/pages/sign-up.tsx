@@ -5,6 +5,7 @@ import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy
 import PasswordRulesChecklist from "@/components/password-rules-checklist";
 import { ForgotPasswordPanel } from "@/components/forgot-password-panel";
 import PasswordInput from "@/components/password-input";
+import SocialAuthButtons from "@/components/social-auth-buttons";
 import TotalAssetsBanner from "@/components/total-assets-banner";
 
 export default function SignUp() {
@@ -24,6 +25,18 @@ export default function SignUp() {
   const [error, setError] = useState("");
   const [emailTakenAddress, setEmailTakenAddress] = useState("");
   const [showForgot, setShowForgot] = useState(false);
+  const [socialError] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("social_error");
+    if (code) {
+      params.delete("social_error");
+      const qs = params.toString();
+      const url = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+      window.history.replaceState(null, "", url);
+    }
+    return code;
+  });
 
   const MAX_INITIAL_BALANCE_USD = 1_000_000;
 
@@ -128,7 +141,11 @@ export default function SignUp() {
 
         <div className="bg-card border border-card-border rounded-2xl p-8">
           <h1 className="text-2xl font-bold text-foreground mb-1">Create account</h1>
-          <p className="text-muted-foreground text-sm mb-8">Start trading crypto in minutes</p>
+          <p className="text-muted-foreground text-sm mb-6">Start trading crypto in minutes</p>
+
+          <div className="mb-5">
+            <SocialAuthButtons mode="signup" errorCode={socialError} />
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

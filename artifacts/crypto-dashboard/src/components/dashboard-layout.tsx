@@ -158,6 +158,19 @@ export default function DashboardLayout({ children, activeTab }: LayoutProps) {
                   Change password
                 </button>
                 <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    navigate("/connected-accounts");
+                  }}
+                  data-testid="user-menu-connected-accounts"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors border-b border-card-border"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 015.656 0l1.414 1.414a4 4 0 010 5.656l-2.828 2.828a4 4 0 01-5.656 0l-1.414-1.414M10.172 13.828a4 4 0 01-5.656 0L3.1 12.414a4 4 0 010-5.656l2.828-2.828a4 4 0 015.656 0l1.414 1.414" />
+                  </svg>
+                  Connected accounts
+                </button>
+                <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-destructive hover:bg-muted transition-colors"
                 >
