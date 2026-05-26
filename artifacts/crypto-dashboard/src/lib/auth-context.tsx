@@ -26,6 +26,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, initialBalanceUsd?: number, scammedVia?: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  setPassword: (newPassword: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPasswordWithToken: (token: string, newPassword: string) => Promise<void>;
   accountExists: (email: string) => Promise<boolean>;
@@ -219,6 +220,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authApi.changePassword(token, { currentPassword, newPassword });
   };
 
+  const setPassword = async (newPassword: string) => {
+    const token = tokenRef.current;
+    if (!token) {
+      throw new Error("You must be signed in to set a password.");
+    }
+
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.ok) {
+      throw new Error(passwordCheck.error ?? "Please choose a stronger password.");
+    }
+
+    await authApi.setPassword(token, { newPassword });
+  };
+
   const accountExists = async (email: string): Promise<boolean> => {
     const trimmed = email.trim();
     if (!trimmed) return false;
@@ -277,6 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         signup,
         changePassword,
+        setPassword,
         forgotPassword,
         resetPasswordWithToken,
         accountExists,

@@ -183,7 +183,7 @@ export default function ConnectedAccounts() {
           <p className="mt-4 text-xs text-muted-foreground">
             You signed up with a provider, so your account has no password. You can{" "}
             <button
-              onClick={() => navigate("/change-password")}
+              onClick={() => navigate("/set-password")}
               className="text-primary hover:underline font-medium"
             >
               set a password

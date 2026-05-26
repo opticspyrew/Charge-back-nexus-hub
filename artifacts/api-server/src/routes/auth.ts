@@ -616,6 +616,70 @@ router.post("/change-password", async (req: Request, res: Response): Promise<voi
   }
 });
 
+router.post("/set-password", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "You must be signed in to set a password." });
+      return;
+    }
+    const sessionUser = await findUserBySessionToken(token);
+    if (!sessionUser) {
+      res.status(401).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+    // This endpoint is only for accounts that don't yet have a password —
+    // typically users who signed up via Google or Apple. Users who already
+    // have a password must use /change-password and prove they know the
+    // current one.
+    if (sessionUser.passwordHash) {
+      res.status(409).json({
+        error: "Your account already has a password. Use change password instead.",
+      });
+      return;
+    }
+    const { newPassword } = req.body as { newPassword?: string };
+    if (!newPassword) {
+      res.status(400).json({ error: "New password is required." });
+      return;
+    }
+    const passwordCheck = validatePassword(newPassword);
+    if (!passwordCheck.ok) {
+      res.status(400).json({ error: passwordCheck.error ?? "Please choose a stronger password." });
+      return;
+    }
+    const hashed = await hashPassword(newPassword);
+    await db.update(users)
+      .set({
+        passwordHash: hashed.passwordHash,
+        passwordSalt: hashed.passwordSalt,
+        passwordIterations: hashed.passwordIterations,
+      })
+      .where(eq(users.id, sessionUser.id));
+
+    // Revoke all other sessions for this user, mirroring /change-password.
+    // The caller's own session remains active so they don't get immediately
+    // signed out.
+    const currentSession = await findSessionWithUser(token);
+    if (currentSession) {
+      await deleteAllUserSessions(sessionUser.id, currentSession.session.id);
+    }
+
+    logger.info(
+      { userId: sessionUser.id },
+      "User set initial password; other sessions revoked",
+    );
+    void notifyPasswordChanged(
+      { name: sessionUser.name, email: sessionUser.email },
+      "change",
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "Failed to set initial password");
+    res.status(500).json({ error: "Failed to set password." });
+  }
+});
+
 router.post("/forgot-password", async (req: Request, res: Response): Promise<void> => {
   // Always return 200 OK regardless of whether the account exists, the
   // payload was malformed, or anything internal failed. This prevents
