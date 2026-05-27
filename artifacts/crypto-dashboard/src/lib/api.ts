@@ -254,6 +254,11 @@ export const authApi = {
       Authorization: `Bearer ${token}`,
     }),
 
+  setPassword: (token: string, data: { newPassword: string }) =>
+    post<{ ok: boolean }>(`${AUTH_BASE}/set-password`, data, {
+      Authorization: `Bearer ${token}`,
+    }),
+
   forgotPassword: (email: string) =>
     post<{ ok: boolean }>(`${AUTH_BASE}/forgot-password`, { email }),
 
