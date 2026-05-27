@@ -268,8 +268,8 @@ test("resolveUserForProviderProfile: unverified email does NOT auto-link", async
   state.nextUserId = 10;
 
   const user = await resolveUserForProviderProfile({
-    provider: "apple",
-    providerUserId: "a-sub-1",
+    provider: "google",
+    providerUserId: "g-sub-unverified",
     email: "carol@example.com",
     emailVerified: false, // critical: no auto-link
     name: "Carol",
@@ -302,8 +302,8 @@ test("resolveUserForProviderProfile: new user name falls back to email local-par
   resetState();
 
   const user = await resolveUserForProviderProfile({
-    provider: "apple",
-    providerUserId: "a-sub-noname",
+    provider: "google",
+    providerUserId: "g-sub-noname",
     email: "noname@example.com",
     emailVerified: true,
     name: null,
@@ -345,15 +345,15 @@ test("attachProviderToExistingUser: returns already_linked_to_self for re-link",
   state.providerIdentities.push({
     id: 1,
     userId: 5,
-    provider: "apple",
-    providerUserId: "a-self",
+    provider: "google",
+    providerUserId: "g-self",
     emailAtLink: "x@example.com",
   });
   state.nextLinkId = 2;
 
   const result = await attachProviderToExistingUser(5, {
-    provider: "apple",
-    providerUserId: "a-self",
+    provider: "google",
+    providerUserId: "g-self",
     email: "x@example.com",
     emailVerified: true,
     name: "X",
