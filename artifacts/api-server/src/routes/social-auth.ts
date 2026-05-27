@@ -1,18 +1,15 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, users, providerIdentities } from "@workspace/db";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   createSession,
   extractBearerToken,
   findSessionWithUser,
   hasSeenSessionMetadata,
-  publicUser,
 } from "../lib/auth";
 import {
-  buildAppleAuthUrl,
   buildGoogleAuthUrl,
   clearStateCookie,
-  exchangeAppleCode,
   exchangeGoogleCode,
   getProviderConfigStatus,
   pkceChallengeFromVerifier,
@@ -21,13 +18,11 @@ import {
   resolveUserForProviderProfile,
   attachProviderToExistingUser,
   setStateCookie,
-  verifyAppleIdToken,
   verifyGoogleIdToken,
   type OAuthStatePayload,
   type ProviderProfile,
 } from "../lib/social-oauth";
 import {
-  getAppleConfig,
   getGoogleConfig,
   isProviderConfigured,
   type SocialProvider,
@@ -84,27 +79,16 @@ async function startFlow(
 
   try {
     const redirectUri = callbackUrl(req, provider);
-    if (provider === "google") {
-      const cfg = getGoogleConfig()!;
-      const codeChallenge = await pkceChallengeFromVerifier(codeVerifier);
-      const url = buildGoogleAuthUrl({
-        clientId: cfg.clientId,
-        redirectUri,
-        state,
-        nonce,
-        codeChallenge,
-      });
-      res.redirect(url);
-    } else {
-      const cfg = getAppleConfig()!;
-      const url = buildAppleAuthUrl({
-        clientId: cfg.clientId,
-        redirectUri,
-        state,
-        nonce,
-      });
-      res.redirect(url);
-    }
+    const cfg = getGoogleConfig()!;
+    const codeChallenge = await pkceChallengeFromVerifier(codeVerifier);
+    const url = buildGoogleAuthUrl({
+      clientId: cfg.clientId,
+      redirectUri,
+      state,
+      nonce,
+      codeChallenge,
+    });
+    res.redirect(url);
   } catch (err) {
     logger.error({ err, provider }, "social-auth: failed to start flow");
     clearStateCookie(res, provider);
@@ -158,11 +142,15 @@ router.get("/providers/linked", async (req, res) => {
       .where(eq(providerIdentities.userId, userId));
     res.json({
       providers: getProviderConfigStatus(),
-      linked: rows.map((r) => ({
-        provider: r.provider,
-        email: r.emailAtLink,
-        linkedAt: r.linkedAt.toISOString(),
-      })),
+      // Only return links for providers we still support. Stale rows for
+      // removed providers (e.g. apple) are hidden from the UI.
+      linked: rows
+        .filter((r) => r.provider === "google")
+        .map((r) => ({
+          provider: r.provider as SocialProvider,
+          email: r.emailAtLink,
+          linkedAt: r.linkedAt.toISOString(),
+        })),
       hasPassword: !!user.passwordHash,
     });
   } catch (err) {
@@ -173,8 +161,8 @@ router.get("/providers/linked", async (req, res) => {
 
 router.post("/providers/:provider/disconnect", async (req, res) => {
   try {
-    const provider = req.params.provider as SocialProvider;
-    if (provider !== "google" && provider !== "apple") {
+    const provider = req.params.provider;
+    if (provider !== "google") {
       res.status(400).json({ error: "Unknown provider." });
       return;
     }
@@ -190,20 +178,6 @@ router.post("/providers/:provider/disconnect", async (req, res) => {
     }
 
     // Don't allow disconnect if it would leave the user with no sign-in method.
-    const otherLinks = await db
-      .select({ id: providerIdentities.id })
-      .from(providerIdentities)
-      .where(
-        and(
-          eq(providerIdentities.userId, userId),
-          // anything that's NOT this provider counts as an alternate method
-        ),
-      );
-    const otherProviderCount = otherLinks.filter((l) => {
-      // We didn't select provider; re-query lightly:
-      return true;
-    }).length;
-    // Re-fetch with provider info to be precise:
     const allLinks = await db
       .select({ provider: providerIdentities.provider })
       .from(providerIdentities)
@@ -217,8 +191,6 @@ router.post("/providers/:provider/disconnect", async (req, res) => {
       });
       return;
     }
-
-    void otherProviderCount;
 
     await db
       .delete(providerIdentities)
@@ -253,29 +225,6 @@ router.get("/google/connect", async (req, res) => {
 
 router.get("/google/callback", async (req, res) => {
   await handleCallback(req, res, "google");
-});
-
-// --- Start / callback for Apple --------------------------------------------
-
-router.get("/apple/login", (req, res) => {
-  void startFlow(req, res, "apple");
-});
-
-router.get("/apple/connect", async (req, res) => {
-  const userId = await loadAuthedUserId(req);
-  if (!userId) {
-    redirectToSignInError(res, "auth_required");
-    return;
-  }
-  void startFlow(req, res, "apple", { linkUserId: userId });
-});
-
-// Apple posts back via form_post; accept POST and GET both.
-router.post("/apple/callback", async (req, res) => {
-  await handleCallback(req, res, "apple");
-});
-router.get("/apple/callback", async (req, res) => {
-  await handleCallback(req, res, "apple");
 });
 
 // --- Shared callback handler -----------------------------------------------
@@ -324,42 +273,19 @@ async function handleCallback(
   let profile: ProviderProfile;
   try {
     const redirectUri = callbackUrl(req, provider);
-    if (provider === "google") {
-      const cfg = getGoogleConfig()!;
-      const { idToken } = await exchangeGoogleCode({
-        code,
-        redirectUri,
-        codeVerifier: stored.codeVerifier,
-        clientId: cfg.clientId,
-        clientSecret: cfg.clientSecret,
-      });
-      profile = await verifyGoogleIdToken({
-        idToken,
-        clientId: cfg.clientId,
-        expectedNonce: stored.nonce,
-      });
-    } else {
-      const cfg = getAppleConfig()!;
-      const { idToken } = await exchangeAppleCode({
-        code,
-        redirectUri,
-        cfg,
-      });
-      let userJson: { name?: { firstName?: string; lastName?: string } } | null = null;
-      if (typeof params?.user === "string") {
-        try {
-          userJson = JSON.parse(params.user);
-        } catch {
-          userJson = null;
-        }
-      }
-      profile = await verifyAppleIdToken({
-        idToken,
-        clientId: cfg.clientId,
-        expectedNonce: stored.nonce,
-        userJson,
-      });
-    }
+    const cfg = getGoogleConfig()!;
+    const { idToken } = await exchangeGoogleCode({
+      code,
+      redirectUri,
+      codeVerifier: stored.codeVerifier,
+      clientId: cfg.clientId,
+      clientSecret: cfg.clientSecret,
+    });
+    profile = await verifyGoogleIdToken({
+      idToken,
+      clientId: cfg.clientId,
+      expectedNonce: stored.nonce,
+    });
   } catch (err) {
     logger.error({ err, provider }, "social-auth: token exchange or verify failed");
     if (linking) {

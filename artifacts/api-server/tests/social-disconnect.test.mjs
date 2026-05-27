@@ -1,14 +1,13 @@
 // HTTP integration tests for the /api/auth/providers/* endpoints.
 //
-// Coverage (task #84):
-//   - GET /providers/config returns google + apple flags
+// Coverage:
+//   - GET /providers/config returns google flag
 //   - GET /providers/linked requires auth (401) and returns shape (200)
 //   - POST /providers/:p/disconnect rejects unknown provider (400)
 //   - POST /providers/:p/disconnect requires auth (401)
 //   - Disconnect succeeds when user still has password (i.e. a remaining method)
 //   - Disconnect BLOCKED (400) when it would leave the user with no sign-in
 //     method (no password AND no other provider) — the critical safety rule
-//   - Disconnect succeeds when user has no password but multiple providers
 //
 // Provider identities are seeded directly via SQL because the OAuth callback
 // can't be exercised without live provider credentials. The disconnect logic
@@ -82,7 +81,7 @@ test("GET /providers/config returns provider availability flags", async () => {
   const body = await jsonOf(res);
   assert.ok(body.providers, "expected providers object");
   assert.equal(typeof body.providers.google, "boolean");
-  assert.equal(typeof body.providers.apple, "boolean");
+  assert.equal(body.providers.apple, undefined, "apple must no longer be reported");
 });
 
 test("GET /providers/linked without a token returns 401", async () => {
@@ -108,6 +107,15 @@ test("GET /providers/linked returns linked providers and hasPassword for the ses
 test("POST /providers/:p/disconnect rejects unknown provider", async () => {
   const { token } = await signupUser();
   const res = await fetch(`${BASE}/auth/providers/facebook/disconnect`, {
+    method: "POST",
+    headers: ipHeaders({ authorization: `Bearer ${token}` }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /providers/apple/disconnect is rejected (apple no longer supported)", async () => {
+  const { token } = await signupUser();
+  const res = await fetch(`${BASE}/auth/providers/apple/disconnect`, {
     method: "POST",
     headers: ipHeaders({ authorization: `Bearer ${token}` }),
   });
@@ -165,24 +173,15 @@ test("disconnect is BLOCKED when it would leave the user with no sign-in method"
   assert.ok(providers.includes("google"), "blocked disconnect must not have deleted the row");
 });
 
-test("disconnect succeeds when user has no password but another provider remains", async () => {
+test("GET /providers/linked hides any leftover apple rows (provider was removed)", async () => {
   const { token, userId } = await signupUser();
-  await seedProviderIdentity(userId, "google", `g-${rnd()}`);
   await seedProviderIdentity(userId, "apple", `a-${rnd()}`);
-  await clearPassword(userId);
 
-  const res = await fetch(`${BASE}/auth/providers/google/disconnect`, {
-    method: "POST",
+  const res = await fetch(`${BASE}/auth/providers/linked`, {
     headers: ipHeaders({ authorization: `Bearer ${token}` }),
   });
   assert.equal(res.status, 200);
-
-  // Apple should still be linked.
-  const linked = await fetch(`${BASE}/auth/providers/linked`, {
-    headers: ipHeaders({ authorization: `Bearer ${token}` }),
-  });
-  const linkedBody = await jsonOf(linked);
-  const providers = linkedBody.linked.map((l) => l.provider);
-  assert.ok(providers.includes("apple"));
-  assert.ok(!providers.includes("google"));
+  const body = await jsonOf(res);
+  const providers = body.linked.map((l) => l.provider);
+  assert.ok(!providers.includes("apple"), "apple links must not be returned");
 });

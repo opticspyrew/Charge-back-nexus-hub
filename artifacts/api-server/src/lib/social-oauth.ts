@@ -1,14 +1,12 @@
-import { createHash, randomBytes, createPrivateKey, type KeyObject } from "node:crypto";
-import { SignJWT, jwtVerify, createRemoteJWKSet } from "jose";
+import { createHash, randomBytes } from "node:crypto";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 import type { Request, Response } from "express";
 import { db, users, providerIdentities, type User } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { normalizeEmail } from "./auth";
 import {
-  getAppleConfig,
   getGoogleConfig,
-  type AppleConfig,
   type SocialProvider,
 } from "./social-providers";
 
@@ -32,7 +30,7 @@ export function setStateCookie(res: Response, provider: SocialProvider, payload:
   res.cookie(stateCookieName(provider), JSON.stringify(payload), {
     httpOnly: true,
     secure: isProd,
-    sameSite: provider === "apple" ? "none" : "lax",
+    sameSite: "lax",
     maxAge: COOKIE_MAX_AGE_MS,
     path: "/api/auth",
   });
@@ -282,123 +280,8 @@ export async function verifyGoogleIdToken(params: {
   };
 }
 
-// --- Apple -----------------------------------------------------------------
-
-const APPLE_AUTH_URL = "https://appleid.apple.com/auth/authorize";
-const APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token";
-const APPLE_ISSUER = "https://appleid.apple.com";
-const APPLE_JWKS = createRemoteJWKSet(new URL("https://appleid.apple.com/auth/keys"));
-
-let cachedApplePrivateKey: { pem: string; key: KeyObject } | null = null;
-function loadApplePrivateKey(pem: string): KeyObject {
-  if (cachedApplePrivateKey && cachedApplePrivateKey.pem === pem) {
-    return cachedApplePrivateKey.key;
-  }
-  const key = createPrivateKey({ key: pem, format: "pem" });
-  cachedApplePrivateKey = { pem, key };
-  return key;
-}
-
-async function buildAppleClientSecret(cfg: AppleConfig): Promise<string> {
-  const key = loadApplePrivateKey(cfg.privateKey);
-  const now = Math.floor(Date.now() / 1000);
-  return await new SignJWT({})
-    .setProtectedHeader({ alg: "ES256", kid: cfg.keyId })
-    .setIssuer(cfg.teamId)
-    .setIssuedAt(now)
-    .setExpirationTime(now + 60 * 10)
-    .setAudience(APPLE_ISSUER)
-    .setSubject(cfg.clientId)
-    .sign(key);
-}
-
-export function buildAppleAuthUrl(params: {
-  clientId: string;
-  redirectUri: string;
-  state: string;
-  nonce: string;
-}): string {
-  const qs = new URLSearchParams({
-    response_type: "code",
-    response_mode: "form_post",
-    client_id: params.clientId,
-    redirect_uri: params.redirectUri,
-    scope: "name email",
-    state: params.state,
-    nonce: params.nonce,
-  });
-  return `${APPLE_AUTH_URL}?${qs.toString()}`;
-}
-
-export async function exchangeAppleCode(params: {
-  code: string;
-  redirectUri: string;
-  cfg: AppleConfig;
-}): Promise<{ idToken: string }> {
-  const clientSecret = await buildAppleClientSecret(params.cfg);
-  const body = new URLSearchParams({
-    code: params.code,
-    client_id: params.cfg.clientId,
-    client_secret: clientSecret,
-    redirect_uri: params.redirectUri,
-    grant_type: "authorization_code",
-  });
-  const res = await fetch(APPLE_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Apple token exchange failed: ${res.status} ${text}`);
-  }
-  const data = (await res.json()) as { id_token?: string };
-  if (!data.id_token) throw new Error("Apple token response missing id_token");
-  return { idToken: data.id_token };
-}
-
-export async function verifyAppleIdToken(params: {
-  idToken: string;
-  clientId: string;
-  expectedNonce: string;
-  userJson?: { name?: { firstName?: string; lastName?: string } } | null;
-}): Promise<ProviderProfile> {
-  const { payload } = await jwtVerify(params.idToken, APPLE_JWKS, {
-    audience: params.clientId,
-    issuer: APPLE_ISSUER,
-  });
-  if (typeof payload.sub !== "string" || !payload.sub) {
-    throw new Error("Apple id_token missing sub");
-  }
-  if (typeof payload.nonce !== "string" || payload.nonce !== params.expectedNonce) {
-    throw new Error("Apple id_token nonce mismatch");
-  }
-  const email = typeof payload.email === "string" ? payload.email : "";
-  // Apple only returns email_verified="true" when the email is real (not a relay)
-  // and verified. We treat both true and "true" as verified.
-  const emailVerified =
-    payload.email_verified === true || payload.email_verified === "true";
-  if (!email || !emailVerified) {
-    throw new Error("Apple id_token email missing or unverified");
-  }
-  let name: string | null = null;
-  if (params.userJson?.name) {
-    const { firstName, lastName } = params.userJson.name;
-    const composed = [firstName, lastName].filter((s) => typeof s === "string" && s).join(" ").trim();
-    if (composed) name = composed;
-  }
-  return {
-    provider: "apple",
-    providerUserId: payload.sub,
-    email,
-    emailVerified: true,
-    name,
-  };
-}
-
 export function getProviderConfigStatus(): Record<SocialProvider, boolean> {
   return {
     google: !!getGoogleConfig(),
-    apple: !!getAppleConfig(),
   };
 }

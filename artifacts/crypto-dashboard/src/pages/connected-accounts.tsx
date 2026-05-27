@@ -18,13 +18,11 @@ const STATUS_MESSAGES: Record<string, { kind: "success" | "error"; text: string 
   already_linked: { kind: "error", text: "That account is already connected." },
   in_use_elsewhere: { kind: "error", text: "That provider account is connected to a different CryptoVault user." },
   google_not_configured: { kind: "error", text: "Google sign-in isn't available right now." },
-  apple_not_configured: { kind: "error", text: "Apple sign-in isn't available right now." },
   start_failed: { kind: "error", text: "We couldn't start the link flow. Please try again." },
 };
 
 const PROVIDER_LABELS: Record<SocialProvider, string> = {
   google: "Google",
-  apple: "Apple",
 };
 
 export default function ConnectedAccounts() {
@@ -95,7 +93,7 @@ export default function ConnectedAccounts() {
     }
   };
 
-  const providers: SocialProvider[] = ["google", "apple"];
+  const providers: SocialProvider[] = ["google"];
 
   return (
     <DashboardLayout activeTab="connected-accounts">

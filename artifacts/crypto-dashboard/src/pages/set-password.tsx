@@ -58,7 +58,7 @@ export default function SetPassword() {
           <p className="text-muted-foreground text-sm">
             Add a password to{" "}
             <span className="text-foreground font-medium">{user?.email ?? "your account"}</span>{" "}
-            so you can sign in without Google or Apple.
+            so you can sign in without Google.
           </p>
         </div>
 

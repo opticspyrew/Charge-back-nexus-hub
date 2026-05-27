@@ -301,13 +301,12 @@ export const authApi = {
     post<AuthSessionResponse>(`${AUTH_BASE}/reset-password`, data),
 };
 
-// Social sign-in (Google / Apple) -------------------------------------------
+// Social sign-in (Google) ---------------------------------------------------
 
-export type SocialProvider = "google" | "apple";
+export type SocialProvider = "google";
 
 export interface ProvidersConfig {
   google: boolean;
-  apple: boolean;
 }
 
 export interface LinkedProvider {
@@ -325,7 +324,7 @@ export interface ProvidersLinkedResponse {
 export const socialAuthApi = {
   publicConfig: async (): Promise<ProvidersConfig> => {
     const res = await fetch(`${AUTH_BASE}/providers/config`);
-    if (!res.ok) return { google: false, apple: false };
+    if (!res.ok) return { google: false };
     const data = (await res.json()) as { providers: ProvidersConfig };
     return data.providers;
   },
