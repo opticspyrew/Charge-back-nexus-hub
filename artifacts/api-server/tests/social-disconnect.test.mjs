@@ -173,6 +173,25 @@ test("disconnect is BLOCKED when it would leave the user with no sign-in method"
   assert.ok(providers.includes("google"), "blocked disconnect must not have deleted the row");
 });
 
+test("disconnect google is BLOCKED when only fallback is a stale apple row (apple no longer counts as a sign-in method)", async () => {
+  const { token, userId } = await signupUser();
+  await seedProviderIdentity(userId, "google", `g-${rnd()}`);
+  await seedProviderIdentity(userId, "apple", `a-${rnd()}`); // stale, unsupported
+  await clearPassword(userId);
+
+  const res = await fetch(`${BASE}/auth/providers/google/disconnect`, {
+    method: "POST",
+    headers: ipHeaders({ authorization: `Bearer ${token}` }),
+  });
+  assert.equal(
+    res.status,
+    400,
+    "stale apple row must NOT count as a valid alternate sign-in method",
+  );
+  const body = await jsonOf(res);
+  assert.match(body.error, /sign-in method|password|provider/i);
+});
+
 test("GET /providers/linked hides any leftover apple rows (provider was removed)", async () => {
   const { token, userId } = await signupUser();
   await seedProviderIdentity(userId, "apple", `a-${rnd()}`);
