@@ -178,11 +178,18 @@ router.post("/providers/:provider/disconnect", async (req, res) => {
     }
 
     // Don't allow disconnect if it would leave the user with no sign-in method.
+    // IMPORTANT: only count providers we currently SUPPORT (i.e. "google").
+    // Stale rows from removed providers (e.g. apple) must NOT be treated as a
+    // valid fallback, or a no-password user with google+stale-apple could
+    // disconnect google and be left with only unusable apple rows.
     const allLinks = await db
       .select({ provider: providerIdentities.provider })
       .from(providerIdentities)
       .where(eq(providerIdentities.userId, userId));
-    const otherProviders = allLinks.filter((l) => l.provider !== provider).length;
+    const SUPPORTED_PROVIDERS: ReadonlySet<string> = new Set(["google"]);
+    const otherProviders = allLinks.filter(
+      (l) => l.provider !== provider && SUPPORTED_PROVIDERS.has(l.provider),
+    ).length;
     const hasPassword = !!user.passwordHash;
     if (!hasPassword && otherProviders === 0) {
       res.status(400).json({
