@@ -21,6 +21,11 @@ import ChangePassword from "@/pages/change-password";
 import SetPassword from "@/pages/set-password";
 import ConnectedAccounts from "@/pages/connected-accounts";
 import ResetPassword from "@/pages/reset-password";
+import RefundsLanding from "@/refunds/pages/landing";
+import RefundsBrandGuide from "@/refunds/pages/brand-guide";
+import RefundsSignIn from "@/refunds/pages/sign-in";
+import RefundsSignUp from "@/refunds/pages/sign-up";
+import RefundsPortal from "@/refunds/pages/portal";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +33,14 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) {
     return <Redirect to="/sign-in" />;
+  }
+  return <Component />;
+}
+
+function RefundsProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) {
+    return <Redirect to="/refunds/sign-in" />;
   }
   return <Component />;
 }
@@ -51,6 +64,11 @@ function Router() {
       <Route path="/change-password" component={() => <ProtectedRoute component={ChangePassword} />} />
       <Route path="/set-password" component={() => <ProtectedRoute component={SetPassword} />} />
       <Route path="/connected-accounts" component={() => <ProtectedRoute component={ConnectedAccounts} />} />
+      <Route path="/refunds" component={RefundsLanding} />
+      <Route path="/refunds/brand" component={RefundsBrandGuide} />
+      <Route path="/refunds/sign-in" component={RefundsSignIn} />
+      <Route path="/refunds/sign-up" component={RefundsSignUp} />
+      <Route path="/refunds/portal" component={() => <RefundsProtectedRoute component={RefundsPortal} />} />
       <Route component={NotFound} />
     </Switch>
   );
