@@ -251,6 +251,38 @@ router.post("/intake", intakeLimiter, async (req: Request, res: Response): Promi
       return;
     }
 
+    // `amount` is optional, but when present it must be a real, non-negative
+    // number that fits the numeric(14, 2) column (max 999,999,999,999.99).
+    // Otherwise a malformed value like "1.2.3" — or a non-string JSON payload
+    // (number/object/array) that would throw on string ops — reaches Postgres
+    // as a cast and surfaces as a 500 instead of a clean 400.
+    const amountInvalid = () => {
+      res.status(400).json({
+        error: "Loss amount must be a valid non-negative number.",
+      });
+    };
+
+    if (amount != null && typeof amount !== "string") {
+      amountInvalid();
+      return;
+    }
+
+    const normalizedAmount = amount ? amount.replace(/,/g, "").trim() : "";
+    if (normalizedAmount) {
+      const AMOUNT_UPPER_BOUND = 1_000_000_000_000; // exclusive; numeric(14, 2) caps at 12 integer digits
+      const parsedAmount = Number(normalizedAmount);
+      const isWellFormed = /^\d+(\.\d+)?$/.test(normalizedAmount);
+      if (
+        !isWellFormed ||
+        !Number.isFinite(parsedAmount) ||
+        parsedAmount < 0 ||
+        parsedAmount >= AMOUNT_UPPER_BOUND
+      ) {
+        amountInvalid();
+        return;
+      }
+    }
+
     const normalizedEmail = user.email.toLowerCase().trim();
     let [client] = await db
       .select()
@@ -282,8 +314,6 @@ router.post("/intake", intakeLimiter, async (req: Request, res: Response): Promi
       evidenceCount ? `Evidence files attached: ${evidenceCount}` : null,
       txHashes?.trim() ? `Transaction hashes:\n${txHashes.trim()}` : null,
     ].filter(Boolean);
-
-    const normalizedAmount = amount ? amount.replace(/,/g, "").trim() : "";
 
     const [request] = await db
       .insert(adminServiceRequests)
