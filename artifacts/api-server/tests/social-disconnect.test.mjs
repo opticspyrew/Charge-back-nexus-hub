@@ -13,15 +13,30 @@
 // can't be exercised without live provider credentials. The disconnect logic
 // itself is independent of how the link was created.
 
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { pool } from "@workspace/db";
 
 const BASE = process.env.API_BASE_URL ?? "http://localhost:8080/api";
 
+// Track every user this suite creates so we can delete them (and their
+// cascading rows: provider_identities, user_sessions, etc.) at the end. This
+// keeps the dev database free of test residue no matter how often the suite
+// is re-run.
+const createdUserIds = [];
+
 function rnd() {
   return Math.random().toString(36).slice(2, 10);
 }
+
+// Delete every user created by this suite. The FK from provider_identities and
+// user_sessions to users.id is ON DELETE CASCADE, so removing the user removes
+// its seeded provider links and sessions too.
+after(async () => {
+  if (createdUserIds.length > 0) {
+    await pool.query(`DELETE FROM users WHERE id = ANY($1::int[])`, [createdUserIds]);
+  }
+});
 
 function fakeIp() {
   const oct = () => Math.floor(Math.random() * 254) + 1;
@@ -55,6 +70,7 @@ async function signupUser() {
   });
   assert.equal(res.status, 201, "signup should succeed");
   const body = await jsonOf(res);
+  createdUserIds.push(body.user.id);
   return { email, token: body.token, userId: body.user.id };
 }
 
