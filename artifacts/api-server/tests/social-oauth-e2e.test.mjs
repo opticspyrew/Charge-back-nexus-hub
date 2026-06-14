@@ -30,6 +30,13 @@ let server;
 let pool;
 let BASE;
 
+// Track every account this suite creates — both the ones made via /auth/signup
+// and the brand-new users the fake Google sign-in flow creates — so they can be
+// deleted in after(). provider_identities and user_sessions have an ON DELETE
+// CASCADE FK to users.id, so removing the user removes its linked rows too.
+// Re-running the suite repeatedly then leaves no stale rows in the dev DB.
+const createdEmails = [];
+
 function rnd() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -81,11 +88,21 @@ before(async () => {
 });
 
 after(async () => {
+  // Remove every user this suite created (cascades to provider_identities and
+  // user_sessions). Match case-insensitively because the server lowercases
+  // emails on store, while the test keeps the original-cased string.
+  if (pool && createdEmails.length > 0) {
+    await pool.query(
+      `DELETE FROM users WHERE lower(email) = ANY($1::text[])`,
+      [createdEmails.map((e) => e.toLowerCase())],
+    );
+  }
   if (server) await new Promise((resolve) => server.close(resolve));
 });
 
 async function signupUser() {
   const email = `e2e-${rnd()}@example.com`;
+  createdEmails.push(email);
   const res = await fetch(`${BASE}/auth/signup`, {
     method: "POST",
     headers: ipHeaders({ "content-type": "application/json" }),
@@ -131,6 +148,7 @@ async function runFakeOAuth({ startPath, email, name }) {
 
 test("sign-in with Google creates a brand-new user and lands on the dashboard", async () => {
   const email = `e2e-google-${rnd()}@example.com`;
+  createdEmails.push(email);
   const res = await runFakeOAuth({
     startPath: "/auth/google/login",
     email,
@@ -166,6 +184,7 @@ test("sign-in with Google creates a brand-new user and lands on the dashboard", 
 
 test("signing in again with the same Google email reuses the same user (no duplicate)", async () => {
   const email = `e2e-return-${rnd()}@example.com`;
+  createdEmails.push(email);
   await runFakeOAuth({ startPath: "/auth/google/login", email, name: "Repeat User" });
   const second = await runFakeOAuth({
     startPath: "/auth/google/login",
