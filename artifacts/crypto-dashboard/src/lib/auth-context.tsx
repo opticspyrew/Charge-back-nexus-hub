@@ -164,6 +164,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    // Keep multiple tabs in sync: the browser fires a "storage" event in every
+    // OTHER tab of this origin when localStorage changes. When the session key
+    // is written or removed elsewhere (login, signup, logout), adopt the new
+    // value here so this tab reflects the change without a manual refresh.
+    // We update state directly instead of via updateSession() to avoid
+    // re-writing storage (which could loop) — the originating tab already did.
+    if (typeof window === "undefined") return;
+    const onStorage = (event: StorageEvent) => {
+      // A null key means the whole store was cleared; otherwise only react to
+      // changes to our session key.
+      if (event.key !== null && event.key !== SESSION_KEY) return;
+      const next = loadStoredSession();
+      tokenRef.current = next?.token ?? null;
+      setSessionState(next);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const login = async (email: string, password: string) => {
     const lock = getLockoutState(email);
     if (lock.locked) {
