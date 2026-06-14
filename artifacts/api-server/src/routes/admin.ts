@@ -52,7 +52,9 @@ import { ObjectStorageService } from "../lib/objectStorage";
 
 // Support address shown in KYC decision emails. Kept in sync with the address
 // used by other user-facing notifications (see auth.ts SUPPORT_EMAIL).
-const KYC_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+const DEFAULT_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
+const KYC_SUPPORT_EMAIL =
+  process.env.SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
 // Same address is reused for payment-confirmation decision emails so users
 // have a consistent contact across notification types.
 const PAYMENT_SUPPORT_EMAIL = KYC_SUPPORT_EMAIL;
