@@ -1,4 +1,17 @@
-import { pgTable, serial, text, integer, timestamp, unique, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, unique, real, jsonb } from "drizzle-orm/pg-core";
+
+/**
+ * Per-user toggles for non-critical notification emails. Security-critical
+ * alerts (e.g. password changed) are intentionally NOT represented here — they
+ * are always sent and cannot be disabled. A null column (no row preference set)
+ * is treated as "all enabled" by resolveNotificationPreferences in the API.
+ */
+export interface NotificationPreferences {
+  /** KYC approval / rejection decision emails. */
+  kycDecisions: boolean;
+  /** New sign-in / new device alert emails. */
+  newSignIn: boolean;
+}
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -18,6 +31,10 @@ export const users = pgTable("users", {
   // (e.g. "Payment Firm: CashApp"). Nullable for accounts created before
   // this field existed.
   scammedVia: text("scammed_via"),
+  // Per-user notification email toggles. Null = no preference set yet, which
+  // the API resolves to "all enabled". Security-critical emails are never
+  // gated on this column.
+  notificationPreferences: jsonb("notification_preferences").$type<NotificationPreferences>(),
 }, (t) => [
   unique("users_email_key").on(t.email),
   unique("users_replit_sub_key").on(t.replitSub),

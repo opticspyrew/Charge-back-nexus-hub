@@ -299,7 +299,38 @@ export const authApi = {
 
   resetPassword: (data: { token: string; newPassword: string }) =>
     post<AuthSessionResponse>(`${AUTH_BASE}/reset-password`, data),
+
+  getNotificationPreferences: async (token: string): Promise<NotificationPreferencesResponse> => {
+    const res = await fetch(`${AUTH_BASE}/preferences`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || "Failed to load notification preferences");
+    }
+    return res.json();
+  },
+
+  updateNotificationPreferences: (
+    token: string,
+    data: Partial<NotificationPreferences>,
+  ) =>
+    request<NotificationPreferencesResponse>(`${AUTH_BASE}/preferences`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+      headers: { Authorization: `Bearer ${token}` },
+    }),
 };
+
+export interface NotificationPreferences {
+  kycDecisions: boolean;
+  newSignIn: boolean;
+}
+
+export interface NotificationPreferencesResponse {
+  preferences: NotificationPreferences;
+  mandatory: string[];
+}
 
 // Social sign-in (Google) ---------------------------------------------------
 
