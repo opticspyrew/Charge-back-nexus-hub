@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authApi } from "@/lib/api";
 import { getPasswordStrengthHint, validatePassword } from "@/lib/password-policy";
 import PasswordInput from "@/components/password-input";
+import PasswordRulesChecklist from "@/components/password-rules-checklist";
 
 type Status = "validating" | "valid" | "invalid" | "submitting" | "done";
 
@@ -172,11 +173,15 @@ export default function ResetPassword() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min. 8 chars, mix letters & numbers"
-                    aria-describedby="reset-strength-hint"
+                    aria-describedby="reset-password-rules reset-strength-hint"
                     data-testid="reset-new-password"
                     className="px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   />
-                  {strengthHint ? (
+                  <PasswordRulesChecklist
+                    id="reset-password-rules"
+                    password={password}
+                  />
+                  {strengthHint && (
                     <p
                       id="reset-strength-hint"
                       data-testid="reset-strength-hint"
@@ -190,13 +195,6 @@ export default function ResetPassword() {
                       }
                     >
                       {strengthHint.message}
-                    </p>
-                  ) : (
-                    <p
-                      id="reset-strength-hint"
-                      className="mt-1.5 text-xs text-muted-foreground"
-                    >
-                      Use 8+ characters and mix letters with numbers or symbols.
                     </p>
                   )}
                 </div>
