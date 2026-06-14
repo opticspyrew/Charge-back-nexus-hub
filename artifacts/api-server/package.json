@@ -8,7 +8,8 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --experimental-test-module-mocks --test \"tests/**/*.test.mjs\" \"tests/**/*.test.mts\""
+    "test": "node --import tsx --experimental-test-module-mocks --test \"tests/**/*.test.mjs\" \"tests/**/*.test.mts\"",
+    "test:guard": "node --import tsx --test tests/no-leftover-accounts.guard.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
