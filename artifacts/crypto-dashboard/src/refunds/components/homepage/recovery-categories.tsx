@@ -7,7 +7,7 @@ import {
   ScanLine,
   type LucideIcon,
 } from "lucide-react";
-import { getRecoveryCategories } from "../../data/mocks";
+import { useRecoveryCategories } from "../../data/api";
 import Reveal from "./reveal";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -19,9 +19,8 @@ const ICONS: Record<string, LucideIcon> = {
   Mailbox,
 };
 
-const CATEGORIES = getRecoveryCategories();
-
 export default function RecoveryCategories() {
+  const CATEGORIES = useRecoveryCategories();
   return (
     <section
       id="categories"

@@ -7,14 +7,20 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { getRecoveryStats, getRecoveryTrend } from "../../data/mocks";
+import { useRecoveryStats, useRecoveryTrend } from "../../data/api";
 import AnimatedCounter from "./animated-counter";
 import Reveal from "./reveal";
 
-const STATS = getRecoveryStats();
-const TREND = getRecoveryTrend();
+const compactUsd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
 
 export default function RecoveryStats() {
+  const STATS = useRecoveryStats();
+  const TREND = useRecoveryTrend();
   return (
     <section
       id="statistics"
@@ -61,7 +67,7 @@ export default function RecoveryStats() {
           <div className="refunds-glass rounded-2xl p-5 h-full">
             <div className="flex items-center justify-between mb-4">
               <span className="text-sm font-semibold text-foreground">
-                Assets traced (USD millions)
+                Funds recovered (USD)
               </span>
               <span className="font-mono text-[10px] text-muted-foreground">
                 trailing 8 months
@@ -93,6 +99,7 @@ export default function RecoveryStats() {
                     tick={{ fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
+                    tickFormatter={(v: number) => compactUsd.format(v)}
                   />
                   <Tooltip
                     cursor={{ stroke: "hsl(180 95% 50% / 0.3)" }}
@@ -103,7 +110,7 @@ export default function RecoveryStats() {
                       fontSize: 12,
                       color: "hsl(195 25% 96%)",
                     }}
-                    formatter={(v: number) => [`$${v}M`, "Traced"]}
+                    formatter={(v: number) => [compactUsd.format(v), "Recovered"]}
                   />
                   <Area
                     type="monotone"

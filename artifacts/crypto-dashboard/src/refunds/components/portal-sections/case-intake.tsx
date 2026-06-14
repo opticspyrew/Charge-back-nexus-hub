@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Check, ChevronLeft, ChevronRight, FileUp, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { submitCaseIntake } from "../../data/api";
 
 type IncidentType = "" | "phishing" | "compromise" | "social" | "smart-contract" | "exchange";
 
@@ -20,6 +22,7 @@ const INCIDENTS: { value: IncidentType; label: string; desc: string }[] = [
 ];
 
 export default function CaseIntake() {
+  const { token } = useAuth();
   const [step, setStep] = useState(1);
   const [incident, setIncident] = useState<IncidentType>("");
   const [asset, setAsset] = useState("");
@@ -29,6 +32,9 @@ export default function CaseIntake() {
   const [evidence, setEvidence] = useState<File[]>([]);
   const [authorize, setAuthorize] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [reference, setReference] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   const canAdvance = () => {
     switch (step) {
@@ -45,8 +51,29 @@ export default function CaseIntake() {
     setEvidence((prev) => [...prev, ...Array.from(files)].slice(0, 10));
   };
 
-  const handleSubmit = () => {
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    if (!token) {
+      setError("Your session has expired. Please sign in again to submit a case.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await submitCaseIntake(token, {
+        incident: INCIDENTS.find((i) => i.value === incident)?.label ?? incident,
+        asset,
+        chain,
+        amount,
+        txHashes,
+        evidenceCount: evidence.length,
+      });
+      setReference(result.reference);
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit your case. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -61,7 +88,7 @@ export default function CaseIntake() {
           Messaging channel. Outcomes depend on jurisdiction, counterparty cooperation,
           and the underlying asset — no recovery is guaranteed.
         </p>
-        <p className="mt-6 font-mono text-xs text-primary">Reference: RF-2026-DRAFT</p>
+        <p className="mt-6 font-mono text-xs text-primary">Reference: {reference}</p>
       </div>
     );
   }
@@ -305,12 +332,19 @@ export default function CaseIntake() {
             <button
               type="button"
               onClick={handleSubmit}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              disabled={submitting || !authorize}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
             >
-              <ShieldCheck className="w-4 h-4" /> Submit intake
+              <ShieldCheck className="w-4 h-4" />
+              {submitting ? "Submitting…" : "Submit intake"}
             </button>
           )}
         </div>
+        {error && (
+          <p className="mt-3 text-xs text-destructive text-right" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     </div>
   );
