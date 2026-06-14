@@ -1,12 +1,19 @@
 import type {
   AddressRisk,
   AiMessage,
+  BlogArticle,
   CustodyLogEntry,
+  EcosystemColumn,
   EvidenceFile,
+  FaqEntry,
   InvestigatorAssignment,
   MessageThread,
   OnChainAlert,
   OnChainTx,
+  ProcessStep,
+  RecoveryCategory,
+  RecoveryStat,
+  RecoveryTrendPoint,
   RefundsCase,
   SecureMessage,
   TimelineEvent,
@@ -517,4 +524,284 @@ export function getInvestigatorAssignments(): InvestigatorAssignment[] {
 }
 export function getAiThread(): AiMessage[] {
   return clone(AI_MESSAGES);
+}
+
+// ----------------------------------------------------------------------------
+// Homepage marketing content (synthetic, swappable via these read functions).
+// ----------------------------------------------------------------------------
+
+const RECOVERY_CATEGORIES: RecoveryCategory[] = [
+  {
+    id: "phishing",
+    name: "Phishing & approval drains",
+    icon: "ScanLine",
+    summary:
+      "Malicious signature requests and token-approval exploits that silently drain wallets after a single interaction.",
+    signals: ["Unlimited approvals", "Drainer contracts", "Spoofed dApps"],
+  },
+  {
+    id: "wallet-compromise",
+    name: "Wallet compromise",
+    icon: "KeyRound",
+    summary:
+      "Leaked seed phrases, malware, and SIM-swap takeovers leading to unauthorized transfers from self-custody wallets.",
+    signals: ["Seed exposure", "Clipboard malware", "SIM swap"],
+  },
+  {
+    id: "investment-fraud",
+    name: "Investment & romance fraud",
+    icon: "HeartCrack",
+    summary:
+      "Long-con schemes routing victim deposits through layered wallets and fraudulent trading platforms.",
+    signals: ["Fake platforms", "Pig-butchering", "Layered deposits"],
+  },
+  {
+    id: "contract-exploit",
+    name: "Smart contract exploit",
+    icon: "Bug",
+    summary:
+      "Protocol-level exploits — reentrancy, oracle manipulation, and bridge attacks — that move pooled funds at scale.",
+    signals: ["Reentrancy", "Oracle abuse", "Bridge attack"],
+  },
+  {
+    id: "exchange-incident",
+    name: "Exchange & custodian incident",
+    icon: "Building2",
+    summary:
+      "Frozen, misdirected, or withheld balances at centralized venues requiring documented counterparty engagement.",
+    signals: ["Frozen funds", "Wrong network", "Withdrawal holds"],
+  },
+  {
+    id: "business-email",
+    name: "Business payment redirection",
+    icon: "Mailbox",
+    summary:
+      "Compromised invoicing and payment instructions that redirect corporate crypto settlements to attacker wallets.",
+    signals: ["Invoice fraud", "Vendor spoof", "Treasury loss"],
+  },
+];
+
+const PROCESS_STEPS: ProcessStep[] = [
+  {
+    index: 1,
+    key: "intake",
+    title: "Secure intake",
+    detail:
+      "You submit the incident, affected assets, and transaction hashes through an encrypted case file. Nothing is shared without authorization.",
+    duration: "Day 0",
+  },
+  {
+    index: 2,
+    key: "triage",
+    title: "Forensic triage",
+    detail:
+      "Analysts validate the loss, score recoverability, and map the initial path of funds across chains and counterparties.",
+    duration: "< 6 hours",
+  },
+  {
+    index: 3,
+    key: "investigation",
+    title: "Investigation",
+    detail:
+      "Continuous on-chain monitoring, attribution, and evidence collection build an auditable, chain-of-custody record.",
+    duration: "Days 1–14",
+  },
+  {
+    index: 4,
+    key: "coordination",
+    title: "Coordination",
+    detail:
+      "With your written authorization we engage regulated venues, custodians, counsel, and law-enforcement liaisons.",
+    duration: "Ongoing",
+  },
+  {
+    index: 5,
+    key: "resolution",
+    title: "Resolution & reporting",
+    detail:
+      "Outcomes are documented in evidence-grade reports. Recovery depends on jurisdiction and counterparty cooperation.",
+    duration: "Case-dependent",
+  },
+];
+
+const RECOVERY_STATS: RecoveryStat[] = [
+  {
+    id: "assets-traced",
+    label: "Assets traced",
+    value: 482,
+    prefix: "$",
+    suffix: "M",
+    caption: "Cumulative value mapped on-chain across active and closed cases.",
+  },
+  {
+    id: "chains",
+    label: "Chains analyzed",
+    value: 17,
+    caption: "Networks under continuous monitoring and path analysis.",
+  },
+  {
+    id: "cases",
+    label: "Cases investigated",
+    value: 1240,
+    suffix: "+",
+    caption: "Forensic investigations opened since platform inception.",
+  },
+  {
+    id: "triage",
+    label: "Median triage",
+    value: 5.8,
+    decimals: 1,
+    suffix: "h",
+    caption: "Time from intake to a scored recoverability assessment.",
+  },
+];
+
+const RECOVERY_TREND: RecoveryTrendPoint[] = [
+  { month: "Jan", recoveredUsd: 2.1, casesOpened: 64 },
+  { month: "Feb", recoveredUsd: 3.4, casesOpened: 71 },
+  { month: "Mar", recoveredUsd: 2.9, casesOpened: 83 },
+  { month: "Apr", recoveredUsd: 4.6, casesOpened: 96 },
+  { month: "May", recoveredUsd: 5.2, casesOpened: 102 },
+  { month: "Jun", recoveredUsd: 6.8, casesOpened: 118 },
+  { month: "Jul", recoveredUsd: 6.1, casesOpened: 109 },
+  { month: "Aug", recoveredUsd: 7.9, casesOpened: 124 },
+];
+
+const BLOG_ARTICLES: BlogArticle[] = [
+  {
+    id: "approval-drains",
+    category: "Threat intel",
+    title: "How approval drainers empty a wallet in a single signature",
+    excerpt:
+      "A breakdown of the token-approval pattern behind the year's most common self-custody losses — and the on-chain signals that expose it.",
+    readMinutes: 7,
+    publishedAt: "2026-05-28",
+  },
+  {
+    id: "chain-of-custody",
+    category: "Compliance",
+    title: "Building evidence that holds up: chain-of-custody for digital assets",
+    excerpt:
+      "What separates a screenshot from admissible forensic evidence, and how hashing and sealing preserve integrity end to end.",
+    readMinutes: 9,
+    publishedAt: "2026-05-12",
+  },
+  {
+    id: "bridge-tracing",
+    category: "Investigations",
+    title: "Following funds across bridges without losing the trail",
+    excerpt:
+      "Cross-chain laundering is designed to break attribution. Here is how analysts re-stitch the path of funds after a bridge hop.",
+    readMinutes: 8,
+    publishedAt: "2026-04-30",
+  },
+  {
+    id: "pig-butchering",
+    category: "Fraud",
+    title: "Anatomy of a pig-butchering deposit funnel",
+    excerpt:
+      "Layered deposit wallets, fake trading dashboards, and the recovery windows that close fast — what victims should preserve first.",
+    readMinutes: 6,
+    publishedAt: "2026-04-15",
+  },
+];
+
+const FAQ_ENTRIES: FaqEntry[] = [
+  {
+    id: "guarantee",
+    question: "Can you guarantee my funds will be recovered?",
+    answer:
+      "No. No legitimate recovery service can guarantee an outcome. Recovery depends on jurisdiction, counterparty cooperation, the asset involved, and how quickly funds are traced. We provide an honest recoverability assessment after triage.",
+  },
+  {
+    id: "reverse",
+    question: "Can you reverse a blockchain transaction?",
+    answer:
+      "On-chain transactions are final and cannot be reversed. Our work focuses on tracing assets, building evidence, and coordinating with regulated venues and counsel where funds can lawfully be frozen or returned.",
+  },
+  {
+    id: "custody",
+    question: "Do you take custody of my assets or wallet keys?",
+    answer:
+      "Never. Refunds.site does not custody assets and does not request your private keys or seed phrase. Investigations are read-only on-chain unless you provide explicit written authorization for a specific action.",
+  },
+  {
+    id: "data",
+    question: "How is my case data protected?",
+    answer:
+      "Case files are encrypted in transit and at rest, handled under SOC 2 controls, and access is scoped to your assigned analysts. Evidence is hashed and logged to a tamper-evident chain of custody.",
+  },
+  {
+    id: "law-enforcement",
+    question: "Do you work with law enforcement?",
+    answer:
+      "When appropriate and with your authorization, we prepare evidence packages for counsel and act as a liaison to law-enforcement and regulated counterparties. We do not act unilaterally on your behalf.",
+  },
+  {
+    id: "cost",
+    question: "How quickly should I start a case?",
+    answer:
+      "As soon as possible. Recovery windows narrow as funds move and settle. Early tracing and counterparty engagement materially improve the chances of a favorable outcome.",
+  },
+];
+
+const ECOSYSTEM_MAP: EcosystemColumn[] = [
+  {
+    heading: "Platform",
+    links: [
+      { label: "Secure portal", href: "/refunds/sign-in" },
+      { label: "Open a case", href: "/refunds/sign-up" },
+      { label: "Recovery vault", href: "/refunds/portal" },
+      { label: "Brand system", href: "/refunds/brand" },
+    ],
+  },
+  {
+    heading: "Capabilities",
+    links: [
+      { label: "Blockchain intelligence", href: "#intelligence" },
+      { label: "Investigation operations", href: "#operations" },
+      { label: "AI recovery assistant", href: "#assistant" },
+      { label: "Recovery statistics", href: "#statistics" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
+      { label: "Threat intelligence", href: "#education" },
+      { label: "Recovery process", href: "#process" },
+      { label: "FAQ", href: "#faq" },
+      { label: "Recovery categories", href: "#categories" },
+    ],
+  },
+  {
+    heading: "Trust & legal",
+    links: [
+      { label: "Compliance posture", href: "#compliance" },
+      { label: "Privacy by design", href: "#compliance" },
+      { label: "Terms of engagement", href: "#compliance" },
+      { label: "Responsible disclosure", href: "#compliance" },
+    ],
+  },
+];
+
+export function getRecoveryCategories(): RecoveryCategory[] {
+  return clone(RECOVERY_CATEGORIES);
+}
+export function getProcessSteps(): ProcessStep[] {
+  return clone(PROCESS_STEPS);
+}
+export function getRecoveryStats(): RecoveryStat[] {
+  return clone(RECOVERY_STATS);
+}
+export function getRecoveryTrend(): RecoveryTrendPoint[] {
+  return clone(RECOVERY_TREND);
+}
+export function getBlogArticles(): BlogArticle[] {
+  return clone(BLOG_ARTICLES);
+}
+export function getFaqEntries(): FaqEntry[] {
+  return clone(FAQ_ENTRIES);
+}
+export function getEcosystemMap(): EcosystemColumn[] {
+  return clone(ECOSYSTEM_MAP);
 }

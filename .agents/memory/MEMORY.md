@@ -1,0 +1,1 @@
+- [Refunds.site / CryptoVault seam](refunds-seam.md) — Refunds lives in crypto-dashboard under /refunds + src/refunds/, isolated via .refunds-scope CSS-var override; never cross-import.

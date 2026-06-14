@@ -151,3 +151,60 @@ export interface InvestigatorAssignment {
   nextActionDue: string;
   workload: number;
 }
+
+export interface RecoveryCategory {
+  id: string;
+  name: string;
+  icon: string;
+  summary: string;
+  signals: string[];
+}
+
+export interface ProcessStep {
+  index: number;
+  key: string;
+  title: string;
+  detail: string;
+  duration: string;
+}
+
+export interface RecoveryStat {
+  id: string;
+  label: string;
+  value: number;
+  suffix?: string;
+  prefix?: string;
+  decimals?: number;
+  caption: string;
+}
+
+export interface RecoveryTrendPoint {
+  month: string;
+  recoveredUsd: number;
+  casesOpened: number;
+}
+
+export interface BlogArticle {
+  id: string;
+  category: string;
+  title: string;
+  excerpt: string;
+  readMinutes: number;
+  publishedAt: string;
+}
+
+export interface FaqEntry {
+  id: string;
+  question: string;
+  answer: string;
+}
+
+export interface EcosystemLink {
+  label: string;
+  href: string;
+}
+
+export interface EcosystemColumn {
+  heading: string;
+  links: EcosystemLink[];
+}
