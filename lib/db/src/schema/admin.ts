@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, serial, text, varchar, numeric, integer, timestamp, jsonb, unique, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, varchar, numeric, integer, timestamp, jsonb, unique, boolean, index } from "drizzle-orm/pg-core";
 
 export const adminClients = pgTable("admin_clients", {
   id: serial("id").primaryKey(),
@@ -30,6 +30,13 @@ export const adminServiceRequests = pgTable("admin_service_requests", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   unique("admin_service_requests_public_token_key").on(t.publicToken),
+  // Speeds up the per-user pending-withdrawal count on GET /api/auth/sessions,
+  // which filters admin_service_requests by client_id, type and status.
+  index("admin_service_requests_client_type_status_idx").on(
+    t.clientId,
+    t.type,
+    t.status,
+  ),
 ]);
 
 export const adminSessions = pgTable("admin_sessions", {
