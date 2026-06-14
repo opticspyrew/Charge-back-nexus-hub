@@ -7,6 +7,7 @@ import { sendAdminEmail, sendUserEmail, newClientEmail, newServiceRequestEmail, 
 import { logger } from "../lib/logger";
 import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
 import { clearLoginFailures, getAccountThrottleStatus } from "../lib/login-throttle";
+import { resolveNotificationPreferences } from "../lib/notification-preferences";
 
 const router = Router();
 
@@ -890,11 +891,18 @@ async function decideKyc(req: Request, res: Response, decision: "approved" | "re
     // decision itself — log and move on.
     try {
       const [recipient] = await db
-        .select({ name: users.name, email: users.email })
+        .select({
+          name: users.name,
+          email: users.email,
+          notificationPreferences: users.notificationPreferences,
+        })
         .from(users)
         .where(eq(users.id, submission.userId))
         .limit(1);
-      if (recipient?.email) {
+      const wantsKycEmail =
+        !!recipient &&
+        resolveNotificationPreferences(recipient.notificationPreferences).kycDecisions;
+      if (recipient?.email && wantsKycEmail) {
         const appUrl = buildAdminAppUrl(req);
         const built = decision === "approved"
           ? kycApprovedEmail({

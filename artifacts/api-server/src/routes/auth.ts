@@ -48,6 +48,9 @@ import {
   getAccountThrottleStatus,
   recordLoginFailure,
 } from "../lib/login-throttle";
+import {
+  resolveNotificationPreferences,
+} from "../lib/notification-preferences";
 
 const DEFAULT_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
@@ -502,7 +505,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
       "User signed in",
     );
 
-    if (!historicallySeen) {
+    if (!historicallySeen && resolveNotificationPreferences(user.notificationPreferences).newSignIn) {
       // Fire-and-forget: a failed email must not break sign-in.
       void notifyNewSignIn({ name: user.name, email: user.email }, metadata);
     }
@@ -926,6 +929,71 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     logger.error({ err }, "Failed to load session user");
     res.status(500).json({ error: "Failed to load session." });
+  }
+});
+
+// Notification preferences -------------------------------------------------
+//
+// Security-critical alerts (password changed) are mandatory and never appear in
+// the togglable set. The client uses `mandatory` to render those categories as
+// locked-on.
+const MANDATORY_NOTIFICATIONS = ["passwordChanged"] as const;
+
+router.get("/preferences", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    const user = await findUserBySessionToken(token);
+    if (!user) {
+      res.status(401).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+    res.json({
+      preferences: resolveNotificationPreferences(user.notificationPreferences),
+      mandatory: MANDATORY_NOTIFICATIONS,
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to load notification preferences");
+    res.status(500).json({ error: "Failed to load notification preferences." });
+  }
+});
+
+router.patch("/preferences", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    if (!token) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+    const user = await findUserBySessionToken(token);
+    if (!user) {
+      res.status(401).json({ error: "Session expired. Please sign in again." });
+      return;
+    }
+
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    // Start from the user's current resolved preferences so a partial update
+    // (e.g. only toggling kycDecisions) leaves other categories untouched.
+    const current = resolveNotificationPreferences(user.notificationPreferences);
+    const next = {
+      kycDecisions:
+        typeof body.kycDecisions === "boolean" ? body.kycDecisions : current.kycDecisions,
+      newSignIn:
+        typeof body.newSignIn === "boolean" ? body.newSignIn : current.newSignIn,
+    };
+
+    await db
+      .update(users)
+      .set({ notificationPreferences: next, updatedAt: new Date() })
+      .where(eq(users.id, user.id));
+
+    res.json({ preferences: next, mandatory: MANDATORY_NOTIFICATIONS });
+  } catch (err) {
+    logger.error({ err }, "Failed to update notification preferences");
+    res.status(500).json({ error: "Failed to update notification preferences." });
   }
 });
 

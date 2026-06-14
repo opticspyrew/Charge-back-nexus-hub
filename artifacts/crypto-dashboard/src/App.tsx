@@ -20,6 +20,7 @@ import CashAppGasFee from "@/pages/cashapp-gas-fee";
 import ChangePassword from "@/pages/change-password";
 import SetPassword from "@/pages/set-password";
 import ConnectedAccounts from "@/pages/connected-accounts";
+import NotificationSettings from "@/pages/notification-settings";
 import ResetPassword from "@/pages/reset-password";
 import RefundsLanding from "@/refunds/pages/landing";
 import RefundsBrandGuide from "@/refunds/pages/brand-guide";
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/change-password" component={() => <ProtectedRoute component={ChangePassword} />} />
       <Route path="/set-password" component={() => <ProtectedRoute component={SetPassword} />} />
       <Route path="/connected-accounts" component={() => <ProtectedRoute component={ConnectedAccounts} />} />
+      <Route path="/notification-settings" component={() => <ProtectedRoute component={NotificationSettings} />} />
       <Route path="/refunds" component={RefundsLanding} />
       <Route path="/refunds/brand" component={RefundsBrandGuide} />
       <Route path="/refunds/sign-in" component={RefundsSignIn} />

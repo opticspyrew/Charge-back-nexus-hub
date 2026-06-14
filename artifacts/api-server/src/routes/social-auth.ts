@@ -32,6 +32,7 @@ import {
   getTrustedAppOrigin,
   notifyNewSignIn,
 } from "../lib/login-notifications";
+import { resolveNotificationPreferences } from "../lib/notification-preferences";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -358,7 +359,7 @@ async function handleCallback(
     return;
   }
 
-  if (!historicallySeen) {
+  if (!historicallySeen && resolveNotificationPreferences(user.notificationPreferences).newSignIn) {
     void notifyNewSignIn({ name: user.name, email: user.email }, metadata, req);
   }
 
