@@ -51,9 +51,7 @@ import {
 import {
   resolveNotificationPreferences,
 } from "../lib/notification-preferences";
-
-const DEFAULT_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
+import { SUPPORT_EMAIL } from "../lib/support-email";
 
 const MAX_USER_AGENT_LENGTH = 500;
 

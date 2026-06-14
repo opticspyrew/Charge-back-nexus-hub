@@ -49,15 +49,13 @@ function safeCredentialsMatch(
 }
 
 import { ObjectStorageService } from "../lib/objectStorage";
+import { SUPPORT_EMAIL } from "../lib/support-email";
 
-// Support address shown in KYC decision emails. Kept in sync with the address
-// used by other user-facing notifications (see auth.ts SUPPORT_EMAIL).
-const DEFAULT_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
-const KYC_SUPPORT_EMAIL =
-  process.env.SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
-// Same address is reused for payment-confirmation decision emails so users
-// have a consistent contact across notification types.
-const PAYMENT_SUPPORT_EMAIL = KYC_SUPPORT_EMAIL;
+// Support address shown in KYC and payment-confirmation decision emails.
+// Resolved from the shared support-email helper so every notification type
+// uses one consistent contact address.
+const KYC_SUPPORT_EMAIL = SUPPORT_EMAIL;
+const PAYMENT_SUPPORT_EMAIL = SUPPORT_EMAIL;
 
 // Build a link back to the user-facing dashboard for KYC decision emails.
 // The KYC modal is opened from the main dashboard, so the same URL works for

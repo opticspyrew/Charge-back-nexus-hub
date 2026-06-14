@@ -3,9 +3,7 @@ import { logger } from "./logger";
 import { newSignInEmail, sendUserEmail } from "./email";
 import { type SessionMetadata } from "./auth";
 import { getClientIp } from "./forgot-password-throttle";
-
-const DEFAULT_SUPPORT_EMAIL = "Opticspycrew@gmail.com";
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL?.trim() || DEFAULT_SUPPORT_EMAIL;
+import { SUPPORT_EMAIL } from "./support-email";
 
 const MAX_USER_AGENT_LENGTH = 500;
 
