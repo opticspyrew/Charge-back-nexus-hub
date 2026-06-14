@@ -25,8 +25,10 @@ import {
 import {
   getGoogleConfig,
   isProviderConfigured,
+  isSocialOAuthTestMode,
   type SocialProvider,
 } from "../lib/social-providers";
+import { normalizeEmail } from "../lib/auth";
 import {
   captureSessionMetadata,
   getTrustedAppOrigin,
@@ -77,6 +79,13 @@ async function startFlow(
   const payload: OAuthStatePayload = { state, nonce, codeVerifier };
   if (opts.linkUserId) payload.linkUserId = opts.linkUserId;
   setStateCookie(res, provider, payload);
+
+  // Test mode: skip the real provider and hand off to the in-app fake consent
+  // page, carrying the same `state` so the callback's CSRF check still passes.
+  if (isSocialOAuthTestMode()) {
+    res.redirect(`/api/auth/${provider}/test-authorize?state=${encodeURIComponent(state)}`);
+    return;
+  }
 
   try {
     const redirectUri = callbackUrl(req, provider);
@@ -235,6 +244,67 @@ router.get("/google/callback", async (req, res) => {
   await handleCallback(req, res, "google");
 });
 
+// --- Test-mode fake consent screen -----------------------------------------
+// Only mounted/served when SOCIAL_OAUTH_TEST_MODE is on (and not in
+// production). Stands in for the real Google account chooser so the full
+// sign-in / connect journey can be driven in a browser without credentials.
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderTestAuthorizeHtml(provider: SocialProvider, state: string): string {
+  const safeState = escapeHtmlAttr(state);
+  const callback = `/api/auth/${provider}/callback`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Test sign-in (${provider})</title>
+</head>
+<body style="font-family: system-ui, sans-serif; max-width: 24rem; margin: 4rem auto; padding: 0 1rem;">
+<h1 style="font-size: 1.25rem;">Test ${provider} sign-in</h1>
+<p style="color:#555; font-size: 0.9rem;">Fake provider consent screen (test mode only).</p>
+<form method="GET" action="${callback}" data-testid="test-authorize-form">
+  <input type="hidden" name="state" value="${safeState}" />
+  <label style="display:block; margin-bottom:0.75rem;">
+    Email
+    <input type="email" name="email" required data-testid="test-authorize-email"
+      style="display:block; width:100%; padding:0.5rem; margin-top:0.25rem;" />
+  </label>
+  <label style="display:block; margin-bottom:0.75rem;">
+    Name
+    <input type="text" name="name" data-testid="test-authorize-name"
+      style="display:block; width:100%; padding:0.5rem; margin-top:0.25rem;" />
+  </label>
+  <button type="submit" data-testid="test-authorize-continue"
+    style="padding:0.5rem 1rem; cursor:pointer;">Continue</button>
+</form>
+<form method="GET" action="${callback}" style="margin-top:1rem;">
+  <input type="hidden" name="state" value="${safeState}" />
+  <input type="hidden" name="error" value="user_cancelled_authorize" />
+  <button type="submit" data-testid="test-authorize-cancel"
+    style="padding:0.5rem 1rem; cursor:pointer; background:none; border:1px solid #ccc;">Cancel</button>
+</form>
+</body>
+</html>`;
+}
+
+router.get("/google/test-authorize", (req, res) => {
+  if (!isSocialOAuthTestMode()) {
+    res.status(404).send("Not found");
+    return;
+  }
+  const state = typeof req.query.state === "string" ? req.query.state : "";
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.send(renderTestAuthorizeHtml("google", state));
+});
+
 // --- Shared callback handler -----------------------------------------------
 
 async function handleCallback(
@@ -245,10 +315,12 @@ async function handleCallback(
   const stored = readStateCookie(req, provider);
   clearStateCookie(res, provider);
 
+  const testMode = isSocialOAuthTestMode();
   const params = req.method === "POST" ? req.body : req.query;
   const queryError = typeof params?.error === "string" ? params.error : null;
   const state = typeof params?.state === "string" ? params.state : null;
   const code = typeof params?.code === "string" ? params.code : null;
+  const testEmail = typeof params?.email === "string" ? params.email : null;
   const linking = !!stored?.linkUserId;
 
   if (queryError) {
@@ -260,7 +332,10 @@ async function handleCallback(
     }
     return;
   }
-  if (!stored || !state || !code || stored.state !== state) {
+  // In test mode the fake consent screen returns an `email` rather than a real
+  // authorization `code`; everything else (state/CSRF check) is unchanged.
+  const hasCredential = testMode ? !!testEmail : !!code;
+  if (!stored || !state || !hasCredential || stored.state !== state) {
     logger.warn({ provider }, "social-auth: missing or mismatched state in callback");
     if (linking) {
       redirectToConnectedAccounts(res, "missing_state");
@@ -279,29 +354,44 @@ async function handleCallback(
   }
 
   let profile: ProviderProfile;
-  try {
-    const redirectUri = callbackUrl(req, provider);
-    const cfg = getGoogleConfig()!;
-    const { idToken } = await exchangeGoogleCode({
-      code,
-      redirectUri,
-      codeVerifier: stored.codeVerifier,
-      clientId: cfg.clientId,
-      clientSecret: cfg.clientSecret,
-    });
-    profile = await verifyGoogleIdToken({
-      idToken,
-      clientId: cfg.clientId,
-      expectedNonce: stored.nonce,
-    });
-  } catch (err) {
-    logger.error({ err, provider }, "social-auth: token exchange or verify failed");
-    if (linking) {
-      redirectToConnectedAccounts(res, "exchange_failed");
-    } else {
-      redirectToSignInError(res, "exchange_failed");
+  if (testMode) {
+    // Build a verified profile straight from the fake consent input. No network
+    // exchange happens; the provider user id is derived from the email so the
+    // same test identity is stable across logins (link/return logic applies).
+    const email = normalizeEmail(testEmail!);
+    const rawName = typeof params?.name === "string" ? params.name.trim() : "";
+    profile = {
+      provider,
+      providerUserId: `test|${provider}|${email}`,
+      email,
+      emailVerified: true,
+      name: rawName || null,
+    };
+  } else {
+    try {
+      const redirectUri = callbackUrl(req, provider);
+      const cfg = getGoogleConfig()!;
+      const { idToken } = await exchangeGoogleCode({
+        code: code!,
+        redirectUri,
+        codeVerifier: stored.codeVerifier,
+        clientId: cfg.clientId,
+        clientSecret: cfg.clientSecret,
+      });
+      profile = await verifyGoogleIdToken({
+        idToken,
+        clientId: cfg.clientId,
+        expectedNonce: stored.nonce,
+      });
+    } catch (err) {
+      logger.error({ err, provider }, "social-auth: token exchange or verify failed");
+      if (linking) {
+        redirectToConnectedAccounts(res, "exchange_failed");
+      } else {
+        redirectToSignInError(res, "exchange_failed");
+      }
+      return;
     }
-    return;
   }
 
   if (!profile.emailVerified || !profile.email) {
