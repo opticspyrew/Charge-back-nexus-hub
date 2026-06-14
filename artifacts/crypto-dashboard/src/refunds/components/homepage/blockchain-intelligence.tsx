@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { motion } from "framer-motion";
 import { Activity, AlertTriangle, Network, Radar } from "lucide-react";
 import Reveal from "./reveal";
@@ -44,8 +44,20 @@ const RISK_ROWS = [
 ];
 
 export default function BlockchainIntelligence() {
-  const [active, setActive] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const activeId = hovered ?? selected;
   const byId = (id: string) => NODES.find((n) => n.id === id)!;
+
+  const toggleSelect = (id: string) =>
+    setSelected((cur) => (cur === id ? null : id));
+
+  const handleKeyDown = (e: KeyboardEvent<SVGGElement>, id: string) => {
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      e.preventDefault();
+      toggleSelect(id);
+    }
+  };
 
   return (
     <section
@@ -75,7 +87,7 @@ export default function BlockchainIntelligence() {
                 <Network className="w-4 h-4 text-primary" /> Path of funds
               </span>
               <span className="font-mono text-[10px] text-muted-foreground">
-                Hover a node
+                Hover or focus a node
               </span>
             </div>
             <svg viewBox="0 0 430 200" className="w-full" role="img" aria-label="Path of funds graph">
@@ -98,40 +110,47 @@ export default function BlockchainIntelligence() {
                   );
                 })}
               </g>
-              {NODES.map((n) => (
-                <g
-                  key={n.id}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`${n.label} (${n.kind})`}
-                  onMouseEnter={() => setActive(n.id)}
-                  onMouseLeave={() => setActive(null)}
-                  onFocus={() => setActive(n.id)}
-                  onBlur={() => setActive(null)}
-                  className="cursor-pointer focus:outline-none [&:focus_circle]:stroke-primary"
-                >
-                  <circle
-                    cx={n.x}
-                    cy={n.y}
-                    r={active === n.id ? 11 : 8}
-                    fill={NODE_COLOR[n.kind]}
-                    stroke="hsl(222 60% 5%)"
-                    strokeWidth="2"
-                    className="transition-all"
-                  />
-                  {active === n.id && (
-                    <text
-                      x={n.x}
-                      y={n.y - 16}
-                      textAnchor="middle"
-                      className="fill-foreground"
-                      style={{ font: "600 10px var(--font-mono, monospace)" }}
-                    >
-                      {n.label}
-                    </text>
-                  )}
-                </g>
-              ))}
+              {NODES.map((n) => {
+                const isActive = activeId === n.id;
+                const isSelected = selected === n.id;
+                return (
+                  <g
+                    key={n.id}
+                    tabIndex={0}
+                    role="button"
+                    aria-label={`${n.label} (${n.kind})`}
+                    aria-pressed={isSelected}
+                    onMouseEnter={() => setHovered(n.id)}
+                    onMouseLeave={() => setHovered(null)}
+                    onFocus={() => setHovered(n.id)}
+                    onBlur={() => setHovered(null)}
+                    onClick={() => toggleSelect(n.id)}
+                    onKeyDown={(e) => handleKeyDown(e, n.id)}
+                    className="cursor-pointer focus:outline-none [&:focus-visible_circle]:stroke-primary [&:focus-visible_circle]:stroke-[3]"
+                  >
+                    <circle
+                      cx={n.x}
+                      cy={n.y}
+                      r={isActive ? 11 : 8}
+                      fill={NODE_COLOR[n.kind]}
+                      stroke={isSelected ? "hsl(var(--primary))" : "hsl(222 60% 5%)"}
+                      strokeWidth={isSelected ? 3 : 2}
+                      className="transition-all motion-reduce:transition-none"
+                    />
+                    {isActive && (
+                      <text
+                        x={n.x}
+                        y={n.y - 16}
+                        textAnchor="middle"
+                        className="fill-foreground"
+                        style={{ font: "600 10px var(--font-mono, monospace)" }}
+                      >
+                        {n.label}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
             </svg>
             <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
               {(
