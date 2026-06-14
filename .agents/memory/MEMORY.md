@@ -1,1 +1,2 @@
 - [Refunds.site / CryptoVault seam](refunds-seam.md) — Refunds lives in crypto-dashboard under /refunds + src/refunds/, isolated via .refunds-scope CSS-var override; never cross-import.
+- [API server & data conventions](api-server-conventions.md) — frontend uses root-relative /api (not BASE_URL); api-server dev needs restart for new routes; mount specific prefixes before general.

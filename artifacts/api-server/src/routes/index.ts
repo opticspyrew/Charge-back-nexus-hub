@@ -5,11 +5,13 @@ import publicRouter from "./public";
 import authRouter from "./auth";
 import replitAuthRouter from "./replit-auth";
 import socialAuthRouter from "./social-auth";
+import refundsRouter from "./refunds";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/admin", adminRouter);
+router.use("/public/refunds", refundsRouter);
 router.use("/public", publicRouter);
 router.use("/auth/replit", replitAuthRouter);
 router.use("/auth", socialAuthRouter);
