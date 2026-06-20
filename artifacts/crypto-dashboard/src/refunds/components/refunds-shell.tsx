@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import {
   Activity,
   Bell,
+  CandlestickChart,
   FileCheck2,
   FolderOpen,
   Inbox,
@@ -23,6 +24,7 @@ import RefundsLogo from "./refunds-logo";
 
 export type PortalSectionId =
   | "wallet"
+  | "trade"
   | "overview"
   | "intake"
   | "cases"
@@ -39,6 +41,7 @@ export const PORTAL_SECTIONS: ReadonlyArray<{
   icon: ReactNode;
 }> = [
   { id: "wallet", label: "Wallet", icon: <Wallet className="w-4.5 h-4.5" /> },
+  { id: "trade", label: "Trade", icon: <CandlestickChart className="w-4.5 h-4.5" /> },
   { id: "overview", label: "Recovery Vault", icon: <LayoutDashboard className="w-4.5 h-4.5" /> },
   { id: "intake", label: "Case Intake", icon: <Inbox className="w-4.5 h-4.5" /> },
   { id: "cases", label: "My Cases", icon: <FolderOpen className="w-4.5 h-4.5" /> },

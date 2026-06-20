@@ -1,6 +1,7 @@
 import { useState } from "react";
 import RefundsShell, { type PortalSectionId } from "../components/refunds-shell";
 import Funds from "../components/portal-sections/funds";
+import Trade from "../components/portal-sections/trade";
 import VaultOverview from "../components/portal-sections/vault-overview";
 import CaseIntake from "../components/portal-sections/case-intake";
 import MyCases from "../components/portal-sections/my-cases";
@@ -15,6 +16,7 @@ import { useApprovalPoller } from "@/hooks/use-approval-poller";
 
 const VALID_SECTIONS: PortalSectionId[] = [
   "wallet",
+  "trade",
   "overview",
   "intake",
   "cases",
@@ -50,7 +52,8 @@ export default function RefundsPortal() {
 
   return (
     <RefundsShell active={section} onSectionChange={handleChange}>
-      {section === "wallet" && <Funds tx={tx} />}
+      {section === "wallet" && <Funds tx={tx} onTrade={() => handleChange("trade")} />}
+      {section === "trade" && <Trade tx={tx} />}
       {section === "overview" && <VaultOverview />}
       {section === "intake" && <CaseIntake />}
       {section === "cases" && <MyCases />}

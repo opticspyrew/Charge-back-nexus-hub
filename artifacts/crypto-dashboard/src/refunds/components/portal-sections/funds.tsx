@@ -4,6 +4,7 @@ import {
   ArrowDownToLine,
   ArrowUpRight,
   Banknote,
+  CandlestickChart,
   Plus,
   Repeat,
   Send,
@@ -32,7 +33,7 @@ function BlockConfirmationLabel({ tx }: { tx: Transaction }) {
   );
 }
 
-export default function Funds({ tx }: { tx: TxApi }) {
+export default function Funds({ tx, onTrade }: { tx: TxApi; onTrade?: () => void }) {
   const [, navigate] = useLocation();
   const { transactions, addTransaction, cancelTransaction } = tx;
   const { btcFormatted, usdFormatted } = useBalance();
@@ -93,6 +94,9 @@ export default function Funds({ tx }: { tx: TxApi }) {
     { label: "Receive", icon: <ArrowDownToLine className="w-4 h-4" />, onClick: () => setModal("receive") },
     { label: "Withdraw", icon: <ArrowUpRight className="w-4 h-4" />, onClick: () => requireKyc("Withdraw", () => setModal("withdraw")) },
     { label: "Deposit", icon: <Plus className="w-4 h-4" />, onClick: () => setModal("deposit") },
+    ...(onTrade
+      ? [{ label: "Trade", icon: <CandlestickChart className="w-4 h-4" />, onClick: onTrade }]
+      : []),
     { label: "Convert", icon: <Repeat className="w-4 h-4" />, onClick: () => setConvertOpen((v) => !v) },
   ];
 
@@ -139,7 +143,7 @@ export default function Funds({ tx }: { tx: TxApi }) {
           </p>
           <p className="text-sm text-muted-foreground mt-1 font-mono">{btcFormatted} BTC</p>
 
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             {actions.map((a) => (
               <button
                 key={a.label}
