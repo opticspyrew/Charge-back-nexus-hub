@@ -111,3 +111,79 @@ export async function submitCaseIntake(
   }
   return (await res.json()) as CaseIntakeResult;
 }
+
+// ---------------------------------------------------------------------------
+// Authenticated "My cases" data layer.
+//
+// Unlike the homepage hooks above (which are public and seeded with mock data),
+// this reads the signed-in client's own recovery cases from an authenticated
+// endpoint. There is no mock fallback: an unauthenticated or failed request
+// surfaces as an error/empty state in the portal rather than fabricated cases.
+// ---------------------------------------------------------------------------
+
+export interface PortalCase {
+  id: number;
+  reference: string;
+  incident: string | null;
+  asset: string | null;
+  chain: string | null;
+  amount: string | null;
+  currency: string;
+  status: string;
+  submittedAt: string;
+}
+
+export async function fetchMyCases(token: string): Promise<PortalCase[]> {
+  const res = await fetch(`${BASE}/cases`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || "Failed to load your cases");
+  }
+  const data = (await res.json()) as { cases: PortalCase[] };
+  return data.cases;
+}
+
+export interface MyCasesState {
+  cases: PortalCase[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+export function useMyCases(token: string | null): MyCasesState {
+  const [cases, setCases] = useState<PortalCase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    if (!token) {
+      setCases([]);
+      setError("Your session has expired. Please sign in again to view your cases.");
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setError(null);
+    fetchMyCases(token)
+      .then((data) => {
+        if (active) setCases(data);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Failed to load your cases");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, nonce]);
+
+  return { cases, loading, error, reload: () => setNonce((n) => n + 1) };
+}
