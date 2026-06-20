@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   Activity,
-  ArrowLeftRight,
   Bell,
   FileCheck2,
   FolderOpen,
@@ -17,11 +16,13 @@ import {
   ScanLine,
   ShieldCheck,
   Sparkles,
+  Wallet,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import RefundsLogo from "./refunds-logo";
 
 export type PortalSectionId =
+  | "wallet"
   | "overview"
   | "intake"
   | "cases"
@@ -37,6 +38,7 @@ export const PORTAL_SECTIONS: ReadonlyArray<{
   label: string;
   icon: ReactNode;
 }> = [
+  { id: "wallet", label: "Wallet", icon: <Wallet className="w-4.5 h-4.5" /> },
   { id: "overview", label: "Recovery Vault", icon: <LayoutDashboard className="w-4.5 h-4.5" /> },
   { id: "intake", label: "Case Intake", icon: <Inbox className="w-4.5 h-4.5" /> },
   { id: "cases", label: "My Cases", icon: <FolderOpen className="w-4.5 h-4.5" /> },
@@ -194,15 +196,6 @@ export default function RefundsShell({ active, onSectionChange, children }: Refu
                 Session • E2EE-AES-256
               </span>
             </div>
-            <button
-              onClick={() => navigate("/dashboard")}
-              data-testid="refunds-to-dashboard"
-              className="flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg text-sm font-medium text-foreground refunds-glass-soft hover:bg-muted transition-colors"
-              aria-label="Open crypto dashboard"
-            >
-              <ArrowLeftRight className="w-4 h-4 text-primary" />
-              <span className="hidden sm:inline">Crypto Dashboard</span>
-            </button>
             <button
               aria-label="Notifications"
               className="relative p-2 rounded-lg hover:bg-muted transition-colors"

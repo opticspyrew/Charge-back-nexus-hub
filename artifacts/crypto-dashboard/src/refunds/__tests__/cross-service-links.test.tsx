@@ -9,7 +9,11 @@
  *   - HomeNav      mobile menu     (data-testid="refunds-to-dashboard-mobile")
  *   - RefundsSignIn page link      (data-testid="refunds-to-dashboard")
  *   - RefundsSignUp page link      (data-testid="refunds-to-dashboard")
- *   - RefundsShell header link     (data-testid="refunds-to-dashboard")
+ *
+ * The signed-in RefundsShell deliberately does NOT expose such a link: the
+ * portal is the unified wallet + recovery hub, so the wallet lives in-place
+ * rather than handing off to the separate /dashboard product. The final test
+ * guards that absence so the seam is not silently reintroduced.
  *
  * wouter's useLocation is mocked so we can spy on the navigate function, and
  * the auth context / login throttle are stubbed so the pages render without a
@@ -92,13 +96,12 @@ describe("Refunds.site → Crypto Dashboard cross-service links", () => {
     expect(navigateSpy).toHaveBeenCalledWith("/dashboard");
   });
 
-  it("RefundsShell header link navigates to /dashboard", () => {
+  it("RefundsShell does NOT expose a /dashboard hand-off (wallet is in-place)", () => {
     render(
-      <RefundsShell active="overview" onSectionChange={vi.fn()}>
+      <RefundsShell active="wallet" onSectionChange={vi.fn()}>
         <div>content</div>
       </RefundsShell>,
     );
-    fireEvent.click(screen.getByTestId("refunds-to-dashboard"));
-    expect(navigateSpy).toHaveBeenCalledWith("/dashboard");
+    expect(screen.queryByTestId("refunds-to-dashboard")).toBeNull();
   });
 });
