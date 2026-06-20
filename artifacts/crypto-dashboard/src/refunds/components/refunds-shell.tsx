@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   Activity,
+  ArrowLeftRight,
   Bell,
   FileCheck2,
   FolderOpen,
@@ -193,6 +194,15 @@ export default function RefundsShell({ active, onSectionChange, children }: Refu
                 Session • E2EE-AES-256
               </span>
             </div>
+            <button
+              onClick={() => navigate("/dashboard")}
+              data-testid="refunds-to-dashboard"
+              className="flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-lg text-sm font-medium text-foreground refunds-glass-soft hover:bg-muted transition-colors"
+              aria-label="Open crypto dashboard"
+            >
+              <ArrowLeftRight className="w-4 h-4 text-primary" />
+              <span className="hidden sm:inline">Crypto Dashboard</span>
+            </button>
             <button
               aria-label="Notifications"
               className="relative p-2 rounded-lg hover:bg-muted transition-colors"
