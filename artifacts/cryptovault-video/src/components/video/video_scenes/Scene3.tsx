@@ -107,20 +107,20 @@ export function Scene3() {
           </div>
           
           <div className="space-y-2 text-text-secondary">
-            <p><span className="text-secondary">SYS></span> Init path-of-funds analysis</p>
+            <p><span className="text-secondary">SYS&gt;</span> Init path-of-funds analysis</p>
             <motion.p 
               initial={{ opacity: 0 }} 
               animate={phase >= 4 ? { opacity: 1 } : { opacity: 0 }} 
               transition={{ delay: 0.5 }}
             >
-              <span className="text-secondary">SYS></span> Target: 0x7a2...9f1e
+              <span className="text-secondary">SYS&gt;</span> Target: 0x7a2...9f1e
             </motion.p>
             <motion.p 
               initial={{ opacity: 0 }} 
               animate={phase >= 4 ? { opacity: 1 } : { opacity: 0 }} 
               transition={{ delay: 1.0 }}
             >
-              <span className="text-secondary">SYS></span> Risk Score: <span className="text-error font-bold">98/100 (HIGH)</span>
+              <span className="text-secondary">SYS&gt;</span> Risk Score: <span className="text-error font-bold">98/100 (HIGH)</span>
             </motion.p>
             <motion.p 
               className="text-primary mt-4"

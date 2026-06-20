@@ -2,4 +2,5 @@
 - [API server & data conventions](api-server-conventions.md) — frontend uses root-relative /api (not BASE_URL); api-server dev needs restart for new routes; mount specific prefixes before general.
 - [Social OAuth test mode](social-oauth-test-mode.md) — Google sign-in is testable without real creds via SOCIAL_OAUTH_TEST_MODE (dev-only) fake provider; how to run e2e + live browser.
 - [Audio generation unavailable](audio-generation-unavailable.md) — generateMusic/textToSpeech 401 invalid_api_key here; video-js builds ship silent, skip audio wiring, don't retry past once.
+- [video-js JSX angle-bracket trap](video-jsx-angle-brackets.md) — literal >/< in scene text breaks esbuild; error only on scene request, not at dev start; escape as &gt;/&lt;.
 - [Workflow port conflicts](workflow-port-conflicts.md) — web workflow shows FAILED/DIDNT_OPEN_A_PORT yet serves on PORT+1; orphaned vite procs hold the port, pkill them then restart (restart_workflow can't reap orphans).
