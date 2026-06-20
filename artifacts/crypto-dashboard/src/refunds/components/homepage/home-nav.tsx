@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, Menu, X } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Menu, X } from "lucide-react";
 import RefundsLogo from "../refunds-logo";
 
 const NAV_LINKS = [
@@ -54,6 +54,15 @@ export default function HomeNav() {
 
         <div className="hidden sm:flex items-center gap-2">
           <button
+            onClick={() => navigate("/dashboard")}
+            data-testid="refunds-to-dashboard"
+            aria-label="Open crypto dashboard"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-foreground rounded-lg border border-card-border bg-card/40 hover:bg-card/70 transition-colors"
+          >
+            <ArrowLeftRight className="w-4 h-4 text-primary" />
+            Crypto Dashboard
+          </button>
+          <button
             onClick={() => navigate("/refunds/sign-in")}
             className="px-3 py-2 text-sm text-foreground rounded-lg border border-card-border bg-card/40 hover:bg-card/70 transition-colors"
           >
@@ -94,9 +103,21 @@ export default function HomeNav() {
             <button
               onClick={() => {
                 setOpen(false);
+                navigate("/dashboard");
+              }}
+              data-testid="refunds-to-dashboard-mobile"
+              aria-label="Open crypto dashboard"
+              className="mt-1 inline-flex items-center gap-1.5 px-3 py-2 text-sm text-left text-foreground rounded-lg border border-card-border bg-card/40"
+            >
+              <ArrowLeftRight className="w-4 h-4 text-primary" />
+              Crypto Dashboard
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
                 navigate("/refunds/sign-in");
               }}
-              className="mt-1 px-3 py-2 text-sm text-left text-foreground rounded-lg border border-card-border bg-card/40"
+              className="px-3 py-2 text-sm text-left text-foreground rounded-lg border border-card-border bg-card/40"
             >
               Client sign-in
             </button>

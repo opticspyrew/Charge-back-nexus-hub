@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Lock, ShieldCheck } from "lucide-react";
+import { ArrowLeftRight, Lock, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { validatePassword } from "@/lib/password-policy";
 import PasswordInput from "@/components/password-input";
@@ -141,6 +141,18 @@ export default function RefundsSignUp() {
           Refunds.site does not custody assets and cannot reverse on-chain transactions.
           Recovery outcomes are not guaranteed.
         </p>
+
+        <div className="mt-5 flex justify-center">
+          <button
+            onClick={() => navigate("/dashboard")}
+            data-testid="refunds-to-dashboard"
+            aria-label="Open crypto dashboard"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-foreground rounded-lg border border-card-border bg-card/40 hover:bg-card/70 transition-colors"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5 text-primary" />
+            Crypto Dashboard
+          </button>
+        </div>
       </div>
     </div>
   );
