@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db, pool } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { extractBearerToken, findUserBySessionToken } from "../lib/auth";
 import { sendAdminEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
@@ -228,6 +228,24 @@ function caseReference(id: number, createdAt: Date): string {
   return `RF-${createdAt.getUTCFullYear()}-${String(id).padStart(4, "0")}`;
 }
 
+// The intake handler stores the structured incident/asset/chain values inside
+// the free-text `notes` column. Parse them back out so the client-facing case
+// list can present them as discrete fields without a schema change.
+function parseIntakeNotes(notes: string | null): {
+  incident: string | null;
+  asset: string | null;
+  chain: string | null;
+} {
+  if (!notes) return { incident: null, asset: null, chain: null };
+  const incident = notes.match(/^Incident type:\s*(.+)$/m)?.[1]?.trim() ?? null;
+  const assetChain = notes.match(/^Asset \/ chain:\s*(.+?)\s+on\s+(.+)$/m);
+  return {
+    incident,
+    asset: assetChain?.[1]?.trim() ?? null,
+    chain: assetChain?.[2]?.trim() ?? null,
+  };
+}
+
 router.post("/intake", intakeLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
     const token = extractBearerToken(req);
@@ -353,6 +371,69 @@ router.post("/intake", intakeLimiter, async (req: Request, res: Response): Promi
   } catch (err) {
     logger.error({ err }, "Failed to submit recovery case intake");
     res.status(500).json({ error: "Failed to submit case intake" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// "My cases" — authenticated case list.
+//
+// Returns only the recovery cases belonging to the signed-in user, resolved
+// from their email to an admin_clients row. Other request types and other
+// clients' cases are never returned.
+// ---------------------------------------------------------------------------
+
+router.get("/cases", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    const user = token ? await findUserBySessionToken(token) : undefined;
+    if (!user) {
+      res.status(401).json({ error: "Sign in required to view your cases." });
+      return;
+    }
+
+    const normalizedEmail = user.email.toLowerCase().trim();
+    const [client] = await db
+      .select()
+      .from(adminClients)
+      .where(eq(adminClients.email, normalizedEmail));
+
+    // No client row means the user has never filed a case.
+    if (!client) {
+      res.json({ cases: [] });
+      return;
+    }
+
+    const rows = await db
+      .select()
+      .from(adminServiceRequests)
+      .where(
+        and(
+          eq(adminServiceRequests.clientId, client.id),
+          eq(adminServiceRequests.type, "recovery_case"),
+        ),
+      )
+      .orderBy(desc(adminServiceRequests.createdAt));
+
+    const cases = rows.map((row) => {
+      const { incident, asset, chain } = parseIntakeNotes(row.notes);
+      const createdAt = row.createdAt as Date;
+      return {
+        id: row.id,
+        reference: caseReference(row.id, createdAt),
+        incident,
+        asset,
+        chain,
+        amount: row.amount,
+        currency: row.currency,
+        status: row.status,
+        submittedAt: createdAt.toISOString(),
+      };
+    });
+
+    res.json({ cases });
+  } catch (err) {
+    logger.error({ err }, "Failed to load client recovery cases");
+    res.status(500).json({ error: "Failed to load your cases" });
   }
 });
 

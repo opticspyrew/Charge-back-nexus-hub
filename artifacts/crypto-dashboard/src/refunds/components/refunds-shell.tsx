@@ -4,6 +4,7 @@ import {
   Activity,
   Bell,
   FileCheck2,
+  FolderOpen,
   Inbox,
   LayoutDashboard,
   LineChart,
@@ -22,6 +23,7 @@ import RefundsLogo from "./refunds-logo";
 export type PortalSectionId =
   | "overview"
   | "intake"
+  | "cases"
   | "investigator"
   | "chain"
   | "ai"
@@ -36,6 +38,7 @@ export const PORTAL_SECTIONS: ReadonlyArray<{
 }> = [
   { id: "overview", label: "Recovery Vault", icon: <LayoutDashboard className="w-4.5 h-4.5" /> },
   { id: "intake", label: "Case Intake", icon: <Inbox className="w-4.5 h-4.5" /> },
+  { id: "cases", label: "My Cases", icon: <FolderOpen className="w-4.5 h-4.5" /> },
   { id: "investigator", label: "Investigator", icon: <ShieldCheck className="w-4.5 h-4.5" /> },
   { id: "chain", label: "Blockchain Intelligence", icon: <Network className="w-4.5 h-4.5" /> },
   { id: "ai", label: "AI Assistant", icon: <Sparkles className="w-4.5 h-4.5" /> },

@@ -2,6 +2,7 @@ import { useState } from "react";
 import RefundsShell, { type PortalSectionId } from "../components/refunds-shell";
 import VaultOverview from "../components/portal-sections/vault-overview";
 import CaseIntake from "../components/portal-sections/case-intake";
+import MyCases from "../components/portal-sections/my-cases";
 import InvestigatorPanel from "../components/portal-sections/investigator-panel";
 import BlockchainWidgets from "../components/portal-sections/blockchain-widgets";
 import AiAssistant from "../components/portal-sections/ai-assistant";
@@ -12,6 +13,7 @@ import RecoveryTimeline from "../components/portal-sections/recovery-timeline";
 const VALID_SECTIONS: PortalSectionId[] = [
   "overview",
   "intake",
+  "cases",
   "investigator",
   "chain",
   "ai",
@@ -40,6 +42,7 @@ export default function RefundsPortal() {
     <RefundsShell active={section} onSectionChange={handleChange}>
       {section === "overview" && <VaultOverview />}
       {section === "intake" && <CaseIntake />}
+      {section === "cases" && <MyCases />}
       {section === "investigator" && <InvestigatorPanel />}
       {section === "chain" && <BlockchainWidgets />}
       {section === "ai" && <AiAssistant />}
