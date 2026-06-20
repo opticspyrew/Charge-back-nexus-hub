@@ -52,6 +52,13 @@ function RootRoute() {
   return <Redirect to={isRefundsHost ? "/refunds" : "/sign-in"} />;
 }
 
+// refunds.site opens to a single unified hub at /refunds: the marketing landing
+// for anonymous visitors, and the merged wallet + recovery portal once signed in.
+function RefundsHome() {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <RefundsPortal /> : <RefundsLanding />;
+}
+
 function Router() {
   return (
     <Switch>
@@ -72,7 +79,7 @@ function Router() {
       <Route path="/set-password" component={() => <ProtectedRoute component={SetPassword} />} />
       <Route path="/connected-accounts" component={() => <ProtectedRoute component={ConnectedAccounts} />} />
       <Route path="/notification-settings" component={() => <ProtectedRoute component={NotificationSettings} />} />
-      <Route path="/refunds" component={RefundsLanding} />
+      <Route path="/refunds" component={RefundsHome} />
       <Route path="/refunds/brand" component={RefundsBrandGuide} />
       <Route path="/refunds/sign-in" component={RefundsSignIn} />
       <Route path="/refunds/sign-up" component={RefundsSignUp} />
