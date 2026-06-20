@@ -32,3 +32,20 @@ description: Non-obvious wiring conventions for adding API routes and frontend f
 ## Pre-existing unrelated tsc error
 - `artifacts/api-server/src/lib/objectStorage.ts(265)` has a pre-existing
   `signed_url`/unknown tsc error unrelated to feature work — ignore it.
+
+## api-server tests are LIVE integration tests (no in-process app boot)
+- `pnpm --filter @workspace/api-server test` runs `node --import tsx --test`
+  against a **running** server (default `http://localhost:8080/api`, override
+  `API_BASE_URL`). The server MUST be up (the dev workflow) or every test fails
+  to connect — they are integration tests, not unit tests.
+- Harness pattern (mirror `tests/pending-withdrawal-count.test.mjs`): signup via
+  the real API, push created ids, delete users in `after()`. Deleting the user
+  is enough — `transactions` FK is `ON DELETE CASCADE`.
+- **Anti-flake:** send a fresh fake `x-forwarded-for` per request; the server
+  has `trust proxy` + per-minute rate limiters, and a shared real IP across many
+  signups/logins will trip 429s.
+- **Guard constraint:** `no-leftover-accounts.guard.mjs` only counts
+  `social-%@example.com` / `kycflow-%@example.com`. New suites should use a
+  different email prefix AND still clean up their own users.
+- POST `/auth/transactions` is idempotent on `(user_id, txn_id)`:
+  201 on create, **200** on duplicate (onConflictDoNothing + re-select).
