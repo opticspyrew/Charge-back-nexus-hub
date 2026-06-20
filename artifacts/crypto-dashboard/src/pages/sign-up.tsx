@@ -377,23 +377,6 @@ export default function SignUp() {
                 </>
               ) : "Create Account"}
             </button>
-
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-
-            <a
-              href="/api/auth/replit/login"
-              data-testid="signup-replit"
-              className="w-full py-2.5 bg-card border border-border text-foreground rounded-xl font-semibold text-sm hover:bg-accent/40 transition-colors flex items-center justify-center gap-2"
-            >
-              Sign up with Replit
-            </a>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
