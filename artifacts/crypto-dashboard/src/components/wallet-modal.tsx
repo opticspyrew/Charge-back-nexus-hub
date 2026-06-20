@@ -36,17 +36,40 @@ export default function WalletModal({ type, onClose, onConfirmed }: WalletModalP
     setStep("confirm");
   };
 
+  const typeLabel: Record<WalletModalProps["type"], string> = {
+    send: "Send",
+    withdraw: "Withdrawal",
+    deposit: "Deposit",
+    receive: "Receive",
+  };
+
   const handleConfirm = async () => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1500));
     setLoading(false);
     setStep("success");
-    if (onConfirmed && (type === "send" || type === "withdraw")) {
+    if (onConfirmed) {
       onConfirmed({
-        type: type === "withdraw" ? "Withdrawal" : "Send",
+        type: typeLabel[type],
         asset: selectedCrypto,
         amount,
         address,
+      });
+    }
+  };
+
+  const handleReceiveConfirm = async () => {
+    if (!amount) return;
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 1200));
+    setLoading(false);
+    setStep("success");
+    if (onConfirmed) {
+      onConfirmed({
+        type: "Receive",
+        asset: selectedCrypto,
+        amount,
+        address: receiveAddress,
       });
     }
   };
@@ -83,12 +106,20 @@ export default function WalletModal({ type, onClose, onConfirmed }: WalletModalP
                 </svg>
               </div>
               <h3 className="text-xl font-bold text-foreground mb-2">
-                {type === "deposit" ? "Deposit initiated!" : type === "withdraw" ? "Withdrawal submitted!" : "Transaction sent!"}
+                {type === "deposit"
+                  ? "Deposit initiated!"
+                  : type === "withdraw"
+                    ? "Withdrawal submitted!"
+                    : type === "receive"
+                      ? "Receipt recorded!"
+                      : "Transaction sent!"}
               </h3>
               <p className="text-muted-foreground text-sm mb-6">
                 {type === "deposit"
                   ? "Your deposit is being processed. Funds will appear shortly."
-                  : "Your transaction is pending. It will appear in your history below."}
+                  : type === "receive"
+                    ? "We've logged this incoming transfer in your history below."
+                    : "Your transaction is pending. It will appear in your history below."}
               </p>
               <div className="bg-muted rounded-xl p-4 text-left mb-6">
                 <div className="flex justify-between text-sm mb-2">
@@ -196,6 +227,38 @@ export default function WalletModal({ type, onClose, onConfirmed }: WalletModalP
                       <p className="text-xs text-muted-foreground">Only send {selectedCrypto} to this address. Sending other assets may result in permanent loss.</p>
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1.5">Amount received</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={amount}
+                        onChange={e => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full px-4 py-2.5 bg-muted border border-input rounded-xl text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary pr-20"
+                        min="0"
+                        step="any"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">{selectedCrypto}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1.5">Log an incoming transfer once it lands in your wallet.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReceiveConfirm}
+                    disabled={loading || !amount}
+                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Recording...
+                      </>
+                    ) : "Confirm Receipt"}
+                  </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">

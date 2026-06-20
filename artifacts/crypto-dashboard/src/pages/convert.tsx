@@ -1,6 +1,7 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/dashboard-layout";
 import { useBalance } from "@/hooks/use-balance";
+import { pushTransaction } from "@/hooks/use-transactions";
 
 export default function Convert() {
   const { btcFormatted } = useBalance();
@@ -35,6 +36,16 @@ export default function Convert() {
     if (!amount) return;
     setLoading(true);
     await new Promise(r => setTimeout(r, 1500));
+    const usd = parseFloat(amount) * from.price;
+    pushTransaction({
+      type: "Conversion",
+      asset: toAsset,
+      amount: `+${toAmount} ${toAsset}`,
+      usdAmount: Number.isFinite(usd) ? Math.round(usd * 100) / 100 : 0,
+      address: `${fromAsset} → ${toAsset}`,
+      status: "Completed",
+      statusType: "completed",
+    });
     setLoading(false);
     setConverted(true);
   };

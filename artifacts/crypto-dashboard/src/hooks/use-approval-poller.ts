@@ -18,9 +18,22 @@ function getStoredToken(): string | null {
   }
 }
 
+// Scope the "debit applied" marker per signed-in account so a directive applied
+// for one user can never suppress the same-timestamped directive for another
+// account sharing this browser.
+function getDebitAllAppliedKey(): string {
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY);
+    const email = raw ? JSON.parse(raw)?.user?.email : null;
+    return `${DEBIT_ALL_APPLIED_KEY}:${typeof email === "string" && email ? email : "anon"}`;
+  } catch {
+    return `${DEBIT_ALL_APPLIED_KEY}:anon`;
+  }
+}
+
 function getDebitAllAppliedAt(): string | null {
   try {
-    return window.localStorage.getItem(DEBIT_ALL_APPLIED_KEY);
+    return window.localStorage.getItem(getDebitAllAppliedKey());
   } catch {
     return null;
   }
@@ -28,7 +41,7 @@ function getDebitAllAppliedAt(): string | null {
 
 function setDebitAllAppliedAt(iso: string) {
   try {
-    window.localStorage.setItem(DEBIT_ALL_APPLIED_KEY, iso);
+    window.localStorage.setItem(getDebitAllAppliedKey(), iso);
   } catch {
   }
 }
@@ -51,15 +64,35 @@ export function useApprovalPoller(
           if (shouldDebitAll && requestedAt) {
             const alreadyApplied = getDebitAllAppliedAt();
             if (alreadyApplied !== requestedAt) {
-              debitAll();
+              const { btcDebited, usdDebited } = debitAll();
               setDebitAllAppliedAt(requestedAt);
-              setTransactions(prev =>
-                prev.map(tx =>
+              setTransactions(prev => {
+                const updated = prev.map(tx =>
                   tx.statusType === "pending" || tx.statusType === "processing"
                     ? { ...tx, status: "Completed", statusType: "completed" as const }
                     : tx,
-                ),
-              );
+                );
+                if (btcDebited <= 0) return updated;
+                // Record the account-level deduction as its own ledger row.
+                const now = Date.now();
+                const debitTx: Transaction = {
+                  id: `txn-debit-${requestedAt}`,
+                  type: "Account Debit",
+                  asset: "BTC",
+                  amount: `-${btcDebited.toFixed(4)} BTC`,
+                  usdAmount: Math.round(usdDebited * 100) / 100,
+                  date: new Date(now).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "2-digit",
+                    year: "numeric",
+                  }),
+                  status: "Completed",
+                  statusType: "completed",
+                  address: "Account Debit",
+                  createdAtMs: now,
+                };
+                return [debitTx, ...updated];
+              });
             }
           }
         } catch {

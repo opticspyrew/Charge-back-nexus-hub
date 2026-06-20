@@ -6,6 +6,7 @@ import authRouter from "./auth";
 import replitAuthRouter from "./replit-auth";
 import socialAuthRouter from "./social-auth";
 import refundsRouter from "./refunds";
+import transactionsRouter from "./transactions";
 
 const router: IRouter = Router();
 
@@ -15,6 +16,7 @@ router.use("/public/refunds", refundsRouter);
 router.use("/public", publicRouter);
 router.use("/auth/replit", replitAuthRouter);
 router.use("/auth", socialAuthRouter);
+router.use("/auth", transactionsRouter);
 router.use("/auth", authRouter);
 
 export default router;
