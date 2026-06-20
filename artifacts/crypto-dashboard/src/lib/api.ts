@@ -2,6 +2,45 @@ const API_BASE = "/api";
 const PUBLIC_BASE = `${API_BASE}/public`;
 const AUTH_BASE = `${API_BASE}/auth`;
 
+// Error carrying the HTTP status so retry logic can tell a transient failure
+// (network drop / 5xx) apart from a permanent one (4xx).
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+// A failure is worth retrying if it's a network error (fetch rejected, so no
+// status) or a transient server-side condition. Most 4xx are caller mistakes
+// that won't change on retry.
+function isRetryable(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return err.status >= 500 || err.status === 408 || err.status === 429;
+  }
+  return true;
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  { retries = 3, baseDelayMs = 400 }: { retries?: number; baseDelayMs?: number } = {},
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt === retries || !isRetryable(err)) break;
+      const delay = baseDelayMs * 2 ** attempt + Math.random() * 150;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw lastErr;
+}
+
 async function request<T>(
   path: string,
   init: RequestInit = {},
@@ -15,7 +54,7 @@ async function request<T>(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || "Request failed");
+    throw new ApiError(res.status, err.error || "Request failed");
   }
   return res.json();
 }
@@ -128,37 +167,56 @@ export interface TransactionInput {
 // Per-user, server-backed transaction ledger. Every call is authenticated and
 // scoped to the session user by the API — the client never sends a user id.
 export const transactionsApi = {
+  // Soft list: returns [] on any failure. Used where an empty fallback is
+  // acceptable. For reconciliation prefer `listOrThrow` so a network drop is
+  // not mistaken for "the user has no transactions".
   list: async (token: string): Promise<ServerTransaction[]> => {
-    const res = await fetch(`${AUTH_BASE}/transactions`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { transactions: ServerTransaction[] };
+    try {
+      return await transactionsApi.listOrThrow(token);
+    } catch {
+      return [];
+    }
+  },
+  listOrThrow: async (token: string): Promise<ServerTransaction[]> => {
+    const data = await withRetry(() =>
+      request<{ transactions: ServerTransaction[] }>(`${AUTH_BASE}/transactions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
     return data.transactions ?? [];
   },
   create: (token: string, body: TransactionInput) =>
-    post<{ transaction: ServerTransaction }>(`${AUTH_BASE}/transactions`, body, {
-      Authorization: `Bearer ${token}`,
-    }),
+    withRetry(() =>
+      post<{ transaction: ServerTransaction }>(`${AUTH_BASE}/transactions`, body, {
+        Authorization: `Bearer ${token}`,
+      }),
+    ),
   update: (
     token: string,
     txnId: string,
     body: { status: string; statusType: string },
   ) =>
-    request<{ transaction: ServerTransaction }>(
-      `${AUTH_BASE}/transactions/${encodeURIComponent(txnId)}`,
-      {
-        method: "PATCH",
-        body: JSON.stringify(body),
-        headers: { Authorization: `Bearer ${token}` },
-      },
+    withRetry(() =>
+      request<{ transaction: ServerTransaction }>(
+        `${AUTH_BASE}/transactions/${encodeURIComponent(txnId)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(body),
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      ),
     ),
-  remove: async (token: string, txnId: string): Promise<void> => {
-    await fetch(`${AUTH_BASE}/transactions/${encodeURIComponent(txnId)}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  },
+  remove: (token: string, txnId: string): Promise<void> =>
+    withRetry(async () => {
+      const res = await fetch(`${AUTH_BASE}/transactions/${encodeURIComponent(txnId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new ApiError(res.status, err.error || "Failed to delete transaction");
+      }
+    }),
 };
 
 export interface AuthUser {

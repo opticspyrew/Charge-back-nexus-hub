@@ -155,6 +155,9 @@ export function clearPaymentConfirmation(txId: string) {
 const PROCESSING_AFTER_MS = 20_000;
 const INVESTIGATION_AFTER_MS = PROCESSING_AFTER_MS + 90_000;
 const TICK_MS = 5_000;
+// How often the displayed ledger is re-reconciled against the server, so a
+// dropped write or a divergence eventually self-heals without a manual refresh.
+const RECONCILE_MS = 30_000;
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
@@ -225,6 +228,47 @@ function sameDisplay(a: Transaction[], b: Transaction[]): boolean {
   return true;
 }
 
+// Reconcile the locally-held base list with a fresh server snapshot without
+// throwing away work that hasn't round-tripped yet. The server snapshot is the
+// source of truth, except:
+//   - rows with a write (create/terminal update) still in flight keep their
+//     local version until the server acknowledges it
+//   - rows with a delete still in flight are dropped even if the snapshot still
+//     contains them
+// This is what lets the late initial list merge with — rather than overwrite —
+// optimistic rows, and lets periodic reconciliation correct any divergence.
+function mergeBase(
+  local: Transaction[],
+  server: Transaction[],
+  inflightWrites: Set<string>,
+  inflightDeletes: Set<string>,
+): Transaction[] {
+  const localById = new Map(local.map(t => [t.id, t]));
+  const merged = new Map<string, Transaction>();
+
+  for (const s of server) {
+    if (inflightDeletes.has(s.id)) continue;
+    const prev = localById.get(s.id);
+    if (prev && inflightWrites.has(s.id)) {
+      // A local change to this row hasn't been acknowledged yet — keep it.
+      merged.set(s.id, prev);
+    } else {
+      // Preserve the locally-known creation time for stable ordering.
+      merged.set(s.id, prev ? { ...s, createdAtMs: prev.createdAtMs ?? s.createdAtMs } : s);
+    }
+  }
+  for (const l of local) {
+    if (merged.has(l.id) || inflightDeletes.has(l.id)) continue;
+    // A local row the server doesn't know about is kept only while its create
+    // is in flight; otherwise it never persisted (or was removed elsewhere).
+    if (inflightWrites.has(l.id)) merged.set(l.id, l);
+  }
+
+  return [...merged.values()].sort(
+    (a, b) => (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0),
+  );
+}
+
 let txnCounter = 0;
 function genTxnId(): string {
   txnCounter = (txnCounter + 1) % 100000;
@@ -279,13 +323,86 @@ export function pushTransaction(tx: AppendInput): string {
 
 export function useTransactions() {
   const [display, setDisplay] = useState<Transaction[]>([]);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const baseRef = useRef<Transaction[]>([]);
   const tokenRef = useRef<string | null>(typeof window !== "undefined" ? getStoredToken() : null);
+  // Ids of ledger writes still in flight, used by `mergeBase` so a concurrent
+  // reconciliation doesn't clobber work that hasn't round-tripped yet.
+  const inflightWrites = useRef<Set<string>>(new Set());
+  const inflightDeletes = useRef<Set<string>>(new Set());
 
   const recompute = useCallback(() => {
     const next = deriveList(baseRef.current);
     setDisplay(prev => (sameDisplay(prev, next) ? prev : next));
   }, []);
+
+  // Pull a fresh server snapshot and merge it into the local base, preserving
+  // in-flight work. Silently no-ops if the server can't be reached so a flaky
+  // connection never wipes the displayed history — the next tick retries.
+  const reconcile = useCallback(async () => {
+    const token = tokenRef.current;
+    if (!token) return;
+    let rows;
+    try {
+      rows = await transactionsApi.listOrThrow(token);
+    } catch {
+      return;
+    }
+    baseRef.current = mergeBase(
+      baseRef.current,
+      rows.map(fromServer),
+      inflightWrites.current,
+      inflightDeletes.current,
+    );
+    recompute();
+  }, [recompute]);
+
+  // Persist a write, tracking it as in-flight and reconciling once it settles.
+  // On persistent failure (retries already exhausted inside transactionsApi),
+  // surface an error; the follow-up reconcile then realigns the display with
+  // the server (e.g. drops a row whose create never landed, or restores one
+  // whose delete failed) so the history can't silently drift.
+  const persistWrite = useCallback(
+    (id: string, run: () => Promise<unknown>, isDelete: boolean) => {
+      const tracker = isDelete ? inflightDeletes.current : inflightWrites.current;
+      tracker.add(id);
+      run()
+        .then(() => setSyncError(null))
+        .catch(() => setSyncError("Some changes couldn't be saved. The list will resync automatically."))
+        .finally(() => {
+          tracker.delete(id);
+          void reconcile();
+        });
+    },
+    [reconcile],
+  );
+
+  const persistCreate = useCallback(
+    (body: TransactionInput) => {
+      const token = tokenRef.current;
+      if (!token) return;
+      persistWrite(body.txnId, () => transactionsApi.create(token, body), false);
+    },
+    [persistWrite],
+  );
+
+  const persistUpdate = useCallback(
+    (txnId: string, body: { status: string; statusType: string }) => {
+      const token = tokenRef.current;
+      if (!token) return;
+      persistWrite(txnId, () => transactionsApi.update(token, txnId, body), false);
+    },
+    [persistWrite],
+  );
+
+  const persistRemove = useCallback(
+    (txnId: string) => {
+      const token = tokenRef.current;
+      if (!token) return;
+      persistWrite(txnId, () => transactionsApi.remove(token, txnId), true);
+    },
+    [persistWrite],
+  );
 
   // Initial load from the server ledger.
   useEffect(() => {
@@ -298,13 +415,23 @@ export function useTransactions() {
       return;
     }
     transactionsApi
-      .list(token)
+      .listOrThrow(token)
       .then(rows => {
         if (cancelled) return;
-        baseRef.current = rows.map(fromServer);
+        // Merge rather than overwrite: the user may have added optimistic rows
+        // before this initial list resolved.
+        baseRef.current = mergeBase(
+          baseRef.current,
+          rows.map(fromServer),
+          inflightWrites.current,
+          inflightDeletes.current,
+        );
         recompute();
       })
-      .catch(() => {});
+      .catch(() => {
+        // Initial load failed (e.g. offline). Keep any optimistic rows and let
+        // periodic reconciliation recover once the connection is back.
+      });
     return () => {
       cancelled = true;
     };
@@ -316,6 +443,14 @@ export function useTransactions() {
     return () => clearInterval(id);
   }, [recompute]);
 
+  // Periodically resync with the server so any divergence self-heals.
+  useEffect(() => {
+    const id = setInterval(() => {
+      void reconcile();
+    }, RECONCILE_MS);
+    return () => clearInterval(id);
+  }, [reconcile]);
+
   // Single funnel used by the approval poller. Detects terminal transitions and
   // removals against the canonical base list, persists them to the server, and
   // recomputes the derived display.
@@ -323,12 +458,11 @@ export function useTransactions() {
     (updater: Transaction[] | ((prev: Transaction[]) => Transaction[])) => {
       const prevDisplay = deriveList(baseRef.current);
       const next = typeof updater === "function" ? updater(prevDisplay) : updater;
-      const token = tokenRef.current;
       const baseById = new Map(baseRef.current.map(b => [b.id, b]));
 
       // Iterate the updater's output (preserving order) so newly injected rows
       // land in the right place. Handle additions, terminal transitions and
-      // removals, persisting each to the server ledger.
+      // removals, persisting each to the server ledger (with retry + resync).
       const newBase: Transaction[] = [];
       const keptIds = new Set<string>();
       for (const n of next) {
@@ -337,34 +471,26 @@ export function useTransactions() {
         if (!b) {
           const created = toBaseFromDisplay(n);
           newBase.push(created);
-          if (token) {
-            void transactionsApi
-              .create(token, toCreateBody(created.id, created, created.status, created.statusType))
-              .catch(() => {});
-          }
+          persistCreate(toCreateBody(created.id, created, created.status, created.statusType));
           continue;
         }
         if (n.statusType === "completed" && b.statusType !== "completed") {
           // Terminal transition (approved/denied/debit-all) — persist it.
           newBase.push({ ...b, statusType: "completed", status: n.status });
-          if (token) {
-            void transactionsApi
-              .update(token, b.id, { status: n.status, statusType: "completed" })
-              .catch(() => {});
-          }
+          persistUpdate(b.id, { status: n.status, statusType: "completed" });
         } else {
           newBase.push(b);
         }
       }
       for (const b of baseRef.current) {
-        if (!keptIds.has(b.id) && token) {
-          void transactionsApi.remove(token, b.id).catch(() => {});
+        if (!keptIds.has(b.id)) {
+          persistRemove(b.id);
         }
       }
       baseRef.current = newBase;
       recompute();
     },
-    [recompute],
+    [recompute, persistCreate, persistUpdate, persistRemove],
   );
 
   const addTransaction = useCallback(
@@ -387,24 +513,20 @@ export function useTransactions() {
       };
       baseRef.current = [base, ...baseRef.current];
       recompute();
-      const token = tokenRef.current;
-      if (token) {
-        void transactionsApi.create(token, toCreateBody(txnId, tx, status, statusType)).catch(() => {});
-      }
+      persistCreate(toCreateBody(txnId, tx, status, statusType));
       return txnId;
     },
-    [recompute],
+    [recompute, persistCreate],
   );
 
   const cancelTransaction = useCallback(
     (id: string) => {
       baseRef.current = baseRef.current.filter(t => t.id !== id);
       recompute();
-      const token = tokenRef.current;
-      if (token) void transactionsApi.remove(token, id).catch(() => {});
+      persistRemove(id);
     },
-    [recompute],
+    [recompute, persistRemove],
   );
 
-  return { transactions: display, addTransaction, cancelTransaction, setTransactions };
+  return { transactions: display, addTransaction, cancelTransaction, setTransactions, syncError };
 }
