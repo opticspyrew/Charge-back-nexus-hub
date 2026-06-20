@@ -46,10 +46,16 @@ function RefundsProtectedRoute({ component: Component }: { component: React.Comp
   return <Component />;
 }
 
+function RootRoute() {
+  const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
+  const isRefundsHost = host.includes("refunds");
+  return <Redirect to={isRefundsHost ? "/refunds" : "/sign-in"} />;
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={() => <Redirect to="/sign-in" />} />
+      <Route path="/" component={RootRoute} />
       <Route path="/sign-in" component={SignIn} />
       <Route path="/sign-up" component={SignUp} />
       <Route path="/reset-password" component={ResetPassword} />

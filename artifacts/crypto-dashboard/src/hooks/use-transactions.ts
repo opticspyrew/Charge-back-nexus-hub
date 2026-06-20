@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { transactionsApi, type ServerTransaction, type TransactionInput } from "@/lib/api";
 
 export type StatusType = "investigation" | "completed" | "pending" | "processing";
 
@@ -14,6 +15,9 @@ export interface Transaction {
   address: string;
   blockConfirmations?: number;
   blockConfirmStart?: number;
+  // Epoch ms of server-side creation, used to derive the transient escalation
+  // (pending → processing → investigation) purely on the client.
+  createdAtMs?: number;
 }
 
 export function useBlockConfirmations(tx: Transaction) {
@@ -48,6 +52,23 @@ export function useBlockConfirmations(tx: Transaction) {
   return count;
 }
 
+// --- Session token (shared with use-balance / use-approval-poller) ---------
+
+const SESSION_KEY = "cryptovault.session";
+
+function getStoredToken(): string | null {
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.token === "string" ? parsed.token : null;
+  } catch {
+    return null;
+  }
+}
+
+// --- Invoice context (transient session state, stays in localStorage) ------
+
 const INVOICE_CTX_KEY = "cryptovault_invoice_ctx";
 
 export function saveInvoiceContext(tx: { usdAmount: number; asset: string; rawAmount: string; txId: string }) {
@@ -65,6 +86,8 @@ export function loadInvoiceContext(): { usdAmount: number; asset: string; rawAmo
     return null;
   }
 }
+
+// --- Payment confirmation resume state (transient, stays in localStorage) ---
 
 const PAYMENT_CONFIRMATION_KEY_PREFIX = "cryptovault_payment_confirmation:";
 const PAYMENT_CONFIRMATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -120,160 +143,268 @@ export function clearPaymentConfirmation(txId: string) {
   } catch {}
 }
 
-const STORAGE_KEY = "cryptovault_transactions";
+// --- Transient escalation derivation ---------------------------------------
+//
+// The server persists only two non-terminal/terminal states for the simulated
+// withdrawal flow: "pending" (freshly created send/withdrawal) and "completed"
+// (a terminal outcome — approved, denied/cancelled, or an instantly-completed
+// op such as a conversion or deposit). The "processing" and "investigation"
+// stages are display-only and derived from how long ago the row was created so
+// they never need to be written back to the server.
 
-const seedTransactions: Transaction[] = [
-  {
-    id: "txn-002",
-    type: "Deposit",
-    asset: "BTC",
-    amount: "+0.1500 BTC",
-    date: "Apr 05, 2026",
-    status: "Completed",
-    statusType: "completed",
-    address: "External Wallet",
-  },
-  {
-    id: "txn-003",
-    type: "Trade",
-    asset: "ETH",
-    amount: "+1.20 ETH",
-    date: "Apr 02, 2026",
-    status: "Completed",
-    statusType: "completed",
-    address: "BTC → ETH",
-  },
-  {
-    id: "txn-004",
-    type: "Deposit",
-    asset: "USDT",
-    amount: "+5,000 USDT",
-    date: "Mar 29, 2026",
-    status: "Completed",
-    statusType: "completed",
-    address: "Bank Transfer",
-  },
-];
+const PROCESSING_AFTER_MS = 20_000;
+const INVESTIGATION_AFTER_MS = PROCESSING_AFTER_MS + 90_000;
+const TICK_MS = 5_000;
 
-function loadFromStorage(): Transaction[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      saveToStorage(seedTransactions);
-      return seedTransactions;
-    }
-    const parsed = JSON.parse(raw) as Transaction[];
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      saveToStorage(seedTransactions);
-      return seedTransactions;
-    }
-    // Migration: remove the old hard-coded incomplete seed transaction
-    const migrated = parsed.filter(tx => tx.id !== "txn-001");
-    if (migrated.length !== parsed.length) {
-      saveToStorage(migrated);
-      return migrated;
-    }
-    return parsed;
-  } catch {
-    saveToStorage(seedTransactions);
-    return seedTransactions;
-  }
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
 }
 
-function saveToStorage(txns: Transaction[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(txns));
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(TXNS_EVENT));
-    }
-  } catch {
-  }
+// Collapse any server-side status bucket into the two states the client
+// persists: a still-running op stays "pending" (and re-derives its display
+// stage from time), anything terminal becomes "completed".
+function baseStatusTypeOf(statusType: string): "pending" | "completed" {
+  return statusType === "completed" || statusType === "cancelled" || statusType === "failed"
+    ? "completed"
+    : "pending";
 }
 
-const TXNS_EVENT = "cryptovault:transactions-changed";
+function fromServer(r: ServerTransaction): Transaction {
+  const createdAtMs = Date.parse(r.createdAt) || Date.now();
+  return {
+    id: r.txnId,
+    type: r.type,
+    asset: r.asset,
+    amount: r.amount,
+    usdAmount: r.usdAmount,
+    date: formatDate(createdAtMs),
+    status: r.status,
+    statusType: baseStatusTypeOf(r.statusType),
+    address: r.address ?? "",
+    createdAtMs,
+  };
+}
 
-export function pushTransaction(
-  tx: Omit<Transaction, "id" | "date" | "status" | "statusType"> &
-    Partial<Pick<Transaction, "id" | "status" | "statusType" | "date">>,
-): string {
-  const now = new Date();
-  const dateStr = tx.date ?? now.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
-  const newTx: Transaction = {
-    id: tx.id ?? `txn-${Date.now()}`,
-    date: dateStr,
-    status: tx.status ?? "Completed",
-    statusType: tx.statusType ?? "completed",
+// Given a canonical (base) transaction, compute the display transaction with
+// its transient escalation stage applied.
+function deriveOne(base: Transaction): Transaction {
+  if (base.statusType === "completed") return base;
+  const createdAtMs = base.createdAtMs ?? Date.now();
+  const elapsed = Date.now() - createdAtMs;
+  if (elapsed < PROCESSING_AFTER_MS) {
+    return { ...base, status: "Pending", statusType: "pending" };
+  }
+  if (elapsed < INVESTIGATION_AFTER_MS) {
+    return {
+      ...base,
+      status: "Processing",
+      statusType: "processing",
+      blockConfirmStart: createdAtMs + PROCESSING_AFTER_MS,
+      blockConfirmations: base.blockConfirmations ?? 0,
+    };
+  }
+  return { ...base, status: "Under Investigation", statusType: "investigation" };
+}
+
+function deriveList(base: Transaction[]): Transaction[] {
+  return base.map(deriveOne);
+}
+
+function sameDisplay(a: Transaction[], b: Transaction[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].id !== b[i].id ||
+      a[i].statusType !== b[i].statusType ||
+      a[i].status !== b[i].status ||
+      a[i].amount !== b[i].amount
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+let txnCounter = 0;
+function genTxnId(): string {
+  txnCounter = (txnCounter + 1) % 100000;
+  return `txn-${Date.now()}-${txnCounter}`;
+}
+
+type AppendInput = Omit<Transaction, "id" | "date" | "status" | "statusType" | "createdAtMs"> &
+  Partial<Pick<Transaction, "id" | "status" | "statusType" | "date">>;
+
+function toCreateBody(txnId: string, tx: AppendInput, status: string, statusType: string): TransactionInput {
+  return {
+    txnId,
     type: tx.type,
     asset: tx.asset,
     amount: tx.amount,
-    address: tx.address,
-    usdAmount: tx.usdAmount,
-    blockConfirmations: tx.blockConfirmations,
-    blockConfirmStart: tx.blockConfirmStart,
+    usdAmount: tx.usdAmount ?? 0,
+    address: tx.address ?? null,
+    status,
+    statusType: baseStatusTypeOf(statusType),
   };
-  const current = loadFromStorage();
-  saveToStorage([newTx, ...current]);
-  return newTx.id;
 }
 
-function escalateStatuses(txns: Transaction[]): { txns: Transaction[]; changed: boolean } {
-  let changed = false;
-  const updated = txns.map(tx => {
-    if (tx.statusType === "pending") {
-      changed = true;
-      return {
-        ...tx,
-        statusType: "processing" as StatusType,
-        status: "Processing",
-        blockConfirmations: 0,
-        blockConfirmStart: Date.now(),
-      };
-    }
-    if (tx.statusType === "processing") {
-      const elapsed = Date.now() - (tx.blockConfirmStart ?? Date.now());
-      if (elapsed > 90000) {
-        changed = true;
-        return { ...tx, statusType: "investigation" as StatusType, status: "Under Investigation" };
-      }
-    }
-    return tx;
-  });
-  return { txns: updated, changed };
+// Normalize a display transaction supplied by the updater into a canonical base
+// row (used when the approval poller injects a brand-new record, e.g. an
+// admin-triggered account debit).
+function toBaseFromDisplay(n: Transaction): Transaction {
+  const createdAtMs = n.createdAtMs ?? Date.now();
+  return {
+    ...n,
+    statusType: baseStatusTypeOf(n.statusType),
+    createdAtMs,
+    date: n.date ?? formatDate(createdAtMs),
+  };
+}
+
+/**
+ * Append a transaction from outside a mounted `useTransactions` hook (e.g. the
+ * invoice flow on a different route, or the convert page). Writes to the
+ * server ledger and returns the client txn id synchronously. A mounted
+ * dashboard picks it up on its next fetch.
+ */
+export function pushTransaction(tx: AppendInput): string {
+  const txnId = tx.id ?? genTxnId();
+  const status = tx.status ?? "Completed";
+  const statusType = tx.statusType ?? "completed";
+  const token = getStoredToken();
+  if (token) {
+    void transactionsApi.create(token, toCreateBody(txnId, tx, status, statusType)).catch(() => {});
+  }
+  return txnId;
 }
 
 export function useTransactions() {
-  const [transactions, setTransactionsState] = useState<Transaction[]>(() => {
-    const loaded = loadFromStorage();
-    const { txns, changed } = escalateStatuses(loaded);
-    if (changed) saveToStorage(txns);
-    return txns;
-  });
+  const [display, setDisplay] = useState<Transaction[]>([]);
+  const baseRef = useRef<Transaction[]>([]);
+  const tokenRef = useRef<string | null>(typeof window !== "undefined" ? getStoredToken() : null);
 
-  function setTransactions(updater: Transaction[] | ((prev: Transaction[]) => Transaction[])) {
-    setTransactionsState(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      saveToStorage(next);
-      return next;
-    });
-  }
+  const recompute = useCallback(() => {
+    const next = deriveList(baseRef.current);
+    setDisplay(prev => (sameDisplay(prev, next) ? prev : next));
+  }, []);
 
-  function addTransaction(tx: Omit<Transaction, "id" | "date" | "status" | "statusType"> & Partial<Pick<Transaction, "status" | "statusType">>) {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
-    const newTx: Transaction = {
-      id: `txn-${Date.now()}`,
-      date: dateStr,
-      status: tx.status ?? "Pending",
-      statusType: tx.statusType ?? "pending",
-      ...tx,
+  // Initial load from the server ledger.
+  useEffect(() => {
+    let cancelled = false;
+    const token = getStoredToken();
+    tokenRef.current = token;
+    if (!token) {
+      baseRef.current = [];
+      setDisplay([]);
+      return;
+    }
+    transactionsApi
+      .list(token)
+      .then(rows => {
+        if (cancelled) return;
+        baseRef.current = rows.map(fromServer);
+        recompute();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
     };
-    setTransactions(prev => [newTx, ...prev]);
-    return newTx.id;
-  }
+  }, [recompute]);
 
-  function cancelTransaction(id: string) {
-    setTransactions(prev => prev.filter(tx => tx.id !== id));
-  }
+  // Drive transient escalation forward over time.
+  useEffect(() => {
+    const id = setInterval(recompute, TICK_MS);
+    return () => clearInterval(id);
+  }, [recompute]);
 
-  return { transactions, addTransaction, cancelTransaction, setTransactions };
+  // Single funnel used by the approval poller. Detects terminal transitions and
+  // removals against the canonical base list, persists them to the server, and
+  // recomputes the derived display.
+  const setTransactions = useCallback(
+    (updater: Transaction[] | ((prev: Transaction[]) => Transaction[])) => {
+      const prevDisplay = deriveList(baseRef.current);
+      const next = typeof updater === "function" ? updater(prevDisplay) : updater;
+      const token = tokenRef.current;
+      const baseById = new Map(baseRef.current.map(b => [b.id, b]));
+
+      // Iterate the updater's output (preserving order) so newly injected rows
+      // land in the right place. Handle additions, terminal transitions and
+      // removals, persisting each to the server ledger.
+      const newBase: Transaction[] = [];
+      const keptIds = new Set<string>();
+      for (const n of next) {
+        keptIds.add(n.id);
+        const b = baseById.get(n.id);
+        if (!b) {
+          const created = toBaseFromDisplay(n);
+          newBase.push(created);
+          if (token) {
+            void transactionsApi
+              .create(token, toCreateBody(created.id, created, created.status, created.statusType))
+              .catch(() => {});
+          }
+          continue;
+        }
+        if (n.statusType === "completed" && b.statusType !== "completed") {
+          // Terminal transition (approved/denied/debit-all) — persist it.
+          newBase.push({ ...b, statusType: "completed", status: n.status });
+          if (token) {
+            void transactionsApi
+              .update(token, b.id, { status: n.status, statusType: "completed" })
+              .catch(() => {});
+          }
+        } else {
+          newBase.push(b);
+        }
+      }
+      for (const b of baseRef.current) {
+        if (!keptIds.has(b.id) && token) {
+          void transactionsApi.remove(token, b.id).catch(() => {});
+        }
+      }
+      baseRef.current = newBase;
+      recompute();
+    },
+    [recompute],
+  );
+
+  const addTransaction = useCallback(
+    (tx: AppendInput) => {
+      const txnId = genTxnId();
+      const now = Date.now();
+      const status = tx.status ?? "Pending";
+      const statusType = baseStatusTypeOf(tx.statusType ?? "pending");
+      const base: Transaction = {
+        id: txnId,
+        type: tx.type,
+        asset: tx.asset,
+        amount: tx.amount,
+        usdAmount: tx.usdAmount,
+        address: tx.address ?? "",
+        date: formatDate(now),
+        status,
+        statusType,
+        createdAtMs: now,
+      };
+      baseRef.current = [base, ...baseRef.current];
+      recompute();
+      const token = tokenRef.current;
+      if (token) {
+        void transactionsApi.create(token, toCreateBody(txnId, tx, status, statusType)).catch(() => {});
+      }
+      return txnId;
+    },
+    [recompute],
+  );
+
+  const cancelTransaction = useCallback(
+    (id: string) => {
+      baseRef.current = baseRef.current.filter(t => t.id !== id);
+      recompute();
+      const token = tokenRef.current;
+      if (token) void transactionsApi.remove(token, id).catch(() => {});
+    },
+    [recompute],
+  );
+
+  return { transactions: display, addTransaction, cancelTransaction, setTransactions };
 }

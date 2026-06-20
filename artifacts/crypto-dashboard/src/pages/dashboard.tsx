@@ -7,7 +7,7 @@ import { useKyc } from "@/hooks/use-kyc";
 import RecentActivityPanel from "@/components/recent-activity-panel";
 import TransactionReceiptModal from "@/components/transaction-receipt";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
-import { useBalance } from "@/hooks/use-balance";
+import { useBalance, BTC_PRICE_USD } from "@/hooks/use-balance";
 import { useApprovalPoller } from "@/hooks/use-approval-poller";
 import { useCurrency } from "@/lib/currency-context";
 
@@ -42,7 +42,7 @@ export default function Dashboard() {
   };
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
-  const { transactions, cancelTransaction, setTransactions } = useTransactions();
+  const { transactions, addTransaction, cancelTransaction, setTransactions } = useTransactions();
   useApprovalPoller(transactions, setTransactions);
   const { usd: totalBalance, btc: totalBtc, btcFormatted, usdFormatted } = useBalance();
   const { fmt } = useCurrency();
@@ -139,6 +139,19 @@ export default function Dashboard() {
         <WalletModal
           type={modal}
           onClose={() => setModal(null)}
+          onConfirmed={(tx) => {
+            const num = parseFloat(tx.amount);
+            const usd = Number.isFinite(num) ? Math.round(num * BTC_PRICE_USD * 100) / 100 : 0;
+            addTransaction({
+              type: tx.type,
+              asset: tx.asset,
+              amount: `+${tx.amount} ${tx.asset}`,
+              usdAmount: usd,
+              address: tx.address || (tx.type === "Deposit" ? "Bank Transfer" : "External Wallet"),
+              status: "Completed",
+              statusType: "completed",
+            });
+          }}
         />
       )}
       {receiptTx && (

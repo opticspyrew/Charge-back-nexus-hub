@@ -101,6 +101,66 @@ export interface WalletConfig {
   sortOrder: number;
 }
 
+export interface ServerTransaction {
+  txnId: string;
+  type: string;
+  asset: string;
+  amount: string;
+  usdAmount: number;
+  address: string | null;
+  status: string;
+  statusType: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TransactionInput {
+  txnId: string;
+  type: string;
+  asset: string;
+  amount: string;
+  usdAmount?: number;
+  address?: string | null;
+  status: string;
+  statusType: string;
+}
+
+// Per-user, server-backed transaction ledger. Every call is authenticated and
+// scoped to the session user by the API — the client never sends a user id.
+export const transactionsApi = {
+  list: async (token: string): Promise<ServerTransaction[]> => {
+    const res = await fetch(`${AUTH_BASE}/transactions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { transactions: ServerTransaction[] };
+    return data.transactions ?? [];
+  },
+  create: (token: string, body: TransactionInput) =>
+    post<{ transaction: ServerTransaction }>(`${AUTH_BASE}/transactions`, body, {
+      Authorization: `Bearer ${token}`,
+    }),
+  update: (
+    token: string,
+    txnId: string,
+    body: { status: string; statusType: string },
+  ) =>
+    request<{ transaction: ServerTransaction }>(
+      `${AUTH_BASE}/transactions/${encodeURIComponent(txnId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    ),
+  remove: async (token: string, txnId: string): Promise<void> => {
+    await fetch(`${AUTH_BASE}/transactions/${encodeURIComponent(txnId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+};
+
 export interface AuthUser {
   id: number;
   email: string;
