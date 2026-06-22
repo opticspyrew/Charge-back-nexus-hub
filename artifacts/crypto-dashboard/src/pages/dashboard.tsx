@@ -42,7 +42,7 @@ export default function Dashboard() {
   };
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
-  const { transactions, addTransaction, cancelTransaction, setTransactions } = useTransactions();
+  const { transactions, addTransaction, cancelTransaction, setTransactions, syncError } = useTransactions();
   useApprovalPoller(transactions, setTransactions);
   const { usd: totalBalance, btc: totalBtc, btcFormatted, usdFormatted } = useBalance();
   const { fmt } = useCurrency();
@@ -263,6 +263,11 @@ export default function Dashboard() {
         {/* Transaction History */}
         <div className="bg-card border border-card-border rounded-2xl p-6">
           <h3 className="text-base font-semibold text-foreground mb-4">Transaction History</h3>
+          {syncError && (
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
+              {syncError}
+            </div>
+          )}
           <div className="space-y-3">
             {transactions.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-6">No transactions yet.</p>
