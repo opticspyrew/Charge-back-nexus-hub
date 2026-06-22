@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog, users, cryptoWalletConfigs, coinSectionOrders, kycSubmissions } from "@workspace/db";
 import { asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { sendAdminEmail, sendUserEmail, newClientEmail, newServiceRequestEmail, kycApprovedEmail, kycRejectedEmail, paymentConfirmationDecisionEmail } from "../lib/email";
+import { sendAdminEmail, sendUserEmail, newClientEmail, newServiceRequestEmail, kycApprovedEmail, kycRejectedEmail, paymentConfirmationDecisionEmail, recoveryCaseStatusEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
 import { clearLoginFailures, getAccountThrottleStatus } from "../lib/login-throttle";
@@ -331,6 +331,45 @@ router.patch("/requests/:id", requireAdmin, async (req: Request, res: Response):
       description: `${request.type} request from ${client?.name ?? "unknown"} ${status}`,
       metadata: { status, requestId: id },
     });
+
+    // Notify the customer by email when their recovery case status changes so
+    // they don't have to keep refreshing their Recovery Vault on refunds.site.
+    // The email copy mirrors the portal status vocabulary (Pending review / In
+    // progress / Approved / Declined / Closed). Email failures are logged but
+    // never block the admin action.
+    if (request.type === "recovery_case" && typeof status === "string" && client?.email) {
+      try {
+        const createdAt = request.createdAt as Date;
+        // Mirror caseReference() in refunds.ts so the reference matches the
+        // one the client sees in their Recovery Vault.
+        const reference = `RF-${createdAt.getUTCFullYear()}-${String(request.id).padStart(4, "0")}`;
+        const appUrl = buildAdminAppUrl(req);
+        const caseUrl = appUrl ? `${appUrl}/refunds` : null;
+        const { subject, html } = recoveryCaseStatusEmail({
+          name: client.name,
+          email: client.email,
+          status,
+          reference,
+          changedAt: new Date(),
+          amount: request.amount,
+          currency: request.currency,
+          caseUrl,
+          supportEmail: PAYMENT_SUPPORT_EMAIL,
+        });
+        const sent = await sendUserEmail(client.email, subject, html);
+        logger.info(
+          { clientId: client.id, requestId: id, status, sent },
+          sent
+            ? "Recovery case status email sent"
+            : "Recovery case status email could not be sent",
+        );
+      } catch (err) {
+        logger.error(
+          { err, clientId: client?.id, requestId: id, status },
+          "Failed to send recovery case status email",
+        );
+      }
+    }
 
     // Notify the customer by email when a payment confirmation request is
     // decided so they don't have to keep the invoice page open. Email failures
