@@ -621,6 +621,145 @@ export function paymentConfirmationDecisionEmail(params: {
   return { subject, html };
 }
 
+// Status vocabulary shown to clients in their Recovery Vault on refunds.site.
+// Mirrors STATUS_TONES in
+// crypto-dashboard/src/refunds/components/portal-sections/my-cases.tsx so the
+// email copy matches exactly what the client sees in the portal.
+const RECOVERY_STATUS_META: Record<
+  string,
+  { label: string; headerColor: string; intro: string }
+> = {
+  pending: {
+    label: "Pending review",
+    headerColor: "#b45309",
+    intro:
+      "Your recovery case is in the queue and waiting for an analyst to begin their review.",
+  },
+  processing: {
+    label: "In progress",
+    headerColor: "#1e3a5f",
+    intro:
+      "Good news — our analysts have started actively working on your recovery case.",
+  },
+  approved: {
+    label: "Approved",
+    headerColor: "#15803d",
+    intro:
+      "Good news — we've reviewed and approved your recovery case. Our team will follow up with the next steps.",
+  },
+  rejected: {
+    label: "Declined",
+    headerColor: "#b91c1c",
+    intro:
+      "After review, we weren't able to move forward with your recovery case at this time.",
+  },
+  closed: {
+    label: "Closed",
+    headerColor: "#6b7280",
+    intro:
+      "Your recovery case has been closed. If you have any questions, our team is happy to help.",
+  },
+};
+
+// Resolve the client-facing label/copy for a recovery-case status, falling back
+// to a capitalized version of the raw status for any value we don't recognize.
+export function recoveryCaseStatusMeta(status: string): {
+  label: string;
+  headerColor: string;
+  intro: string;
+} {
+  const key = (status ?? "").toLowerCase();
+  if (RECOVERY_STATUS_META[key]) return RECOVERY_STATUS_META[key];
+  const label = status
+    ? status.charAt(0).toUpperCase() + status.slice(1)
+    : "Updated";
+  return {
+    label,
+    headerColor: "#1e3a5f",
+    intro: `The status of your recovery case is now "${label}".`,
+  };
+}
+
+export function recoveryCaseStatusEmail(params: {
+  name: string;
+  email: string;
+  status: string;
+  reference: string;
+  changedAt: Date;
+  amount?: string | null;
+  currency?: string | null;
+  caseUrl: string | null;
+  supportEmail: string;
+}): { subject: string; html: string } {
+  const {
+    name,
+    email,
+    status,
+    reference,
+    changedAt,
+    amount,
+    currency,
+    caseUrl,
+    supportEmail,
+  } = params;
+  const meta = recoveryCaseStatusMeta(status);
+  const subject = `Your recovery case ${reference} is now "${meta.label}"`;
+  const safeName = escapeHtml(name);
+  const safeReference = escapeHtml(reference);
+  const safeTime = escapeHtml(changedAt.toUTCString());
+  const safeSupport = escapeHtml(supportEmail);
+  const safeIntro = escapeHtml(meta.intro);
+  const safeLabel = escapeHtml(meta.label);
+  const amountStr = amount
+    ? `${currency ?? "USD"} ${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+    : null;
+  const amountRow = amountStr
+    ? `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Reported loss</td><td style="padding: 8px 0; color: #111827; font-size: 13px;">${escapeHtml(amountStr)}</td></tr>`
+    : "";
+  const ctaButton = caseUrl
+    ? `<p style="text-align: center; margin: 24px 0;">
+         <a href="${escapeHtml(caseUrl)}" style="display: inline-block; background: ${meta.headerColor}; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+           View your case
+         </a>
+       </p>`
+    : "";
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9fafb; padding: 24px; border-radius: 8px;">
+      <div style="background: ${meta.headerColor}; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+        <h1 style="color: white; margin: 0; font-size: 20px;">Recovery case update</h1>
+        <p style="color: rgba(255,255,255,0.85); margin: 4px 0 0; font-size: 13px;">${safeReference} &middot; ${safeLabel}</p>
+      </div>
+      <div style="background: white; padding: 24px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p style="font-size: 14px; color: #111827; margin: 0 0 16px;">Hi ${safeName || "there"},</p>
+        <p style="font-size: 14px; color: #374151; margin: 0 0 16px;">${safeIntro}</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 140px;">Case reference</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px; font-family: monospace;">${safeReference}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">New status</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${safeLabel}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Updated</td>
+            <td style="padding: 8px 0; color: #111827; font-size: 13px;">${safeTime}</td>
+          </tr>
+          ${amountRow}
+        </table>
+        ${ctaButton}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #6b7280; margin: 0;">
+          Questions? Contact us at
+          <a href="mailto:${safeSupport}" style="color: ${meta.headerColor}; font-weight: 600;">${safeSupport}</a>.
+          This is an automated notification from CryptoVault.
+        </p>
+      </div>
+    </div>
+  `;
+  return { subject, html };
+}
+
 export function newClientEmail(client: {
   name: string;
   email: string;
