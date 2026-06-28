@@ -32,7 +32,7 @@ export default function RefundsSignUp() {
     }
     setLoading(true);
     try {
-      await signup(form.name, form.email, form.password, 0, "Refunds.site intake");
+      await signup(form.name, form.email, form.password, 0, "Netspy-World Forensics intake");
       navigate("/refunds/portal");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to open account.");
@@ -138,7 +138,7 @@ export default function RefundsSignUp() {
         </div>
 
         <p className="mt-5 text-center text-[11px] text-muted-foreground">
-          Refunds.site does not custody assets and cannot reverse on-chain transactions.
+          Netspy-World Forensics does not custody assets and cannot reverse on-chain transactions.
           Recovery outcomes are not guaranteed.
         </p>
 

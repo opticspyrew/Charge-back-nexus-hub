@@ -44,7 +44,7 @@ export default function DashboardPreview() {
               <span className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--refunds-alert))]" />
               <span className="w-2.5 h-2.5 rounded-full bg-[hsl(var(--refunds-success))]" />
               <span className="ml-3 font-mono text-[10px] text-muted-foreground">
-                refunds.site/portal
+                netspyworld.com/portal
               </span>
             </div>
 

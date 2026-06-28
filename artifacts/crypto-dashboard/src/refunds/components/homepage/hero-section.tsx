@@ -14,21 +14,21 @@ export default function HeroSection() {
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         >
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] uppercase tracking-wider font-semibold bg-primary/10 border border-primary/25 text-primary">
-            <ScanLine className="w-3.5 h-3.5" /> Digital asset recovery & cyber
-            intelligence
+            <ScanLine className="w-3.5 h-3.5" /> Digital investigation & asset
+            recovery
           </span>
           <h1 className="mt-5 text-4xl sm:text-5xl xl:text-6xl font-semibold tracking-tight text-foreground leading-[1.04]">
-            The secure operating console for
+            The unified console for
             <span className="block bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              digital asset recovery.
+              digital investigation & recovery.
             </span>
           </h1>
           <p className="mt-5 text-base text-muted-foreground max-w-xl leading-relaxed">
-            Refunds.site is an enterprise platform for tracing, investigating, and
-            coordinating the recovery of stolen or misdirected digital assets.
-            Analysts work cases under SOC 2 controls. Outcomes depend on
-            jurisdiction, counterparty cooperation, and the underlying asset — we
-            never guarantee recovery.
+            Netspy-World Forensics is an enterprise platform for digital
+            investigation, blockchain intelligence, and the recovery of stolen or
+            misdirected digital assets. Certified forensic analysts work cases under
+            SOC 2 controls. Outcomes depend on jurisdiction, counterparty
+            cooperation, and the underlying asset — we never guarantee recovery.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <button

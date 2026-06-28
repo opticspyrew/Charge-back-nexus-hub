@@ -14,7 +14,7 @@ const PALETTE = [
 ];
 
 const TYPE_SCALE = [
-  { label: "Display L — 36/700", className: "text-4xl font-semibold tracking-tight", sample: "Refunds.site recovery console" },
+  { label: "Display L — 36/700", className: "text-4xl font-semibold tracking-tight", sample: "Netspy-World Forensics console" },
   { label: "Heading — 24/600", className: "text-2xl font-semibold", sample: "Recovery Vault overview" },
   { label: "Subheading — 18/600", className: "text-lg font-semibold", sample: "Live intelligence feed" },
   { label: "Body — 14/400", className: "text-sm", sample: "Outcomes depend on jurisdiction and counterparty cooperation." },
@@ -55,7 +55,7 @@ export default function BrandGuide() {
         <section>
           <p className="text-[11px] uppercase tracking-[0.18em] text-primary font-semibold">Brand system</p>
           <h1 className="text-3xl sm:text-4xl font-semibold text-foreground tracking-tight mt-2">
-            Refunds.site visual identity
+            Netspy-World Forensics visual identity
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl mt-3 leading-relaxed">
             A live reference of the namespaced design system. Every token, surface, and

@@ -24,8 +24,8 @@ export default function FooterEcosystem() {
         <div>
           <RefundsLogo size={34} />
           <p className="mt-4 text-sm text-muted-foreground max-w-xs leading-relaxed">
-            An enterprise platform for tracing, investigating, and coordinating
-            the recovery of digital assets — operated under formal controls.
+            Enterprise digital investigation, blockchain intelligence, and asset
+            recovery — operated under formal forensic controls.
           </p>
           <p className="mt-4 inline-flex items-center gap-2 text-[11px] text-muted-foreground">
             <Lock className="w-3.5 h-3.5 text-primary" /> Sessions secured with
@@ -56,11 +56,11 @@ export default function FooterEcosystem() {
 
       <div className="mt-10 pt-6 border-t border-card-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <span className="text-xs text-muted-foreground">
-          © 2026 Refunds.site — synthetic demonstration data.
+          © 2026 NETSPYWORLD FORENSICS LTD — synthetic demonstration data.
         </span>
         <span className="text-[11px] text-muted-foreground max-w-md sm:text-right">
-          Refunds.site does not custody assets and cannot reverse on-chain
-          transactions. Outcomes depend on jurisdiction and counterparty
+          Netspy-World Forensics does not custody assets and cannot reverse
+          on-chain transactions. Outcomes depend on jurisdiction and counterparty
           cooperation.
         </span>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { RecoveryCategory, RecoveryStat, RecoveryTrendPoint } from "./types";
+import type { CaseReport, RecoveryCategory, RecoveryStat, RecoveryTrendPoint } from "./types";
 import {
   getRecoveryCategories,
   getRecoveryStats,
@@ -186,4 +186,75 @@ export function useMyCases(token: string | null): MyCasesState {
   }, [token, nonce]);
 
   return { cases, loading, error, reload: () => setNonce((n) => n + 1) };
+}
+
+// ---------------------------------------------------------------------------
+// Case report data layer.
+//
+// Fetches a composed, exportable forensic report for one of the signed-in
+// client's own cases. Ownership is enforced server-side; there is no mock
+// fallback, so an unauthorized or missing case surfaces as an error state.
+// ---------------------------------------------------------------------------
+
+export async function fetchCaseReport(token: string, reference: string): Promise<CaseReport> {
+  const res = await fetch(`${BASE}/reports/${encodeURIComponent(reference)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || "Failed to load the report");
+  }
+  const data = (await res.json()) as { report: CaseReport };
+  return data.report;
+}
+
+export interface CaseReportState {
+  report: CaseReport | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export function useCaseReport(
+  token: string | null,
+  reference: string | null,
+): CaseReportState {
+  const [report, setReport] = useState<CaseReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!reference) {
+      setReport(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    if (!token) {
+      setReport(null);
+      setError("Your session has expired. Please sign in again to view reports.");
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setError(null);
+    setReport(null);
+    fetchCaseReport(token, reference)
+      .then((data) => {
+        if (active) setReport(data);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Failed to load the report");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, reference]);
+
+  return { report, loading, error };
 }

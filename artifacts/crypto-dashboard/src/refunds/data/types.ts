@@ -208,3 +208,36 @@ export interface EcosystemColumn {
   heading: string;
   links: EcosystemLink[];
 }
+
+export interface ReportActivityEntry {
+  at: string;
+  eventType: string;
+  description: string;
+}
+
+export interface CaseReport {
+  reference: string;
+  generatedAt: string;
+  firm: {
+    legalName: string;
+    brand: string;
+    jurisdictionNote: string;
+  };
+  client: {
+    name: string;
+    email: string;
+  };
+  case: {
+    id: number;
+    reference: string;
+    incident: string | null;
+    asset: string | null;
+    chain: string | null;
+    amount: string | null;
+    currency: string;
+    status: string;
+    submittedAt: string;
+    txHashes: string[];
+  };
+  activity: ReportActivityEntry[];
+}

@@ -35,7 +35,7 @@ export default function HomeNav() {
         <button
           onClick={() => navigate("/refunds")}
           className="rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          aria-label="Refunds.site home"
+          aria-label="Netspy-World Forensics home"
         >
           <RefundsLogo size={34} />
         </button>

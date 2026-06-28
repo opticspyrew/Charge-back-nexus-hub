@@ -9,6 +9,9 @@ import AiAssistant from "../components/portal-sections/ai-assistant";
 import SecureMessaging from "../components/portal-sections/secure-messaging";
 import EvidenceUpload from "../components/portal-sections/evidence-upload";
 import RecoveryTimeline from "../components/portal-sections/recovery-timeline";
+import ReportGeneration from "../components/portal-sections/reports";
+import OsintToolkit from "../components/portal-sections/osint-toolkit";
+import LegalCoordination from "../components/portal-sections/legal-coordination";
 
 const VALID_SECTIONS: PortalSectionId[] = [
   "overview",
@@ -20,6 +23,9 @@ const VALID_SECTIONS: PortalSectionId[] = [
   "messages",
   "evidence",
   "timeline",
+  "reports",
+  "osint",
+  "legal",
 ];
 
 function readHashSection(): PortalSectionId {
@@ -49,6 +55,9 @@ export default function RefundsPortal() {
       {section === "messages" && <SecureMessaging />}
       {section === "evidence" && <EvidenceUpload />}
       {section === "timeline" && <RecoveryTimeline />}
+      {section === "reports" && <ReportGeneration />}
+      {section === "osint" && <OsintToolkit />}
+      {section === "legal" && <LegalCoordination />}
     </RefundsShell>
   );
 }

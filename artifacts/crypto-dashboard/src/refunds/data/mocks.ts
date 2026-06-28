@@ -723,7 +723,7 @@ const FAQ_ENTRIES: FaqEntry[] = [
     id: "custody",
     question: "Do you take custody of my assets or wallet keys?",
     answer:
-      "Never. Refunds.site does not custody assets and does not request your private keys or seed phrase. Investigations are read-only on-chain unless you provide explicit written authorization for a specific action.",
+      "Never. Netspy-World Forensics does not custody assets and does not request your private keys or seed phrase. Investigations are read-only on-chain unless you provide explicit written authorization for a specific action.",
   },
   {
     id: "data",
