@@ -29,6 +29,13 @@ description: Non-obvious wiring conventions for adding API routes and frontend f
 - Frontend gets the token from `useAuth()` (`@/lib/auth-context`), where
   `token` is `string | null`.
 
-## Pre-existing unrelated tsc error
-- `artifacts/api-server/src/lib/objectStorage.ts(265)` has a pre-existing
-  `signed_url`/unknown tsc error unrelated to feature work — ignore it.
+## Case-derived documents share one ownership-enforced endpoint
+- `GET /public/refunds/reports/:reference` (frontend `useCaseReport`) is the
+  single source for any document built from a case — Report Generation AND
+  Legal Coordination both consume it, so generated docs cite server-verified
+  facts, not client state. Build new case-document features on top of this hook.
+- **Why:** keeps every case artifact behind the same ownership check (caller's
+  `adminClients` email must match the request's `clientId`).
+- Reference matching must be EXACT on year+id (`caseReference(id, createdAt)`),
+  not just the numeric id — `referenceToId` alone would let `RF-9999-0001`
+  resolve case `0001`. The route re-checks the full reference before returning.

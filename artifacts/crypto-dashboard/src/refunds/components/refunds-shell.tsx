@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   Activity,
   ArrowLeftRight,
   Bell,
   FileCheck2,
+  FileText,
   FolderOpen,
   Inbox,
   LayoutDashboard,
@@ -15,6 +16,8 @@ import {
   MessageSquareLock,
   Network,
   ScanLine,
+  Scale,
+  Search,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -30,22 +33,29 @@ export type PortalSectionId =
   | "ai"
   | "messages"
   | "evidence"
-  | "timeline";
+  | "timeline"
+  | "reports"
+  | "osint"
+  | "legal";
 
 export const PORTAL_SECTIONS: ReadonlyArray<{
   id: PortalSectionId;
   label: string;
+  group: string;
   icon: ReactNode;
 }> = [
-  { id: "overview", label: "Recovery Vault", icon: <LayoutDashboard className="w-4.5 h-4.5" /> },
-  { id: "intake", label: "Case Intake", icon: <Inbox className="w-4.5 h-4.5" /> },
-  { id: "cases", label: "My Cases", icon: <FolderOpen className="w-4.5 h-4.5" /> },
-  { id: "investigator", label: "Investigator", icon: <ShieldCheck className="w-4.5 h-4.5" /> },
-  { id: "chain", label: "Blockchain Intelligence", icon: <Network className="w-4.5 h-4.5" /> },
-  { id: "ai", label: "AI Assistant", icon: <Sparkles className="w-4.5 h-4.5" /> },
-  { id: "messages", label: "Secure Messaging", icon: <MessageSquareLock className="w-4.5 h-4.5" /> },
-  { id: "evidence", label: "Evidence Vault", icon: <FileCheck2 className="w-4.5 h-4.5" /> },
-  { id: "timeline", label: "Recovery Timeline", icon: <Activity className="w-4.5 h-4.5" /> },
+  { id: "overview", label: "Dashboard", group: "Workspace", icon: <LayoutDashboard className="w-4.5 h-4.5" /> },
+  { id: "intake", label: "Case Intake", group: "Investigations", icon: <Inbox className="w-4.5 h-4.5" /> },
+  { id: "cases", label: "Cases & Recoveries", group: "Investigations", icon: <FolderOpen className="w-4.5 h-4.5" /> },
+  { id: "investigator", label: "Investigator", group: "Investigations", icon: <ShieldCheck className="w-4.5 h-4.5" /> },
+  { id: "evidence", label: "Evidence Vault", group: "Investigations", icon: <FileCheck2 className="w-4.5 h-4.5" /> },
+  { id: "timeline", label: "Investigation Timeline", group: "Investigations", icon: <Activity className="w-4.5 h-4.5" /> },
+  { id: "chain", label: "Blockchain Intelligence", group: "Intelligence", icon: <Network className="w-4.5 h-4.5" /> },
+  { id: "osint", label: "OSINT Toolkit", group: "Intelligence", icon: <Search className="w-4.5 h-4.5" /> },
+  { id: "ai", label: "AI Assistant", group: "Intelligence", icon: <Sparkles className="w-4.5 h-4.5" /> },
+  { id: "reports", label: "Report Generation", group: "Reporting", icon: <FileText className="w-4.5 h-4.5" /> },
+  { id: "legal", label: "Legal Coordination", group: "Reporting", icon: <Scale className="w-4.5 h-4.5" /> },
+  { id: "messages", label: "Secure Messaging", group: "Client", icon: <MessageSquareLock className="w-4.5 h-4.5" /> },
 ];
 
 interface RefundsShellProps {
@@ -58,7 +68,7 @@ export default function RefundsShell({ active, onSectionChange, children }: Refu
   const [, navigate] = useLocation();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const activeLabel = PORTAL_SECTIONS.find((s) => s.id === active)?.label ?? "Recovery Vault";
+  const activeLabel = PORTAL_SECTIONS.find((s) => s.id === active)?.label ?? "Dashboard";
 
   const handleLogout = async () => {
     await logout();
@@ -87,7 +97,7 @@ export default function RefundsShell({ active, onSectionChange, children }: Refu
           <button
             onClick={() => navigate("/refunds")}
             className="flex items-center gap-3 group"
-            aria-label="Refunds.site home"
+            aria-label="Netspy-World Forensics home"
           >
             <RefundsLogo size={36} />
           </button>
@@ -100,29 +110,37 @@ export default function RefundsShell({ active, onSectionChange, children }: Refu
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-          <p className="px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-semibold">
-            Client portal
-          </p>
-          {PORTAL_SECTIONS.map((s) => {
+          {PORTAL_SECTIONS.map((s, i) => {
             const isActive = s.id === active;
+            const showGroup = i === 0 || PORTAL_SECTIONS[i - 1].group !== s.group;
             return (
-              <button
-                key={s.id}
-                onClick={() => {
-                  onSectionChange(s.id);
-                  setSidebarOpen(false);
-                }}
-                aria-current={isActive ? "page" : undefined}
-                data-testid={`refunds-nav-${s.id}`}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-primary/15 text-primary border border-primary/25"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground border border-transparent"
-                }`}
-              >
-                <span className={isActive ? "text-primary" : "text-muted-foreground"}>{s.icon}</span>
-                <span className="flex-1 text-left">{s.label}</span>
-              </button>
+              <Fragment key={s.id}>
+                {showGroup && (
+                  <p
+                    className={`px-3 pb-1.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-semibold ${
+                      i === 0 ? "pt-1" : "pt-4"
+                    }`}
+                  >
+                    {s.group}
+                  </p>
+                )}
+                <button
+                  onClick={() => {
+                    onSectionChange(s.id);
+                    setSidebarOpen(false);
+                  }}
+                  aria-current={isActive ? "page" : undefined}
+                  data-testid={`refunds-nav-${s.id}`}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-primary/15 text-primary border border-primary/25"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground border border-transparent"
+                  }`}
+                >
+                  <span className={isActive ? "text-primary" : "text-muted-foreground"}>{s.icon}</span>
+                  <span className="flex-1 text-left">{s.label}</span>
+                </button>
+              </Fragment>
             );
           })}
 
@@ -155,7 +173,7 @@ export default function RefundsShell({ active, onSectionChange, children }: Refu
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">{user?.name || "Client"}</p>
               <p className="text-[11px] text-muted-foreground truncate font-mono">
-                {user?.email || "client@refunds.site"}
+                {user?.email || "client@netspyworld.com"}
               </p>
             </div>
             <button
@@ -182,7 +200,7 @@ export default function RefundsShell({ active, onSectionChange, children }: Refu
             </button>
             <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
-                Refunds.site • Recovery Console
+                Netspy-World Forensics • Investigation Console
               </p>
               <h1 className="text-base sm:text-lg font-semibold text-foreground truncate">{activeLabel}</h1>
             </div>

@@ -41,18 +41,18 @@ export default function RefundsLogo({
         </svg>
       </span>
       {showWordmark && (
-        <span className="flex items-baseline gap-0.5 leading-none">
+        <span className="flex flex-col leading-none">
           <span
-            className="text-base font-semibold tracking-tight text-foreground"
+            className="text-[15px] font-semibold tracking-tight text-foreground"
             style={{ fontFamily: "var(--app-font-sans)", letterSpacing: "-0.01em" }}
           >
-            Refunds
+            Netspy-World
           </span>
           <span
-            className="text-sm font-medium opacity-80 text-muted-foreground"
+            className="text-[10px] font-semibold uppercase tracking-[0.22em] text-primary/80 mt-0.5"
             style={{ fontFamily: "var(--app-font-sans)" }}
           >
-            .site
+            Forensics
           </span>
         </span>
       )}

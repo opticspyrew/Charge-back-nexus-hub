@@ -437,4 +437,128 @@ router.get("/cases", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Case report — composed forensic report for a single owned case.
+//
+// Builds a structured, exportable report from the signed-in client's own case
+// record and their investigation activity. Ownership is enforced: the case must
+// resolve to the caller's client row, so one client can never read another's
+// report. This reads from our own datastore today; when the Manus integration
+// lands, the backend sync populates these same tables, so this endpoint and the
+// frontend that consumes it stay unchanged.
+// ---------------------------------------------------------------------------
+
+function referenceToId(reference: string): number | null {
+  const match = /^RF-\d{4}-(\d+)$/.exec(reference.trim());
+  if (!match) return null;
+  const id = Number(match[1]);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function parseTxHashes(notes: string | null): string[] {
+  if (!notes) return [];
+  const block = notes.match(/Transaction hashes:\s*\n([\s\S]*)$/);
+  if (!block) return [];
+  return block[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+router.get("/reports/:reference", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = extractBearerToken(req);
+    const user = token ? await findUserBySessionToken(token) : undefined;
+    if (!user) {
+      res.status(401).json({ error: "Sign in required to view reports." });
+      return;
+    }
+
+    const referenceParam = Array.isArray(req.params.reference)
+      ? req.params.reference[0]
+      : req.params.reference;
+    const id = referenceToId(referenceParam ?? "");
+    if (!id) {
+      res.status(400).json({ error: "Invalid case reference." });
+      return;
+    }
+
+    const normalizedEmail = user.email.toLowerCase().trim();
+    const [client] = await db
+      .select()
+      .from(adminClients)
+      .where(eq(adminClients.email, normalizedEmail));
+
+    if (!client) {
+      res.status(404).json({ error: "Case not found." });
+      return;
+    }
+
+    const [row] = await db
+      .select()
+      .from(adminServiceRequests)
+      .where(
+        and(
+          eq(adminServiceRequests.id, id),
+          eq(adminServiceRequests.clientId, client.id),
+          eq(adminServiceRequests.type, "recovery_case"),
+        ),
+      );
+
+    if (!row) {
+      res.status(404).json({ error: "Case not found." });
+      return;
+    }
+
+    const createdAt = row.createdAt as Date;
+    if (caseReference(row.id, createdAt) !== (referenceParam ?? "").trim()) {
+      res.status(404).json({ error: "Case not found." });
+      return;
+    }
+
+    const { incident, asset, chain } = parseIntakeNotes(row.notes);
+
+    const activityRows = await db
+      .select()
+      .from(adminActivityLog)
+      .where(eq(adminActivityLog.clientId, client.id))
+      .orderBy(desc(adminActivityLog.createdAt))
+      .limit(50);
+
+    const report = {
+      reference: caseReference(row.id, createdAt),
+      generatedAt: new Date().toISOString(),
+      firm: {
+        legalName: "NETSPYWORLD FORENSICS LTD",
+        brand: "Netspy-World Forensics",
+        jurisdictionNote:
+          "Findings are based on information available at time of generation. Outcomes depend on jurisdiction, counterparty cooperation, and the underlying asset — recovery is never guaranteed.",
+      },
+      client: { name: client.name, email: client.email },
+      case: {
+        id: row.id,
+        reference: caseReference(row.id, createdAt),
+        incident,
+        asset,
+        chain,
+        amount: row.amount,
+        currency: row.currency,
+        status: row.status,
+        submittedAt: createdAt.toISOString(),
+        txHashes: parseTxHashes(row.notes),
+      },
+      activity: activityRows.map((a) => ({
+        at: (a.createdAt as Date).toISOString(),
+        eventType: a.eventType,
+        description: a.description,
+      })),
+    };
+
+    res.json({ report });
+  } catch (err) {
+    logger.error({ err }, "Failed to build case report");
+    res.status(500).json({ error: "Failed to build report" });
+  }
+});
+
 export default router;

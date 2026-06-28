@@ -137,7 +137,7 @@ export default function RefundsSignIn() {
           </form>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            New to Refunds.site?{" "}
+            New to Netspy-World Forensics?{" "}
             <button
               onClick={() => navigate("/refunds/sign-up")}
               className="text-primary hover:underline font-semibold"
@@ -148,8 +148,8 @@ export default function RefundsSignIn() {
         </div>
 
         <p className="mt-5 text-center text-[11px] text-muted-foreground">
-          By signing in you accept the Refunds.site terms and acknowledge that recovery
-          outcomes are not guaranteed.
+          By signing in you accept the Netspy-World Forensics terms and acknowledge that
+          recovery outcomes are not guaranteed.
         </p>
 
         <div className="mt-5 flex justify-center">

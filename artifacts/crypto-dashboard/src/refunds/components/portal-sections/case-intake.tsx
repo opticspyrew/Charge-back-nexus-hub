@@ -256,8 +256,8 @@ export default function CaseIntake() {
             <ul className="text-xs text-muted-foreground space-y-2 list-disc pl-5">
               <li>The information provided is truthful to your knowledge.</li>
               <li>
-                You authorize Refunds.site analysts to perform read-only on-chain
-                analysis of the addresses you control or have identified.
+                You authorize Netspy-World Forensics analysts to perform read-only
+                on-chain analysis of the addresses you control or have identified.
               </li>
               <li>
                 You understand that recovery outcomes depend on jurisdiction,
@@ -265,8 +265,8 @@ export default function CaseIntake() {
                 <strong className="text-foreground"> no outcome is guaranteed</strong>.
               </li>
               <li>
-                Refunds.site will never ask for your seed phrase, private keys,
-                or full payment-card details.
+                Netspy-World Forensics will never ask for your seed phrase, private
+                keys, or full payment-card details.
               </li>
             </ul>
             <label className="flex items-start gap-2 text-sm text-foreground cursor-pointer">

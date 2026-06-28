@@ -50,7 +50,7 @@ export default function AiAssistant() {
             <Sparkles className="w-4.5 h-4.5 text-primary" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-foreground">Refunds AI assistant</h2>
+            <h2 className="text-sm font-semibold text-foreground">Netspy-World Forensics AI</h2>
             <p className="text-[11px] text-muted-foreground">
               Read-only — drafts summaries and surfaces patterns. Cannot act on the chain or contact counterparties.
             </p>
