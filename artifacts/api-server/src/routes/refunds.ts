@@ -1,11 +1,17 @@
 import { Router, type Request, type Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { db, pool } from "@workspace/db";
+import { db, pool, type User } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { extractBearerToken, findUserBySessionToken } from "../lib/auth";
 import { sendAdminEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
+import {
+  getOpenAIClient,
+  isOpenAIConfigured,
+  OPENAI_MODEL,
+  OPENAI_MAX_COMPLETION_TOKENS,
+} from "../lib/openai";
 
 const router = Router();
 
@@ -465,6 +471,108 @@ function parseTxHashes(notes: string | null): string[] {
     .filter(Boolean);
 }
 
+interface CaseReport {
+  reference: string;
+  generatedAt: string;
+  firm: { legalName: string; brand: string; jurisdictionNote: string };
+  client: { name: string; email: string };
+  case: {
+    id: number;
+    reference: string;
+    incident: string | null;
+    asset: string | null;
+    chain: string | null;
+    amount: string | null;
+    currency: string;
+    status: string;
+    submittedAt: string;
+    txHashes: string[];
+  };
+  activity: { at: string; eventType: string; description: string }[];
+}
+
+type LoadReportResult =
+  | { ok: true; report: CaseReport }
+  | { ok: false; status: number; error: string };
+
+// Resolve and build a case report for the signed-in user, enforcing ownership.
+// Shared by the structured report endpoint and the AI narrative endpoint so the
+// ownership check and report shape live in exactly one place.
+async function loadCaseReportForUser(
+  user: User,
+  referenceRaw: string,
+): Promise<LoadReportResult> {
+  const reference = (referenceRaw ?? "").trim();
+  const id = referenceToId(reference);
+  if (!id) return { ok: false, status: 400, error: "Invalid case reference." };
+
+  const normalizedEmail = user.email.toLowerCase().trim();
+  const [client] = await db
+    .select()
+    .from(adminClients)
+    .where(eq(adminClients.email, normalizedEmail));
+
+  if (!client) return { ok: false, status: 404, error: "Case not found." };
+
+  const [row] = await db
+    .select()
+    .from(adminServiceRequests)
+    .where(
+      and(
+        eq(adminServiceRequests.id, id),
+        eq(adminServiceRequests.clientId, client.id),
+        eq(adminServiceRequests.type, "recovery_case"),
+      ),
+    );
+
+  if (!row) return { ok: false, status: 404, error: "Case not found." };
+
+  const createdAt = row.createdAt as Date;
+  if (caseReference(row.id, createdAt) !== reference) {
+    return { ok: false, status: 404, error: "Case not found." };
+  }
+
+  const { incident, asset, chain } = parseIntakeNotes(row.notes);
+
+  const activityRows = await db
+    .select()
+    .from(adminActivityLog)
+    .where(eq(adminActivityLog.clientId, client.id))
+    .orderBy(desc(adminActivityLog.createdAt))
+    .limit(50);
+
+  const report: CaseReport = {
+    reference: caseReference(row.id, createdAt),
+    generatedAt: new Date().toISOString(),
+    firm: {
+      legalName: "NETSPYWORLD FORENSICS LTD",
+      brand: "Netspy-World Forensics",
+      jurisdictionNote:
+        "Findings are based on information available at time of generation. Outcomes depend on jurisdiction, counterparty cooperation, and the underlying asset — recovery is never guaranteed.",
+    },
+    client: { name: client.name, email: client.email },
+    case: {
+      id: row.id,
+      reference: caseReference(row.id, createdAt),
+      incident,
+      asset,
+      chain,
+      amount: row.amount,
+      currency: row.currency,
+      status: row.status,
+      submittedAt: createdAt.toISOString(),
+      txHashes: parseTxHashes(row.notes),
+    },
+    activity: activityRows.map((a) => ({
+      at: (a.createdAt as Date).toISOString(),
+      eventType: a.eventType,
+      description: a.description,
+    })),
+  };
+
+  return { ok: true, report };
+}
+
 router.get("/reports/:reference", async (req: Request, res: Response): Promise<void> => {
   try {
     const token = extractBearerToken(req);
@@ -477,88 +585,261 @@ router.get("/reports/:reference", async (req: Request, res: Response): Promise<v
     const referenceParam = Array.isArray(req.params.reference)
       ? req.params.reference[0]
       : req.params.reference;
-    const id = referenceToId(referenceParam ?? "");
-    if (!id) {
-      res.status(400).json({ error: "Invalid case reference." });
+
+    const result = await loadCaseReportForUser(user, referenceParam ?? "");
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
       return;
     }
 
-    const normalizedEmail = user.email.toLowerCase().trim();
-    const [client] = await db
-      .select()
-      .from(adminClients)
-      .where(eq(adminClients.email, normalizedEmail));
-
-    if (!client) {
-      res.status(404).json({ error: "Case not found." });
-      return;
-    }
-
-    const [row] = await db
-      .select()
-      .from(adminServiceRequests)
-      .where(
-        and(
-          eq(adminServiceRequests.id, id),
-          eq(adminServiceRequests.clientId, client.id),
-          eq(adminServiceRequests.type, "recovery_case"),
-        ),
-      );
-
-    if (!row) {
-      res.status(404).json({ error: "Case not found." });
-      return;
-    }
-
-    const createdAt = row.createdAt as Date;
-    if (caseReference(row.id, createdAt) !== (referenceParam ?? "").trim()) {
-      res.status(404).json({ error: "Case not found." });
-      return;
-    }
-
-    const { incident, asset, chain } = parseIntakeNotes(row.notes);
-
-    const activityRows = await db
-      .select()
-      .from(adminActivityLog)
-      .where(eq(adminActivityLog.clientId, client.id))
-      .orderBy(desc(adminActivityLog.createdAt))
-      .limit(50);
-
-    const report = {
-      reference: caseReference(row.id, createdAt),
-      generatedAt: new Date().toISOString(),
-      firm: {
-        legalName: "NETSPYWORLD FORENSICS LTD",
-        brand: "Netspy-World Forensics",
-        jurisdictionNote:
-          "Findings are based on information available at time of generation. Outcomes depend on jurisdiction, counterparty cooperation, and the underlying asset — recovery is never guaranteed.",
-      },
-      client: { name: client.name, email: client.email },
-      case: {
-        id: row.id,
-        reference: caseReference(row.id, createdAt),
-        incident,
-        asset,
-        chain,
-        amount: row.amount,
-        currency: row.currency,
-        status: row.status,
-        submittedAt: createdAt.toISOString(),
-        txHashes: parseTxHashes(row.notes),
-      },
-      activity: activityRows.map((a) => ({
-        at: (a.createdAt as Date).toISOString(),
-        eventType: a.eventType,
-        description: a.description,
-      })),
-    };
-
-    res.json({ report });
+    res.json({ report: result.report });
   } catch (err) {
     logger.error({ err }, "Failed to build case report");
     res.status(500).json({ error: "Failed to build report" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// AI assistant.
+//
+// Two authenticated, rate-limited endpoints back the portal's forensics
+// assistant. Both are stateless — no conversation is persisted server-side;
+// the client owns the transcript and replays it on each turn. The assistant
+// operates under strict guardrails baked into the system prompt: it never
+// guarantees recovery, never gives legal advice, and never offers to act on
+// the chain or contact counterparties.
+// ---------------------------------------------------------------------------
+
+type AiMode = "recovery" | "forensics";
+
+interface AiChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+const AI_MAX_MESSAGES = 24;
+const AI_MAX_CHARS_PER_MESSAGE = 4000;
+const AI_MAX_TOTAL_CHARS = 16000;
+
+const aiLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 20,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+  handler: (req, res) => {
+    logger.warn({ ip: req.ip, path: req.path }, "Refunds AI rate limit exceeded");
+    res.status(429).json({ error: "Too many requests, please slow down and try again shortly." });
+  },
+});
+
+const AI_GUARDRAILS = [
+  "You are the assistant for Netspy-World Forensics (legal entity NETSPYWORLD FORENSICS LTD), a digital-asset tracing and recovery firm.",
+  "Hard rules you must never break:",
+  "- Never promise, guarantee, or imply a specific recovery outcome, amount, timeline, or success rate. Recovery is never guaranteed and depends on jurisdiction, counterparty cooperation, and the underlying asset.",
+  "- Never provide legal advice. For anything legal, direct the client to a licensed attorney or to the firm's analysts who coordinate with counsel.",
+  "- Never offer to take action yourself: you cannot freeze funds, contact exchanges, counterparties, or law enforcement, file anything, or move assets. A licensed analyst must review and authorize any such step.",
+  "- Never invent case facts, statistics, balances, or addresses. If you do not have a fact, say so.",
+  "- Do not request seed phrases, private keys, passwords, or other secrets, and warn the user never to share them.",
+  "Style: precise, calm, and professional. Be concise. Use plain language a non-technical victim can follow, and end with the concrete next step the client can take.",
+].join("\n");
+
+const AI_MODE_PROMPTS: Record<AiMode, string> = {
+  recovery: [
+    "Mode: RECOVERY GUIDANCE.",
+    "Help the client understand the recovery process: what evidence to preserve (transaction hashes, wallet addresses, dates, communications, exchange tickets), what factors affect recoverability, what to expect at each stage, and how the firm's analysts coordinate the work.",
+    "Frame realistic expectations without ever guaranteeing an outcome.",
+  ].join("\n"),
+  forensics: [
+    "Mode: ON-CHAIN FORENSICS.",
+    "Help the client understand blockchain tracing and analysis concepts: how funds are followed across addresses and bridges, common laundering patterns (peel chains, mixers, layering through exchanges), risk signals, and what on-chain evidence supports a case.",
+    "Explain analytical reasoning at a conceptual level; do not fabricate specific on-chain findings for the client's case.",
+  ].join("\n"),
+};
+
+function parseChatRequest(
+  body: unknown,
+): { ok: true; mode: AiMode; messages: AiChatMessage[] } | { ok: false; error: string } {
+  if (typeof body !== "object" || body === null) {
+    return { ok: false, error: "Request body must be a JSON object." };
+  }
+  const { mode, messages } = body as { mode?: unknown; messages?: unknown };
+
+  if (mode !== "recovery" && mode !== "forensics") {
+    return { ok: false, error: "mode must be either 'recovery' or 'forensics'." };
+  }
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return { ok: false, error: "messages must be a non-empty array." };
+  }
+  if (messages.length > AI_MAX_MESSAGES) {
+    return { ok: false, error: `Conversation is too long (max ${AI_MAX_MESSAGES} messages).` };
+  }
+
+  const cleaned: AiChatMessage[] = [];
+  let totalChars = 0;
+  for (const raw of messages) {
+    if (typeof raw !== "object" || raw === null) {
+      return { ok: false, error: "Each message must be an object with role and content." };
+    }
+    const { role, content } = raw as { role?: unknown; content?: unknown };
+    if (role !== "user" && role !== "assistant") {
+      return { ok: false, error: "Each message role must be 'user' or 'assistant'." };
+    }
+    if (typeof content !== "string" || content.trim().length === 0) {
+      return { ok: false, error: "Each message must have non-empty string content." };
+    }
+    if (content.length > AI_MAX_CHARS_PER_MESSAGE) {
+      return { ok: false, error: `A message exceeds the ${AI_MAX_CHARS_PER_MESSAGE}-character limit.` };
+    }
+    totalChars += content.length;
+    cleaned.push({ role, content });
+  }
+  if (totalChars > AI_MAX_TOTAL_CHARS) {
+    return { ok: false, error: "Conversation is too large. Start a new conversation." };
+  }
+  if (cleaned[cleaned.length - 1].role !== "user") {
+    return { ok: false, error: "The last message must come from the user." };
+  }
+
+  return { ok: true, mode, messages: cleaned };
+}
+
+router.post("/ai/chat", aiLimiter, async (req: Request, res: Response): Promise<void> => {
+  const token = extractBearerToken(req);
+  const user = token ? await findUserBySessionToken(token) : undefined;
+  if (!user) {
+    res.status(401).json({ error: "Sign in required to use the assistant." });
+    return;
+  }
+
+  if (!isOpenAIConfigured()) {
+    res.status(503).json({ error: "The assistant is not configured yet. Please try again later." });
+    return;
+  }
+
+  const parsed = parseChatRequest(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  try {
+    const stream = await getOpenAIClient().chat.completions.create({
+      model: OPENAI_MODEL,
+      max_completion_tokens: OPENAI_MAX_COMPLETION_TOKENS,
+      stream: true,
+      messages: [
+        { role: "system", content: `${AI_GUARDRAILS}\n\n${AI_MODE_PROMPTS[parsed.mode]}` },
+        ...parsed.messages,
+      ],
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (err) {
+    logger.error({ err }, "Refunds AI chat stream failed");
+    // Headers are already sent, so surface the error inside the SSE stream
+    // rather than as an HTTP status the client will never see.
+    res.write(
+      `data: ${JSON.stringify({ error: "The assistant ran into a problem. Please try again." })}\n\n`,
+    );
+    res.end();
+  }
+});
+
+router.post(
+  "/ai/report/:reference",
+  aiLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const token = extractBearerToken(req);
+      const user = token ? await findUserBySessionToken(token) : undefined;
+      if (!user) {
+        res.status(401).json({ error: "Sign in required to generate a report narrative." });
+        return;
+      }
+
+      if (!isOpenAIConfigured()) {
+        res
+          .status(503)
+          .json({ error: "The assistant is not configured yet. Please try again later." });
+        return;
+      }
+
+      const referenceParam = Array.isArray(req.params.reference)
+        ? req.params.reference[0]
+        : req.params.reference;
+
+      const result = await loadCaseReportForUser(user, referenceParam ?? "");
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+
+      const { report } = result;
+      const caseFacts = JSON.stringify(
+        {
+          reference: report.case.reference,
+          incident: report.case.incident,
+          asset: report.case.asset,
+          chain: report.case.chain,
+          amount: report.case.amount,
+          currency: report.case.currency,
+          status: report.case.status,
+          submittedAt: report.case.submittedAt,
+          transactionHashes: report.case.txHashes,
+          activity: report.activity,
+        },
+        null,
+        2,
+      );
+
+      const completion = await getOpenAIClient().chat.completions.create({
+        model: OPENAI_MODEL,
+        max_completion_tokens: OPENAI_MAX_COMPLETION_TOKENS,
+        messages: [
+          {
+            role: "system",
+            content: `${AI_GUARDRAILS}\n\nMode: CASE NARRATIVE. Write a clear, professional investigation narrative for the client's own case using ONLY the structured facts provided. Use these sections: Summary, Incident overview, Investigation activity to date, Current status, and Recommended next steps. Do not invent facts that are not present. Do not promise recovery.`,
+          },
+          {
+            role: "user",
+            content: `Write the investigation narrative for this case. Structured facts:\n\n${caseFacts}`,
+          },
+        ],
+      });
+
+      const narrative = completion.choices[0]?.message?.content?.trim() ?? "";
+      if (!narrative) {
+        res.status(502).json({ error: "The assistant returned an empty narrative. Please try again." });
+        return;
+      }
+
+      res.json({
+        reference: report.case.reference,
+        generatedAt: new Date().toISOString(),
+        model: OPENAI_MODEL,
+        narrative,
+        disclaimer: report.firm.jurisdictionNote,
+      });
+    } catch (err) {
+      logger.error({ err }, "Failed to build AI case narrative");
+      res.status(500).json({ error: "Failed to generate the report narrative." });
+    }
+  },
+);
 
 export default router;
