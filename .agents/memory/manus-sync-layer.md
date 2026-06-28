@@ -1,0 +1,41 @@
+---
+name: Manus/Netspy data-sync layer
+description: Non-obvious decisions for the feature-flagged Refunds.site <-> Netspy-World sync layer in api-server
+---
+
+# Manus/Netspy data-sync layer (feature-flagged)
+
+Lives in `artifacts/api-server/src/lib/manus/*` + `src/routes/refunds-sync.ts`.
+Disabled by default; inbound and outbound are SEPARATE readiness gates (each
+needs its own flag AND its own credentials configured) — a half-configured side
+serves 503 rather than half-working. Contract: `docs/manus-data-sync-requirements.md`
+(our inbound `/sync/*`) + the Netspy handoff PDF (outbound client + webhook receiver).
+
+## Idempotency uses an atomic reservation row, not advisory locks
+`runIdempotent(key, rawBody, handler)` does `INSERT (key, request_hash) ON CONFLICT
+DO NOTHING` as the single serialization point; the winner runs the handler then
+writes the response, losers replay/409/в-progress.
+**Why:** the earlier advisory-lock design held a pooled connection across the whole
+handler, risking pool exhaustion/starvation under concurrent retries. The
+reservation pattern holds no connection across handler execution.
+**How to apply:** keep handlers' side effects naturally idempotent on business
+keys too (clients on email/manusClientId, cases on manusCaseId, activity on
+manusEventId) — the key is the contract guard, not the only guard.
+
+## Webhook redeliveries mutate a per-attempt deliveryId INSIDE the body
+Netspy at-least-once redeliveries reuse a stable `body.id` (event id) but change
+`body.deliveryId` per attempt. So the webhook receiver:
+- de-dupes on `webhook:${body.id ?? body.deliveryId ?? header X-Webhook-Delivery-Id ?? sha256(raw)}` (stable event id FIRST), and
+- calls `runIdempotent(..., { conflictOnBodyMismatch: false })`.
+**Why:** the default `runIdempotent` 409s when a reused key arrives with a
+different raw body. For webhooks that would turn every legitimate redelivery
+(different deliveryId in the body) into a 409 instead of replaying the stored 200.
+`conflictOnBodyMismatch:false` exists specifically for this case; `/sync/*` keeps
+the default true (caller-chosen UUID key, different body genuinely = different request).
+
+## Contract enforcement worth remembering
+- `/sync/*` writes REQUIRE an `Idempotency-Key` header (§4 rule 3); absent => 400
+  ("missing required field", §10), rejected before any side effect.
+- Schema: `manus_idempotency_keys.response_status/response_body` are NULLABLE (a
+  reservation is created before the response exists). `pruneIdempotencyKeys(7)`
+  exists for retention but is NOT auto-scheduled — wire a cron if growth matters.

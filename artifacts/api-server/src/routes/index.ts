@@ -6,11 +6,15 @@ import authRouter from "./auth";
 import replitAuthRouter from "./replit-auth";
 import socialAuthRouter from "./social-auth";
 import refundsRouter from "./refunds";
+import refundsSyncRouter from "./refunds-sync";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/admin", adminRouter);
+// Mount the machine-to-machine Manus sync surfaces first so their specific
+// /sync/* and /webhooks/* paths are matched before the general refunds router.
+router.use("/public/refunds", refundsSyncRouter);
 router.use("/public/refunds", refundsRouter);
 router.use("/public", publicRouter);
 router.use("/auth/replit", replitAuthRouter);
