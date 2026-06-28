@@ -1,16 +1,5 @@
 uploads = []
-
-[[generated]]
-id = "AlcZr-PkfIYOsbDQLfwU7"
-uri = "file://artifacts/cryptovault-video/public/images/grid_texture.png"
-type = "image"
-title = "Dark graphite grid texture"
-
-[[generated]]
-id = "BMYPCHatlqPnxJ-gxYMF7"
-uri = "file://artifacts/cryptovault-video/public/images/nodes.png"
-type = "image"
-title = "Abstract blockchain nodes"
+generated = []
 
 [[outputs]]
 id = "rVsXbqNF12ufq4Aoy_ggm"

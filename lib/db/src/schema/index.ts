@@ -21,4 +21,3 @@ export * from "./admin";
 export * from "./users";
 export * from "./login-throttle";
 export * from "./provider-identities";
-export * from "./transactions";

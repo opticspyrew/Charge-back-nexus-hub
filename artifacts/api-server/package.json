@@ -12,8 +12,6 @@
     "test:guard": "node --import tsx --test tests/no-leftover-accounts.guard.mjs"
   },
   "dependencies": {
-    "@clerk/express": "^2.1.30",
-    "@clerk/shared": "^4.20.0",
     "@google-cloud/storage": "^7.19.0",
     "@types/nodemailer": "^8.0.0",
     "@workspace/api-zod": "workspace:*",
@@ -24,7 +22,6 @@
     "express": "^5",
     "express-rate-limit": "^8.4.1",
     "google-auth-library": "^10.6.2",
-    "http-proxy-middleware": "^4.1.1",
     "jose": "^6.2.3",
     "nodemailer": "^8.0.5",
     "openid-client": "^6.8.4",

@@ -46,23 +46,10 @@ function RefundsProtectedRoute({ component: Component }: { component: React.Comp
   return <Component />;
 }
 
-function RootRoute() {
-  const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "";
-  const isRefundsHost = host.includes("refunds");
-  return <Redirect to={isRefundsHost ? "/refunds" : "/sign-in"} />;
-}
-
-// refunds.site opens to a single unified hub at /refunds: the marketing landing
-// for anonymous visitors, and the merged wallet + recovery portal once signed in.
-function RefundsHome() {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <RefundsPortal /> : <RefundsLanding />;
-}
-
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={RootRoute} />
+      <Route path="/" component={() => <Redirect to="/sign-in" />} />
       <Route path="/sign-in" component={SignIn} />
       <Route path="/sign-up" component={SignUp} />
       <Route path="/reset-password" component={ResetPassword} />
@@ -79,7 +66,7 @@ function Router() {
       <Route path="/set-password" component={() => <ProtectedRoute component={SetPassword} />} />
       <Route path="/connected-accounts" component={() => <ProtectedRoute component={ConnectedAccounts} />} />
       <Route path="/notification-settings" component={() => <ProtectedRoute component={NotificationSettings} />} />
-      <Route path="/refunds" component={RefundsHome} />
+      <Route path="/refunds" component={RefundsLanding} />
       <Route path="/refunds/brand" component={RefundsBrandGuide} />
       <Route path="/refunds/sign-in" component={RefundsSignIn} />
       <Route path="/refunds/sign-up" component={RefundsSignUp} />
