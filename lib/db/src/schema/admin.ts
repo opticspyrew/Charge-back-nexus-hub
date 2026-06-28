@@ -54,6 +54,13 @@ export const adminActivityLog = pgTable("admin_activity_log", {
   id: serial("id").primaryKey(),
   eventType: text("event_type").notNull(),
   clientId: integer("client_id").references(() => adminClients.id),
+  // Optional link to the specific service request (case) this event belongs to.
+  // Nullable: client-level events (e.g. client registration, KYC decisions) have
+  // no owning case. Case reports filter on this so a client with multiple cases
+  // never sees another case's events; events with NULL remain client-scoped.
+  serviceRequestId: integer("service_request_id").references(() => adminServiceRequests.id, {
+    onDelete: "set null",
+  }),
   description: text("description").notNull(),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

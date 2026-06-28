@@ -39,3 +39,31 @@ description: Non-obvious wiring conventions for adding API routes and frontend f
 - Reference matching must be EXACT on year+id (`caseReference(id, createdAt)`),
   not just the numeric id — `referenceToId` alone would let `RF-9999-0001`
   resolve case `0001`. The route re-checks the full reference before returning.
+
+## Per-case activity scoping in case reports
+- `admin_activity_log.service_request_id` (nullable FK, ON DELETE SET NULL) tags
+  an activity event to its owning case. A case report shows: events tagged to
+  this case, PLUS client-level events (`service_request_id IS NULL` AND event
+  type NOT in `CASE_SPECIFIC_EVENT_TYPES`). Untagged case-specific events
+  (legacy rows, or rows nulled when a sibling case is deleted) are **hidden**,
+  never shown as client-level.
+- **Why:** treating every NULL as client-level leaks one case's timeline onto a
+  multi-case client's *other* case reports/AI narratives. Hiding unattributable
+  case events is the safe default; leaking them is a cross-case disclosure.
+- **How to apply:** when you add an insert that sets `service_request_id`, also
+  add that event type to `CASE_SPECIFIC_EVENT_TYPES` in `refunds.ts` (the two
+  must stay in lockstep). Client-level events (registration, KYC) stay NULL.
+- Schema changes here: apply additively via direct `psql "$DATABASE_URL"` ALTER.
+  `drizzle push` is destructive/interactive in this repo (it tried to DROP an
+  unrelated `transactions` table) — never run it for an additive column.
+
+## Running the test suite (node:test)
+- Tests are `node --import tsx --test tests/**/*.test.mjs`. `tsx` is NOT
+  resolvable from the repo root — run a single file via
+  `pnpm --filter @workspace/api-server exec node --import tsx --experimental-test-module-mocks --test tests/<file>.test.mjs`.
+- node:test **block-buffers when piped** (`| tail`) and only flushes on process
+  exit; the full suite (incl. the slow social-oauth e2e) runs ~85–100s and can
+  exceed the 120s tool limit, yielding a killed call with *no output*. Run a
+  focused single file (streams + finishes fast) instead of the whole suite when
+  you only changed one code path. The harness boots a live server on :8080 and
+  uses a fresh fake `X-Forwarded-For` per request to dodge rate limiters.
