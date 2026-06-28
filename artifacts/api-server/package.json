@@ -24,6 +24,7 @@
     "google-auth-library": "^10.6.2",
     "jose": "^6.2.3",
     "nodemailer": "^8.0.5",
+    "openai": "^6.45.0",
     "openid-client": "^6.8.4",
     "pino": "^9",
     "pino-http": "^10"
