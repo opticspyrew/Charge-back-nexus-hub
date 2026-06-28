@@ -6,6 +6,7 @@ import { eq, and, or, isNull, notInArray, desc } from "drizzle-orm";
 import { extractBearerToken, findUserBySessionToken } from "../lib/auth";
 import { sendAdminEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
+import { enqueueOutboundCaseCreate } from "../lib/manus/outbound-hooks";
 import {
   getOpenAIClient,
   isOpenAIConfigured,
@@ -374,6 +375,20 @@ router.post("/intake", intakeLimiter, async (req: Request, res: Response): Promi
       { clientId: client.id, requestId: request.id, emailSent },
       "Recovery case intake submitted",
     );
+
+    // Best-effort push to Netspy. Inert unless outbound sync is enabled and
+    // configured; never blocks or fails the intake response.
+    enqueueOutboundCaseCreate({
+      caseId: request.id,
+      reference,
+      clientEmail: client.email,
+      clientName: client.name,
+      amount: normalizedAmount ? normalizedAmount : null,
+      description: `${incident} (${asset}/${chain})`,
+      chains: [chain],
+      transactionHashes: txHashes?.trim() ? txHashes.trim().split(/\s+/) : undefined,
+    });
+
     res.status(201).json({ reference, requestId: request.id });
   } catch (err) {
     logger.error({ err }, "Failed to submit recovery case intake");

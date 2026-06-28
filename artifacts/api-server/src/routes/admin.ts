@@ -8,6 +8,8 @@ import { logger } from "../lib/logger";
 import { createAdminSession, validateAdminSession, deleteAdminSession } from "../lib/admin-sessions";
 import { clearLoginFailures, getAccountThrottleStatus } from "../lib/login-throttle";
 import { resolveNotificationPreferences } from "../lib/notification-preferences";
+import { enqueueOutboundStatusSync } from "../lib/manus/outbound-hooks";
+import { caseReference } from "../lib/manus/case-reference";
 
 const router = Router();
 
@@ -333,6 +335,17 @@ router.patch("/requests/:id", requireAdmin, async (req: Request, res: Response):
       description: `${request.type} request from ${client?.name ?? "unknown"} ${status}`,
       metadata: { status, requestId: id },
     });
+
+    // Best-effort push of the status change to Netspy for recovery cases. Inert
+    // unless outbound sync is enabled and configured; never blocks the response.
+    if (status && request.type === "recovery_case") {
+      enqueueOutboundStatusSync({
+        caseId: request.id,
+        reference: caseReference(request.id, request.createdAt as Date),
+        status,
+        manusCaseId: request.manusCaseId ?? null,
+      });
+    }
 
     // Notify the customer by email when a payment confirmation request is
     // decided so they don't have to keep the invoice page open. Email failures
