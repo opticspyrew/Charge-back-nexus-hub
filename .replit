@@ -180,6 +180,9 @@ channel = "stable-25_05"
 [userenv.shared]
 
 [userenv.development]
+MANUS_INBOUND_SYNC_ENABLED = "1"
+MANUS_OUTBOUND_SYNC_ENABLED = "1"
+NETSPY_API_BASE_URL = "https://staging-api.netspyworld.com/api/trpc"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-c057b35a-4507-4039-99d9-08e090d0a00a"
