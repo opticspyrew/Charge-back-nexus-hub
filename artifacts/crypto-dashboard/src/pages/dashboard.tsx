@@ -7,7 +7,7 @@ import { useKyc } from "@/hooks/use-kyc";
 import RecentActivityPanel from "@/components/recent-activity-panel";
 import TransactionReceiptModal from "@/components/transaction-receipt";
 import { useTransactions, saveInvoiceContext, useBlockConfirmations, type Transaction } from "@/hooks/use-transactions";
-import { useBalance, BTC_PRICE_USD } from "@/hooks/use-balance";
+import { useBalance } from "@/hooks/use-balance";
 import { useApprovalPoller } from "@/hooks/use-approval-poller";
 import { useCurrency } from "@/lib/currency-context";
 
@@ -42,7 +42,7 @@ export default function Dashboard() {
   };
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const [receiptTx, setReceiptTx] = useState<Transaction | null>(null);
-  const { transactions, addTransaction, cancelTransaction, setTransactions, syncError } = useTransactions();
+  const { transactions, cancelTransaction, setTransactions } = useTransactions();
   useApprovalPoller(transactions, setTransactions);
   const { usd: totalBalance, btc: totalBtc, btcFormatted, usdFormatted } = useBalance();
   const { fmt } = useCurrency();
@@ -139,19 +139,6 @@ export default function Dashboard() {
         <WalletModal
           type={modal}
           onClose={() => setModal(null)}
-          onConfirmed={(tx) => {
-            const num = parseFloat(tx.amount);
-            const usd = Number.isFinite(num) ? Math.round(num * BTC_PRICE_USD * 100) / 100 : 0;
-            addTransaction({
-              type: tx.type,
-              asset: tx.asset,
-              amount: `+${tx.amount} ${tx.asset}`,
-              usdAmount: usd,
-              address: tx.address || (tx.type === "Deposit" ? "Bank Transfer" : "External Wallet"),
-              status: "Completed",
-              statusType: "completed",
-            });
-          }}
         />
       )}
       {receiptTx && (
@@ -263,11 +250,6 @@ export default function Dashboard() {
         {/* Transaction History */}
         <div className="bg-card border border-card-border rounded-2xl p-6">
           <h3 className="text-base font-semibold text-foreground mb-4">Transaction History</h3>
-          {syncError && (
-            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
-              {syncError}
-            </div>
-          )}
           <div className="space-y-3">
             {transactions.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-6">No transactions yet.</p>
