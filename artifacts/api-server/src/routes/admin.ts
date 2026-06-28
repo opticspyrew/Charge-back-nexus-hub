@@ -293,6 +293,7 @@ router.post("/requests", requireAdmin, async (req: Request, res: Response): Prom
     await db.insert(adminActivityLog).values({
       eventType: "service_request_submitted",
       clientId: client.id,
+      serviceRequestId: request.id,
       description: `${type ?? "withdrawal"} request submitted by ${client.name}: ${currency ?? "USD"} ${amount ?? "N/A"}`,
       metadata: { type, amount, currency },
     });
@@ -328,6 +329,7 @@ router.patch("/requests/:id", requireAdmin, async (req: Request, res: Response):
     await db.insert(adminActivityLog).values({
       eventType: "request_status_changed",
       clientId: request.clientId,
+      serviceRequestId: request.id,
       description: `${request.type} request from ${client?.name ?? "unknown"} ${status}`,
       metadata: { status, requestId: id },
     });

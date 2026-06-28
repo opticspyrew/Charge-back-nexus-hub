@@ -1,8 +1,8 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db, pool, type User } from "@workspace/db";
 import { adminClients, adminServiceRequests, adminActivityLog } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, or, isNull, notInArray, desc } from "drizzle-orm";
 import { extractBearerToken, findUserBySessionToken } from "../lib/auth";
 import { sendAdminEmail, newServiceRequestEmail } from "../lib/email";
 import { logger } from "../lib/logger";
@@ -354,6 +354,7 @@ router.post("/intake", intakeLimiter, async (req: Request, res: Response): Promi
     await db.insert(adminActivityLog).values({
       eventType: "service_request_submitted",
       clientId: client.id,
+      serviceRequestId: request.id,
       description: `Recovery case intake from ${client.name}: ${incident} (${asset}/${chain})`,
       metadata: { type: "recovery_case", incident, asset, chain, amount: normalizedAmount || null },
     });
@@ -495,6 +496,12 @@ type LoadReportResult =
   | { ok: true; report: CaseReport }
   | { ok: false; status: number; error: string };
 
+// Activity event types that belong to a specific case rather than the client as
+// a whole. When such an event has no owning case (serviceRequestId IS NULL) we
+// cannot attribute it, so a case report excludes it rather than show it on every
+// case. Keep this in sync with the inserts that set serviceRequestId.
+const CASE_SPECIFIC_EVENT_TYPES = ["service_request_submitted", "request_status_changed"];
+
 // Resolve and build a case report for the signed-in user, enforcing ownership.
 // Shared by the structured report endpoint and the AI narrative endpoint so the
 // ownership check and report shape live in exactly one place.
@@ -534,10 +541,28 @@ async function loadCaseReportForUser(
 
   const { incident, asset, chain } = parseIntakeNotes(row.notes);
 
+  // Scope activity to this case. Include events explicitly tagged to it, plus
+  // genuinely client-level events (serviceRequestId IS NULL and NOT a
+  // case-specific event type, e.g. registration/KYC). Two classes are excluded:
+  // events tagged to a *different* case, and untagged case-specific events
+  // (legacy rows from before this column existed, or rows nulled when a sibling
+  // case was deleted) — those cannot be attributed to a case, so they are never
+  // shown rather than risk leaking one case's timeline into another's report.
   const activityRows = await db
     .select()
     .from(adminActivityLog)
-    .where(eq(adminActivityLog.clientId, client.id))
+    .where(
+      and(
+        eq(adminActivityLog.clientId, client.id),
+        or(
+          eq(adminActivityLog.serviceRequestId, row.id),
+          and(
+            isNull(adminActivityLog.serviceRequestId),
+            notInArray(adminActivityLog.eventType, CASE_SPECIFIC_EVENT_TYPES),
+          ),
+        ),
+      ),
+    )
     .orderBy(desc(adminActivityLog.createdAt))
     .limit(50);
 
@@ -621,17 +646,80 @@ const AI_MAX_MESSAGES = 24;
 const AI_MAX_CHARS_PER_MESSAGE = 4000;
 const AI_MAX_TOTAL_CHARS = 16000;
 
-const aiLimiter = rateLimit({
+// The AI endpoints are the only places that spend OpenAI credits, so they get a
+// layered guard: a coarse IP limiter to blunt anonymous floods before any DB or
+// OpenAI work, then authentication, then per-user limiters for fair access and a
+// hard daily ceiling on spend. Resolving the user up front (requireRefundsUser)
+// lets the per-user limiters key on the account rather than the IP, which is what
+// makes them accurate behind shared NATs/proxies.
+interface AuthedAiRequest extends Request {
+  refundsUser?: User;
+}
+
+async function requireRefundsUser(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const token = extractBearerToken(req);
+    const user = token ? await findUserBySessionToken(token) : undefined;
+    if (!user) {
+      res.status(401).json({ error: "Sign in required to use the assistant." });
+      return;
+    }
+    (req as AuthedAiRequest).refundsUser = user;
+    next();
+  } catch (err) {
+    logger.error({ err }, "Failed to authenticate AI request");
+    res.status(500).json({ error: "Failed to verify your session." });
+  }
+}
+
+function aiRateLimitHandler(scope: string) {
+  return (req: Request, res: Response): void => {
+    logger.warn({ ip: req.ip, path: req.path, scope }, "Refunds AI rate limit exceeded");
+    res.status(429).json({ error: "Too many requests, please slow down and try again shortly." });
+  };
+}
+
+// Keyed on the authenticated user when present (set by requireRefundsUser), with
+// an IP fallback for safety. Used by the per-user limiters that run after auth.
+function aiUserKey(req: Request): string {
+  const user = (req as AuthedAiRequest).refundsUser;
+  return user ? `refunds-ai-user:${user.id}` : ipKeyGenerator(req.ip ?? "");
+}
+
+const aiIpLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 40,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+  handler: aiRateLimitHandler("ip"),
+});
+
+const aiUserLimiter = rateLimit({
   windowMs: 60_000,
   limit: 20,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
-  handler: (req, res) => {
-    logger.warn({ ip: req.ip, path: req.path }, "Refunds AI rate limit exceeded");
-    res.status(429).json({ error: "Too many requests, please slow down and try again shortly." });
-  },
+  keyGenerator: aiUserKey,
+  handler: aiRateLimitHandler("user-minute"),
 });
+
+const aiUserDailyLimiter = rateLimit({
+  windowMs: 24 * 60 * 60_000,
+  limit: 200,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  keyGenerator: aiUserKey,
+  handler: aiRateLimitHandler("user-day"),
+});
+
+// Shared middleware chain for every credit-spending AI route, in order:
+// coarse IP guard -> authenticate -> per-user minute limit -> per-user daily cap.
+const aiChain = [aiIpLimiter, requireRefundsUser, aiUserLimiter, aiUserDailyLimiter];
 
 const AI_GUARDRAILS = [
   "You are the assistant for Netspy-World Forensics (legal entity NETSPYWORLD FORENSICS LTD), a digital-asset tracing and recovery firm.",
@@ -704,14 +792,7 @@ function parseChatRequest(
   return { ok: true, mode, messages: cleaned };
 }
 
-router.post("/ai/chat", aiLimiter, async (req: Request, res: Response): Promise<void> => {
-  const token = extractBearerToken(req);
-  const user = token ? await findUserBySessionToken(token) : undefined;
-  if (!user) {
-    res.status(401).json({ error: "Sign in required to use the assistant." });
-    return;
-  }
-
+router.post("/ai/chat", ...aiChain, async (req: Request, res: Response): Promise<void> => {
   if (!isOpenAIConfigured()) {
     res.status(503).json({ error: "The assistant is not configured yet. Please try again later." });
     return;
@@ -762,15 +843,10 @@ router.post("/ai/chat", aiLimiter, async (req: Request, res: Response): Promise<
 
 router.post(
   "/ai/report/:reference",
-  aiLimiter,
+  ...aiChain,
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const token = extractBearerToken(req);
-      const user = token ? await findUserBySessionToken(token) : undefined;
-      if (!user) {
-        res.status(401).json({ error: "Sign in required to generate a report narrative." });
-        return;
-      }
+      const user = (req as AuthedAiRequest).refundsUser!;
 
       if (!isOpenAIConfigured()) {
         res
