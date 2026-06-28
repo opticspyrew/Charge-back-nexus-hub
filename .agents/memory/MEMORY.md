@@ -2,3 +2,4 @@
 - [API server & data conventions](api-server-conventions.md) — frontend uses root-relative /api (not BASE_URL); api-server dev needs restart for new routes; mount specific prefixes before general.
 - [Social OAuth test mode](social-oauth-test-mode.md) — Google sign-in is testable without real creds via SOCIAL_OAUTH_TEST_MODE (dev-only) fake provider; how to run e2e + live browser.
 - [Workflow port conflicts](workflow-port-conflicts.md) — web workflow shows FAILED/DIDNT_OPEN_A_PORT yet serves on PORT+1; orphaned vite procs hold the port, pkill them then restart (restart_workflow can't reap orphans).
+- [Live-test authed refunds endpoints](live-test-authed-refunds.md) — mint plaintext user_sessions row via SQL CTE (hit :8080 direct); OpenAI 429 insufficient_quota = unfunded key, not a code bug.
