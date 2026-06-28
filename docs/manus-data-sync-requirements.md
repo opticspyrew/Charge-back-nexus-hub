@@ -82,6 +82,17 @@ Activity is **append-only**. Sync never updates or deletes existing rows; it onl
 inserts new events. Each synced event carries provenance in `metadata`
 (`{ "source": "manus", "manusEventId": "..." }`) so we never double-insert.
 
+> **Per-case scoping (required).** `admin_activity_log` today links an event only
+> to a *client* (`client_id`), not to a specific case. That means reports and
+> AI-generated narratives currently aggregate **all** of a client's activity,
+> which is inaccurate for clients with more than one case. Every synced event
+> MUST therefore carry the owning case in `metadata`
+> (`{ "reference": "RF-2026-0001", "manusCaseId": "case_..." }`), and the planned
+> additive column `admin_activity_log.service_request_id` (see §4) must be
+> populated so the report helper can filter activity by case rather than by
+> client. Until that column exists, the case reference in `metadata` is the only
+> reliable per-case scope.
+
 ---
 
 ## 3. Status lifecycle (shared vocabulary)
@@ -114,6 +125,13 @@ Required additive columns on our side (migration to be scheduled with Phase 5):
 
 - `admin_clients.manus_client_id` (text, nullable, unique when present)
 - `admin_service_requests.manus_case_id` (text, nullable, unique when present)
+- `admin_activity_log.service_request_id` (int, nullable, FK → admin_service_requests.id)
+  — links each event to its owning case so reports/narratives can be scoped per
+  case rather than per client (see §2.3). Backfill from `metadata.reference`
+  where possible.
+- A durable store of processed `Idempotency-Key` values (key → result hash,
+  retained ≥ 7 days) so retried webhooks return the original result instead of
+  re-applying writes (see §4 rules 3–4).
 
 Join/idempotency rules:
 
