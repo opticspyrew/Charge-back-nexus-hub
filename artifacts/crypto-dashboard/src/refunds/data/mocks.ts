@@ -752,6 +752,7 @@ const ECOSYSTEM_MAP: EcosystemColumn[] = [
       { label: "Secure portal", href: "/refunds/sign-in" },
       { label: "Open a case", href: "/refunds/sign-up" },
       { label: "Recovery vault", href: "/refunds/portal" },
+      { label: "Services & pricing", href: "/refunds/services" },
       { label: "Brand system", href: "/refunds/brand" },
     ],
   },
@@ -767,7 +768,7 @@ const ECOSYSTEM_MAP: EcosystemColumn[] = [
   {
     heading: "Resources",
     links: [
-      { label: "Threat intelligence", href: "#education" },
+      { label: "Knowledge base", href: "/refunds/knowledge-base" },
       { label: "Recovery process", href: "#process" },
       { label: "FAQ", href: "#faq" },
       { label: "Recovery categories", href: "#categories" },
@@ -776,10 +777,10 @@ const ECOSYSTEM_MAP: EcosystemColumn[] = [
   {
     heading: "Trust & legal",
     links: [
+      { label: "Certifications", href: "/refunds/certifications" },
       { label: "Compliance posture", href: "#compliance" },
       { label: "Privacy by design", href: "#compliance" },
       { label: "Terms of engagement", href: "#compliance" },
-      { label: "Responsible disclosure", href: "#compliance" },
     ],
   },
 ];

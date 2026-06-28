@@ -24,6 +24,9 @@ import NotificationSettings from "@/pages/notification-settings";
 import ResetPassword from "@/pages/reset-password";
 import RefundsLanding from "@/refunds/pages/landing";
 import RefundsBrandGuide from "@/refunds/pages/brand-guide";
+import RefundsServices from "@/refunds/pages/services-pricing";
+import RefundsCertifications from "@/refunds/pages/certifications";
+import RefundsKnowledgeBase from "@/refunds/pages/knowledge-base";
 import RefundsSignIn from "@/refunds/pages/sign-in";
 import RefundsSignUp from "@/refunds/pages/sign-up";
 import RefundsPortal from "@/refunds/pages/portal";
@@ -68,6 +71,9 @@ function Router() {
       <Route path="/notification-settings" component={() => <ProtectedRoute component={NotificationSettings} />} />
       <Route path="/refunds" component={RefundsLanding} />
       <Route path="/refunds/brand" component={RefundsBrandGuide} />
+      <Route path="/refunds/services" component={RefundsServices} />
+      <Route path="/refunds/certifications" component={RefundsCertifications} />
+      <Route path="/refunds/knowledge-base" component={RefundsKnowledgeBase} />
       <Route path="/refunds/sign-in" component={RefundsSignIn} />
       <Route path="/refunds/sign-up" component={RefundsSignUp} />
       <Route path="/refunds/portal" component={() => <RefundsProtectedRoute component={RefundsPortal} />} />
