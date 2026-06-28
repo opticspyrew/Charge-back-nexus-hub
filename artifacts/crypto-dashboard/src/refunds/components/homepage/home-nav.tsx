@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeftRight, ArrowRight, Menu, X } from "lucide-react";
 import RefundsLogo from "../refunds-logo";
+import { refundsGo } from "../../data/nav";
 
 const NAV_LINKS = [
-  { label: "Process", href: "#process" },
-  { label: "Intelligence", href: "#intelligence" },
-  { label: "Operations", href: "#operations" },
-  { label: "Statistics", href: "#statistics" },
-  { label: "FAQ", href: "#faq" },
+  { label: "Process", href: "/refunds#process" },
+  { label: "Services", href: "/refunds/services" },
+  { label: "Certifications", href: "/refunds/certifications" },
+  { label: "Knowledge base", href: "/refunds/knowledge-base" },
+  { label: "FAQ", href: "/refunds#faq" },
 ];
 
 export default function HomeNav() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -45,6 +46,10 @@ export default function HomeNav() {
             <a
               key={l.href}
               href={l.href}
+              onClick={(e) => {
+                e.preventDefault();
+                refundsGo(l.href, location, navigate);
+              }}
               className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-card/60 transition-colors"
             >
               {l.label}
@@ -94,7 +99,11 @@ export default function HomeNav() {
               <a
                 key={l.href}
                 href={l.href}
-                onClick={() => setOpen(false)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                  refundsGo(l.href, location, navigate);
+                }}
                 className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground rounded-lg hover:bg-card/60"
               >
                 {l.label}

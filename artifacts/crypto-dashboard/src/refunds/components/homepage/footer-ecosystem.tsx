@@ -2,20 +2,15 @@ import { useLocation } from "wouter";
 import { Lock } from "lucide-react";
 import RefundsLogo from "../refunds-logo";
 import { getEcosystemMap } from "../../data/mocks";
+import { refundsGo } from "../../data/nav";
 
 const COLUMNS = getEcosystemMap();
 
 export default function FooterEcosystem() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
   const handle = (href: string) => {
-    if (href.startsWith("/")) {
-      navigate(href);
-    } else if (href.startsWith("#")) {
-      document
-        .querySelector(href)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    refundsGo(href, location, navigate);
   };
 
   return (
