@@ -25,6 +25,7 @@ task = "shell.exec"
 args = "pnpm --filter @workspace/admin-dashboard run dev"
 cwd = "./artifacts/admin-dashboard"
 waitForPort = 22133
+ensurePreviewReachable = "/"
 router = "path"
 
 [workflows.workflow.tasks.env]
@@ -45,6 +46,7 @@ task = "shell.exec"
 args = "pnpm --filter @workspace/crypto-dashboard run dev"
 cwd = "./artifacts/crypto-dashboard"
 waitForPort = 20512
+ensurePreviewReachable = "/"
 router = "path"
 
 [workflows.workflow.tasks.env]
@@ -65,6 +67,8 @@ task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run dev"
 cwd = "./artifacts/api-server"
 waitForPort = 8080
+ensurePreviewReachable = "/"
+router = "path"
 
 [workflows.workflow.tasks.env]
 PORT = "8080"
@@ -84,16 +88,8 @@ task = "shell.exec"
 args = "pnpm --filter @workspace/mockup-sandbox run dev"
 cwd = "./artifacts/mockup-sandbox"
 waitForPort = 8081
-
-[workflows.workflow.tasks.env]
-PORT = "8081"
-BASE_PATH = "/__mockup"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/mockup-sandbox run dev"
-cwd = "./artifacts/mockup-sandbox"
-waitForPort = 8081
+ensurePreviewReachable = "/"
+router = "path"
 
 [workflows.workflow.tasks.env]
 PORT = "8081"
@@ -109,7 +105,6 @@ timeoutMs = 20000
 
 [[ports]]
 localPort = 8080
-externalPort = 80
 
 [[ports]]
 localPort = 8081
@@ -117,7 +112,6 @@ externalPort = 8081
 
 [[ports]]
 localPort = 8082
-externalPort = 5000
 
 [[ports]]
 localPort = 8083
@@ -182,7 +176,7 @@ channel = "stable-25_05"
 [userenv.development]
 MANUS_INBOUND_SYNC_ENABLED = "1"
 MANUS_OUTBOUND_SYNC_ENABLED = "1"
-NETSPY_API_BASE_URL = "https://staging-api.netspyworld.com/api/trpc"
+NETSPY_API_BASE_URL = "https://3000-i879oz0togqo0hkembtrz-f3f3d4d2.us2.manus.computer/api/trpc"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-c057b35a-4507-4039-99d9-08e090d0a00a"
