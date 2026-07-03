@@ -31,6 +31,7 @@ import {
 import {
   verifyBodySignature,
   verifyWebhookSignature,
+  verifyNetspyPlainSignature,
   timingSafeEqualStr,
   sha256Hex,
 } from "../lib/manus/crypto";
@@ -233,20 +234,46 @@ router.post(
     const raw = req.rawBody
       ? req.rawBody.toString("utf8")
       : JSON.stringify(req.body ?? {});
-    const verify = verifyWebhookSignature({
+    // Primary scheme (PDF §4.1): X-Webhook-Signature over `${timestamp}.${body}`
+    // with a replay window. Compatibility fallback for the actual Netspy staging
+    // sender: X-Netspy-Signature = plain HMAC-SHA256 over the raw body (no
+    // timestamp; replay safety comes from the event-id de-dupe below).
+    let verify = verifyWebhookSignature({
       rawBody: raw,
       signatureHeader: req.header("x-webhook-signature"),
       timestampHeader: req.header("x-webhook-timestamp"),
       secret,
       replayWindowSeconds: WEBHOOK_REPLAY_WINDOW_SECONDS,
     });
+    let verifiedViaFallback = false;
+    if (!verify.ok) {
+      const netspySig = req.header("x-netspy-signature");
+      if (netspySig) {
+        verify = verifyNetspyPlainSignature({
+          rawBody: raw,
+          signatureHeader: netspySig,
+          secret,
+        });
+        if (verify.ok) {
+          verifiedViaFallback = true;
+          logger.info("Netspy webhook accepted via X-Netspy-Signature compatibility scheme");
+        }
+      }
+    }
     if (!verify.ok) {
       logger.warn({ reason: verify.reason }, "Netspy webhook signature rejected");
       res.status(401).json({ success: false, error: "invalid signature" });
       return;
     }
     try {
-      const deliveryId = req.header("x-webhook-delivery-id");
+      // The fallback scheme signs only the raw body, so the X-Webhook-Delivery-Id
+      // header is UNSIGNED under it. Only signed material may key replay
+      // protection: ignore the header entirely for fallback-verified deliveries
+      // (both for the envelope's deliveryId and the de-dupe key below), falling
+      // back to sha256(raw) when the body carries no id/deliveryId of its own.
+      const deliveryId = verifiedViaFallback
+        ? undefined
+        : req.header("x-webhook-delivery-id");
       const body = (req.body ?? {}) as Record<string, unknown>;
       const envelope = {
         ...body,

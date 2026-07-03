@@ -79,6 +79,33 @@ export function verifyWebhookSignature(opts: VerifyWebhookOptions): VerifyResult
   return { ok: true };
 }
 
+export interface VerifyNetspyPlainSignatureOptions {
+  rawBody: string;
+  /** Bare lowercase hex digest, optionally "sha256="-prefixed. */
+  signatureHeader: string | undefined;
+  secret: string;
+}
+
+/**
+ * Compatibility scheme for the Netspy staging sender (X-Netspy-Signature):
+ * plain HMAC-SHA256 over the raw body only — no timestamp, so no replay
+ * window. Callers must rely on event-id de-duplication for replay safety.
+ */
+export function verifyNetspyPlainSignature(opts: VerifyNetspyPlainSignatureOptions): VerifyResult {
+  const { rawBody, signatureHeader, secret } = opts;
+  if (!signatureHeader) {
+    return { ok: false, reason: "missing signature" };
+  }
+  const provided = signatureHeader.startsWith("sha256=")
+    ? signatureHeader.slice("sha256=".length)
+    : signatureHeader;
+  const expected = hmacSha256Hex(secret, rawBody);
+  if (!timingSafeEqualStr(provided.toLowerCase(), expected)) {
+    return { ok: false, reason: "signature mismatch" };
+  }
+  return { ok: true };
+}
+
 export interface VerifyBodySignatureOptions {
   rawBody: string | Buffer;
   signatureHeader: string | undefined; // "sha256=<hex>"
