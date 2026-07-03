@@ -42,7 +42,10 @@ scheme as fallback (`verifyNetspyPlainSignature`). The sender also puts the
 event type in body field `type` with snake_case names ("case_created"), not the
 PDF's `event` with dotted names — receiver normalizes via a closed alias table
 (`normalizeWebhookEventName`); the `case_updated→case.statusUpdated` alias is an
-unverified guess, confirm semantics when their first real one arrives.
+unverified guess, confirm semantics when their first real one arrives. Their
+staging vocabulary also includes `case_synced` and `blockchain_data_updated` —
+absent from the PDF, deliberately NOT aliased (no guessing); they fall to the
+default recorder (logged + acked 200) until the partner defines their payloads.
 **Why:** the partner implementation, not the spec, is authoritative for interop;
 blocking on spec conformance would stall staging indefinitely.
 **How to apply:** for fallback-verified deliveries the unsigned
