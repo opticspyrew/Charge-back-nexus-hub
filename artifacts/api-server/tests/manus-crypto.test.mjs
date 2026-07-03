@@ -18,6 +18,7 @@ import {
   timingSafeEqualStr,
   verifyWebhookSignature,
   verifyBodySignature,
+  verifyNetspyPlainSignature,
 } from "../src/lib/manus/crypto.ts";
 
 const SECRET = "whk_secret_test_abc123";
@@ -139,6 +140,55 @@ test("verifyBodySignature verifies the optional X-Manus-Signature", () => {
   );
   assert.equal(
     verifyBodySignature({ rawBody: body, signatureHeader: undefined, secret: SECRET }),
+    false,
+  );
+});
+
+test("verifyNetspyPlainSignature accepts a bare lowercase hex HMAC over the raw body", () => {
+  const body = JSON.stringify({ id: "evt_1", type: "case_created" });
+  const sig = crypto.createHmac("sha256", SECRET).update(body).digest("hex");
+  assert.equal(
+    verifyNetspyPlainSignature({ rawBody: body, signatureHeader: sig, secret: SECRET }).ok,
+    true,
+  );
+});
+
+test("verifyNetspyPlainSignature tolerates a sha256= prefix and uppercase hex", () => {
+  const body = JSON.stringify({ id: "evt_2", type: "case_updated" });
+  const sig = crypto.createHmac("sha256", SECRET).update(body).digest("hex");
+  assert.equal(
+    verifyNetspyPlainSignature({ rawBody: body, signatureHeader: `sha256=${sig}`, secret: SECRET })
+      .ok,
+    true,
+  );
+  assert.equal(
+    verifyNetspyPlainSignature({
+      rawBody: body,
+      signatureHeader: sig.toUpperCase(),
+      secret: SECRET,
+    }).ok,
+    true,
+  );
+});
+
+test("verifyNetspyPlainSignature rejects wrong secret, tampered body, and missing header", () => {
+  const body = JSON.stringify({ id: "evt_3", type: "case_created" });
+  const wrong = crypto.createHmac("sha256", "not-the-secret").update(body).digest("hex");
+  assert.equal(
+    verifyNetspyPlainSignature({ rawBody: body, signatureHeader: wrong, secret: SECRET }).ok,
+    false,
+  );
+  const good = crypto.createHmac("sha256", SECRET).update(body).digest("hex");
+  assert.equal(
+    verifyNetspyPlainSignature({
+      rawBody: body + " ",
+      signatureHeader: good,
+      secret: SECRET,
+    }).ok,
+    false,
+  );
+  assert.equal(
+    verifyNetspyPlainSignature({ rawBody: body, signatureHeader: undefined, secret: SECRET }).ok,
     false,
   );
 });

@@ -33,6 +33,24 @@ different raw body. For webhooks that would turn every legitimate redelivery
 `conflictOnBodyMismatch:false` exists specifically for this case; `/sync/*` keeps
 the default true (caller-chosen UUID key, different body genuinely = different request).
 
+## The real Netspy staging sender deviates from its own PDF spec
+The handoff PDF (§4.1) specifies `X-Webhook-Signature = sha256=HMAC(timestamp.body)`
+plus a timestamp header and 300s replay window. The actual staging sender (Manus
+sandbox) instead sends `x-netspy-signature` = bare lowercase hex HMAC over the raw
+body only — no timestamp. The receiver accepts BOTH: PDF scheme first, plain-body
+scheme as fallback (`verifyNetspyPlainSignature`).
+**Why:** the partner implementation, not the spec, is authoritative for interop;
+blocking on spec conformance would stall staging indefinitely.
+**How to apply:** for fallback-verified deliveries the unsigned
+`X-Webhook-Delivery-Id` header must NOT key replay de-dupe or the envelope —
+only signed material (body id/deliveryId, else sha256(raw)). Expect similar
+spec-vs-reality drift in their outbound tRPC procedures (`cases.*` from the PDF
+were absent on staging; only `system.health` existed — requires `{timestamp}`
+input, and it's public/unauthenticated). Their base URL is an ephemeral
+`*.manus.computer` sandbox host — it changes on sandbox restart and the sandbox
+sleeps; 502 "Manus Sandbox" HTML page = asleep/expired link, wake it from the
+Manus task.
+
 ## Contract enforcement worth remembering
 - `/sync/*` writes REQUIRE an `Idempotency-Key` header (§4 rule 3); absent => 400
   ("missing required field", §10), rejected before any side effect.
