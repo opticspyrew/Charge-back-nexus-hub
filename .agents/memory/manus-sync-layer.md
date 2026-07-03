@@ -38,7 +38,11 @@ The handoff PDF (§4.1) specifies `X-Webhook-Signature = sha256=HMAC(timestamp.b
 plus a timestamp header and 300s replay window. The actual staging sender (Manus
 sandbox) instead sends `x-netspy-signature` = bare lowercase hex HMAC over the raw
 body only — no timestamp. The receiver accepts BOTH: PDF scheme first, plain-body
-scheme as fallback (`verifyNetspyPlainSignature`).
+scheme as fallback (`verifyNetspyPlainSignature`). The sender also puts the
+event type in body field `type` with snake_case names ("case_created"), not the
+PDF's `event` with dotted names — receiver normalizes via a closed alias table
+(`normalizeWebhookEventName`); the `case_updated→case.statusUpdated` alias is an
+unverified guess, confirm semantics when their first real one arrives.
 **Why:** the partner implementation, not the spec, is authoritative for interop;
 blocking on spec conformance would stall staging indefinitely.
 **How to apply:** for fallback-verified deliveries the unsigned
