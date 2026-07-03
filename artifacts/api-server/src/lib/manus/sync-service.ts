@@ -421,9 +421,31 @@ export interface WebhookEnvelope {
   id?: string;
   timestamp?: string;
   event?: string;
+  /** Alias used by the actual Netspy staging sender instead of `event`. */
+  type?: string;
   source?: string;
   data?: Record<string, unknown>;
   deliveryId?: string;
+}
+
+// The Netspy staging sender uses snake_case event names in a `type` body field
+// (e.g. "case_created") instead of the PDF §4 dotted names in `event`
+// (e.g. "case.created"). Normalize known aliases onto the canonical names;
+// unknown names pass through untouched (the switch's default case records them).
+const WEBHOOK_EVENT_ALIASES: Record<string, string> = {
+  case_created: "case.created",
+  case_updated: "case.statusUpdated",
+  case_status_updated: "case.statusUpdated",
+  blockchain_trace_completed: "blockchain.traceCompleted",
+  vault_created: "vault.created",
+  vault_compliance_verified: "vault.complianceVerified",
+  vault_funded: "vault.funded",
+  vault_withdrawal_completed: "vault.withdrawalCompleted",
+};
+
+export function normalizeWebhookEventName(name: string | null): string | null {
+  if (!name) return name;
+  return WEBHOOK_EVENT_ALIASES[name.toLowerCase()] ?? name;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -503,7 +525,7 @@ function webhookDescription(event: string, data: Record<string, unknown>): strin
 export async function processWebhookEvent(
   env: WebhookEnvelope,
 ): Promise<SyncResult<{ processed: true; action: string; refundsCaseId?: string }>> {
-  const event = trimmed(env.event);
+  const event = normalizeWebhookEventName(trimmed(env.event) ?? trimmed(env.type));
   if (!event) return fail(400, "missing event type");
   const data = asRecord(env.data);
   const manusEventId = trimmed(env.id) ?? trimmed(env.deliveryId) ?? undefined;

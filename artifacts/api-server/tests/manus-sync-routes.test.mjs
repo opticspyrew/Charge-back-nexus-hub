@@ -263,6 +263,36 @@ test("webhook case.created with a valid signature is processed (200)", async () 
   assert.ok(body.refundsCaseId, "response should surface the refunds case reference");
 });
 
+test("webhook in Netspy staging-sender format (type: case_created + x-netspy-signature) is processed", async () => {
+  const email = `webhook-compat-${rnd()}@example.com`;
+  createdEmails.push(email);
+  const envelope = {
+    id: `evt_${rnd()}`,
+    type: "case_created", // snake_case in `type`, not dotted in `event`
+    data: {
+      unifiedCaseId: 1000 + Math.floor(Math.random() * 9000),
+      clientEmail: email,
+      clientName: "Compat Webhook Client",
+      caseType: "both",
+      estimatedLoss: 12345,
+      caseDescription: "Staging-sender format",
+    },
+  };
+  const raw = JSON.stringify(envelope);
+  const plainSig = crypto.createHmac("sha256", WEBHOOK_SECRET).update(raw).digest("hex");
+
+  const res = await fetch(`${BASE}/public/refunds/webhooks/netspy-events`, {
+    method: "POST",
+    headers: headers({ "x-netspy-signature": plainSig }),
+    body: raw,
+  });
+  assert.equal(res.status, 200, "staging-sender format should be accepted");
+  const body = await jsonOf(res);
+  assert.equal(body.success, true);
+  assert.equal(body.processed, true);
+  assert.ok(body.refundsCaseId, "response should surface the refunds case reference");
+});
+
 test("webhook with a tampered signature is rejected (401)", async () => {
   const raw = JSON.stringify({ id: `evt_${rnd()}`, event: "case.statusUpdated", data: {} });
   const ts = Math.floor(Date.now() / 1000);
