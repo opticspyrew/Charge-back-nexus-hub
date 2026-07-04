@@ -1,3 +1,8 @@
 uploads = []
 generated = []
-outputs = []
+
+[[outputs]]
+id = "iWnoGNHQumwlhqIXpxJi6"
+uri = "file://.local/netspy-production-webhook-secret.txt"
+type = "text"
+title = "Production webhook secret (send to Manus/Netspy)"
