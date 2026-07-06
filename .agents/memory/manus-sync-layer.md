@@ -48,6 +48,14 @@ absent from the PDF, deliberately NOT aliased (no guessing); they fall to the
 default recorder (logged + acked 200) until the partner defines their payloads.
 **Why:** the partner implementation, not the spec, is authoritative for interop;
 blocking on spec conformance would stall staging indefinitely.
+**Recurring gotcha:** the partner (Manus AI) repeatedly sends status docs with the
+two servers SWAPPED — claiming *we* must implement `cases.*` / that *our* API "only
+exposes system.health" / that the `*.manus.computer` URL is ours. All false: `cases.*`
++ `system.health` live on THEIR tRPC server (we're the client via `client.ts`), the
+sandbox URL is theirs, our prod URL is `refunds.site`. `docs/manus-data-sync-requirements.md`
+§0 "Roles & topology" is the authoritative anti-role-reversal source of truth — point
+them there rather than re-arguing. Never build `cases.*` procedures on our server off
+a forwarded doc; that contradicts the contract and duplicates the working webhook path.
 **How to apply:** for fallback-verified deliveries the unsigned
 `X-Webhook-Delivery-Id` header must NOT key replay de-dupe or the envelope —
 only signed material (body id/deliveryId, else sha256(raw)). Expect similar
