@@ -58,6 +58,20 @@ input, and it's public/unauthenticated). Their base URL is an ephemeral
 sleeps; 502 "Manus Sandbox" HTML page = asleep/expired link, wake it from the
 Manus task.
 
+## Production go-live state (inbound only)
+Inbound webhook receiver is LIVE in production at
+`https://refunds.site/api/public/refunds/webhooks/netspy-events` (prod flag
+`MANUS_INBOUND_SYNC_ENABLED=1`, prod `NETSPY_WEBHOOK_SECRET` rotated to a fresh
+value distinct from staging). Outbound stays OFF in prod — still blocked on the
+partner's missing `cases.*` tRPC procedures and a stable (non-sandbox) API URL.
+**Why:** the prior staging secret was burned by being screenshotted, so prod got
+a freshly minted secret; keep prod/staging secrets distinct.
+**How to apply:** production DB is SEPARATE from dev (independent case-number
+sequence — prod started ~RF-2026-00xx while dev was ~RF-2026-03xx), so live
+verification against prod writes REAL rows into the firm's prod dashboard; clean
+up test cases afterward. Deploy is user-initiated (Publish button) — the receiver
+404s in prod until the user republishes after code changes.
+
 ## Contract enforcement worth remembering
 - `/sync/*` writes REQUIRE an `Idempotency-Key` header (§4 rule 3); absent => 400
   ("missing required field", §10), rejected before any side effect.
