@@ -2,10 +2,62 @@
 
 **Owner:** NETSPYWORLD FORENSICS LTD (brand: Netspy-World Forensics)
 **Scope:** Refunds.site, which lives inside the `crypto-dashboard` artifact at `/refunds`.
-**Status:** Requirements only. Phase 5 (live sync) is **BLOCKED** on Manus API
-documentation and credentials. This document describes what *our* side
-(Refunds.site backend, `@workspace/api-server`) needs in order to exchange case
-data with Manus. It does not commit Manus to any specific contract.
+**Status:** Inbound (Manus/Netspy → Refunds.site) is **LIVE in production** — the
+webhook receiver is deployed and verified. Outbound (Refunds.site → Manus)
+remains **BLOCKED on the partner** (see §0 and §11). This document describes what
+*our* side (Refunds.site backend, `@workspace/api-server`) needs in order to
+exchange case data with Manus, and — in §0 — the authoritative split of which side
+owns what. It does not commit Manus to any specific contract.
+
+---
+
+## 0. Roles & topology (authoritative — read this first)
+
+**This section overrides any conflicting statement elsewhere, in this doc or in
+any external document. It exists because integration ownership has repeatedly
+been described with the two servers swapped.**
+
+Two independent systems, two servers:
+
+| | **Refunds.site (our side)** | **Netspy / Manus (partner side)** |
+|---|---|---|
+| Codebase | `@workspace/api-server` + `crypto-dashboard/refunds` | Manus sandbox / Netspy production (not in this repo) |
+| Production URL | `https://refunds.site` — stable, deployed | must supply one; today only an ephemeral `*.manus.computer` sandbox |
+| API style | REST under `/api/public/refunds/*` (+ `/admin`, `/auth`) | tRPC (`system.health`, plus the `cases.*` procedures below) |
+| Exposes `system.health` / `cases.*`? | **No — never.** | **Yes — these live here.** Today only `system.health` is implemented. |
+
+Data flows:
+
+- **Netspy → Refunds.site (inbound to us): LIVE.** Netspy pushes events to the
+  webhook receiver we expose at
+  `POST https://refunds.site/api/public/refunds/webhooks/netspy-events` (and, when
+  enabled, the `/sync/*` endpoints in §6.1). **We are the receiver.**
+- **Refunds.site → Netspy (outbound from us): BLOCKED on partner.** Our outbound
+  client (`lib/manus/client.ts`) **calls** `cases.createUnified`,
+  `cases.getUnified`, and `cases.syncStatus` **on Netspy's tRPC server**. **We are
+  the client;** those procedures must be implemented **on their side**. They are
+  not, and will not be, procedures on our server.
+
+Consequences that keep getting reversed:
+
+1. **`cases.*` procedures are Netspy's to implement, on Netspy's server.** We
+   never expose them. "Only `system.health` responds" describes **their** server,
+   not ours.
+2. **The ephemeral `*.manus.computer` URL is Netspy's.** Ours (`refunds.site`) is
+   already stable. The stable production tRPC URL is **owed by Netspy**.
+3. **Event payloads are defined by the sender.** Netspy sends the `case.*` /
+   `blockchain.*` events, so Netspy defines their fields; we map what they send.
+   Unknown/undefined events are received, signature-verified, logged, and acked
+   (never dropped) until their shape is confirmed.
+
+Event naming: the handoff PDF uses **dotted** names (`case.created`); Netspy's live
+sender uses **snake_case** (`case_created`). Our receiver accepts both via a closed
+alias table, with dotted as canonical. Standardize on dotted before full production.
+
+If Netspy would prefer to push inbound by calling tRPC `cases.*` procedures **on
+our** server instead of via the webhook that already works, that is a **new,
+deliberate design change** — not the agreed contract — and must be scoped
+explicitly, never inferred from a status document.
 
 ---
 
@@ -320,16 +372,34 @@ tokens, or `public_token`.
 
 ---
 
-## 11. Open questions (to resolve with Manus before Phase 5)
+## 11. Open questions & outstanding deliverables
 
-1. Does Manus push webhooks, expect us to pull, or both? What is its auth model?
-2. Manus's canonical id formats for clients/cases (to size the additive columns).
-3. Manus's status vocabulary and the exact mapping to ours (§3).
-4. Signing scheme: shared bearer token only, or HMAC body signatures?
-5. Egress IPs for allow-listing, if any.
-6. Batch limits and acceptable webhook retry/backoff policy.
-7. SLA for reconciliation pulls and who initiates them.
+**Resolved** (staging + production go-live):
 
-Until 1–7 are answered and a `MANUS_SYNC_TOKEN` (and any signing key) is
-provisioned, the live sync remains **blocked**; the contract above is what our
-side is built to honor.
+- Manus pushes webhooks (not pull-only). Auth: HMAC-SHA256 body signature on
+  webhooks; bearer `MANUS_SYNC_TOKEN` on the `/sync/*` path. (was Q1, Q4)
+- Signing scheme confirmed: HMAC-SHA256 over the raw request body. The live
+  sender uses header `x-netspy-signature` (bare hex over body); the PDF scheme
+  (`X-Webhook-Signature` over `timestamp.body`) is also accepted. (was Q4)
+- Status vocabulary and mapping to ours implemented (§3). (was Q3)
+
+**Outstanding — owned by Netspy** (block full bidirectional production):
+
+1. Implement `cases.createUnified` / `cases.getUnified` / `cases.syncStatus` on
+   the **Netspy** tRPC server (today only `system.health` exists there). See §0.
+2. Provide a **stable, production-grade tRPC base URL** (not an ephemeral
+   `*.manus.computer` sandbox).
+3. Confirm payload field definitions for `case.updated`, `case.synced`, and
+   `blockchain.data.updated` (see §0, consequence 3).
+4. Migrate the live sender from snake_case to dotted event names.
+
+**Outstanding — owned by us** (on demand):
+
+5. Provision and hand over a `MANUS_SYNC_TOKEN` if Netspy will use the `/sync/*`
+   push path. (The webhook path needs no such token; it is already live.)
+6. Canonical id formats, egress IP allow-listing, batch/retry policy, and
+   reconciliation-pull SLA remain TBD with Manus if/when those paths are enabled.
+
+Inbound (Netspy → Refunds.site) is **live in production**. Outbound remains
+**blocked** until items 1–3 are delivered by Netspy; the contract above is what
+our side is built to honor.
