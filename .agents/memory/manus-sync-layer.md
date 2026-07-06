@@ -86,3 +86,16 @@ up test cases afterward. Deploy is user-initiated (Publish button) — the recei
 - Schema: `manus_idempotency_keys.response_status/response_body` are NULLABLE (a
   reservation is created before the response exists). `pruneIdempotencyKeys(7)`
   exists for retention but is NOT auto-scheduled — wire a cron if growth matters.
+
+## Partner "production URL" verification (2026-07)
+Netspy's claimed production tRPC base `https://netspyworld.com/api/trpc` is NOT a
+deployed API: Cloudflare-fronted, returns HTTP 403 + HTML `<title>Manus Space</title>`
+on every path (`/`, `/api/trpc`, `/api/trpc/*`) — a Manus sandbox placeholder, not
+tRPC. Even `system.health` fails there.
+**Rule:** before enabling outbound (`NETSPY_API_BASE_URL` + `MANUS_OUTBOUND_SYNC_ENABLED=1`),
+curl the URL and require a JSON tRPC response from `system.health`; a "Manus Space"
+HTML page or any non-JSON = undeployed, do NOT enable. A delivered URL is necessary
+but not sufficient — `cases.createUnified/getUnified/syncStatus` must actually respond.
+**Inbound payloads:** map `case.updated`/`case.synced`/`blockchain.data.updated` in
+processWebhookEvent only from concrete field specs, never a summary; until then they
+stay logged+acked (no guessing).
