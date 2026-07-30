@@ -923,7 +923,18 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
       res.status(401).json({ error: "Session expired. Please sign in again." });
       return;
     }
-    res.json({ user: publicUser(user) });
+
+    // Check whether this user has an approved/active record in admin_clients.
+    // This gates access to the Recovery Portal: only approved clients may enter.
+    const [clientRow] = await db
+      .select({ status: adminClients.status })
+      .from(adminClients)
+      .where(eq(adminClients.email, user.email))
+      .limit(1);
+    const portalAccess =
+      clientRow?.status === "approved" || clientRow?.status === "active";
+
+    res.json({ user: { ...publicUser(user), portalAccess } });
   } catch (err) {
     logger.error({ err }, "Failed to load session user");
     res.status(500).json({ error: "Failed to load session." });
