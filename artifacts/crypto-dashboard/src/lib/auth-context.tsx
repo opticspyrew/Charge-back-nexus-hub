@@ -12,6 +12,8 @@ interface User {
   email: string;
   name: string;
   avatar?: string;
+  /** True when the server has confirmed the user's admin_clients status is approved/active. */
+  portalAccess?: boolean;
 }
 
 interface StoredSession {
@@ -22,6 +24,8 @@ interface StoredSession {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  /** True when this user is allowed to enter the Recovery Portal. */
+  portalAccess: boolean;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, initialBalanceUsd?: number, scammedVia?: string) => Promise<void>;
@@ -39,7 +43,7 @@ const SESSION_KEY = "cryptovault.session";
 const LEGACY_ACCOUNTS_KEY = "cryptovault.accounts";
 
 function toUser(apiUser: AuthUser): User {
-  return { email: apiUser.email, name: apiUser.name };
+  return { email: apiUser.email, name: apiUser.name, portalAccess: apiUser.portalAccess ?? false };
 }
 
 function loadStoredSession(): StoredSession | null {
@@ -308,6 +312,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user: session?.user ?? null,
         isAuthenticated: !!session,
+        portalAccess: session?.user?.portalAccess === true,
         token: session?.token ?? null,
         login,
         signup,

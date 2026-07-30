@@ -105,6 +105,8 @@ export interface AuthUser {
   id: number;
   email: string;
   name: string;
+  /** True when the user's admin_clients record has status approved or active. */
+  portalAccess?: boolean;
 }
 
 export interface AuthSessionResponse {

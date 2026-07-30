@@ -1,9 +1,22 @@
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowRight, ScanLine, ShieldCheck } from "lucide-react";
+import { ArrowRight, ScanLine, LogIn, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 export default function HeroSection() {
   const [, navigate] = useLocation();
+  const { isAuthenticated, portalAccess } = useAuth();
+
+  const handlePortalClick = () => {
+    if (isAuthenticated && portalAccess) {
+      navigate("/refunds/portal");
+    } else if (isAuthenticated) {
+      // Authenticated but pending approval — show the pending screen
+      navigate("/refunds/portal");
+    } else {
+      navigate("/refunds/sign-in");
+    }
+  };
 
   return (
     <section className="px-6 lg:px-10 pt-10 pb-16 max-w-7xl mx-auto">
@@ -32,10 +45,14 @@ export default function HeroSection() {
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <button
-              onClick={() => navigate("/refunds/sign-up")}
+              onClick={handlePortalClick}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
             >
-              Open secure portal <ArrowRight className="w-4 h-4" />
+              {isAuthenticated ? (
+                <><LogIn className="w-4 h-4" /> Enter your portal</>
+              ) : (
+                <>Open secure portal <ArrowRight className="w-4 h-4" /></>
+              )}
             </button>
             <a
               href="#process"
