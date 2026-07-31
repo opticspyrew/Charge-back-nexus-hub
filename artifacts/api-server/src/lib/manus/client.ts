@@ -164,7 +164,10 @@ export interface CreateUnifiedCaseInput {
   clientEmail: string;
   clientName: string;
   caseType?: string;
-  estimatedLoss?: number;
+  // The live server's zod schema requires a STRING here (verified 2026-07-31:
+  // a number is rejected with invalid_type "expected string, received number"),
+  // despite the handoff PDF typing it as a number.
+  estimatedLoss?: string;
   caseDescription?: string;
   evidenceFileUrl?: string;
   blockchainData?: {
