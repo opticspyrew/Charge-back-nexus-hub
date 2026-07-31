@@ -88,14 +88,22 @@ up test cases afterward. Deploy is user-initiated (Publish button) — the recei
   exists for retention but is NOT auto-scheduled — wire a cron if growth matters.
 
 ## Partner "production URL" verification (2026-07)
-Netspy's claimed production tRPC base `https://netspyworld.com/api/trpc` is NOT a
-deployed API: Cloudflare-fronted, returns HTTP 403 + HTML `<title>Manus Space</title>`
-on every path (`/`, `/api/trpc`, `/api/trpc/*`) — a Manus sandbox placeholder, not
-tRPC. Even `system.health` fails there.
+Netspy's earlier claimed base `https://netspyworld.com/api/trpc` was NOT deployed
+(Cloudflare 403 + "Manus Space" HTML placeholder). On 2026-07-31 they delivered
+`https://netspyworld.manus.space/api/trpc` — VERIFIED live real tRPC: `system.health`
+200 `{"ok":true}` (input timestamp must be a NUMBER epoch, not the PDF's ISO string),
+all three `cases.*` procedures exist, and `<origin>/api/health` REST sibling works.
+Wire format is tRPC+superjson: queries `?input={"json":<input>}`, mutation bodies
+`{"json":<input>}`, success `{"result":{"data":{"json":...}}}` — plain-REST framing
+400s. SECURITY NOTE: `cases.getUnified`
+answered with NO auth headers — their reads appear public; don't assume their auth
+mirrors ours.
 **Rule:** before enabling outbound (`NETSPY_API_BASE_URL` + `MANUS_OUTBOUND_SYNC_ENABLED=1`),
 curl the URL and require a JSON tRPC response from `system.health`; a "Manus Space"
 HTML page or any non-JSON = undeployed, do NOT enable. A delivered URL is necessary
 but not sufficient — `cases.createUnified/getUnified/syncStatus` must actually respond.
+Do NOT smoke-test `cases.createUnified` against their prod — it creates real rows;
+verify mutations only via their staging or a partner-coordinated test case.
 **Inbound payloads:** map `case.updated`/`case.synced`/`blockchain.data.updated` in
 processWebhookEvent only from concrete field specs, never a summary; until then they
 stay logged+acked (no guessing).
