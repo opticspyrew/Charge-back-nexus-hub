@@ -64,7 +64,7 @@ const navItems = [
 
 export default function DashboardLayout({ children, activeTab }: LayoutProps) {
   const [, navigate] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, portalAccess } = useAuth();
   const { currency, setCurrency, btcPriceUsd, ratesLoading } = useCurrency();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -120,28 +120,30 @@ export default function DashboardLayout({ children, activeTab }: LayoutProps) {
             </button>
           ))}
 
-          {/* Refunds Portal — distinct destination, separate from the trading tabs */}
-          <div className="mt-3 pt-3 border-t border-sidebar-border">
-            <button
-              type="button"
-              onClick={() => { navigate("/refunds"); setSidebarOpen(false); }}
-              data-testid="nav-refunds-portal"
-              className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-primary/25 bg-primary/[0.06] hover:bg-primary/10 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all"
-            >
-              <span className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-primary flex-shrink-0">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          {/* Refunds Portal — only visible to approved/active clients */}
+          {portalAccess && (
+            <div className="mt-3 pt-3 border-t border-sidebar-border">
+              <button
+                type="button"
+                onClick={() => { navigate("/refunds"); setSidebarOpen(false); }}
+                data-testid="nav-refunds-portal"
+                className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-primary/25 bg-primary/[0.06] hover:bg-primary/10 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-all"
+              >
+                <span className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center text-primary flex-shrink-0">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </span>
+                <span className="flex-1 text-left min-w-0">
+                  <span className="block text-sm font-semibold text-foreground">Refunds Portal</span>
+                  <span className="block text-[11px] text-muted-foreground truncate">Crypto asset recovery</span>
+                </span>
+                <svg className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-              </span>
-              <span className="flex-1 text-left min-w-0">
-                <span className="block text-sm font-semibold text-foreground">Refunds Portal</span>
-                <span className="block text-[11px] text-muted-foreground truncate">Crypto asset recovery</span>
-              </span>
-              <svg className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+              </button>
+            </div>
+          )}
         </nav>
 
         {/* User section */}
